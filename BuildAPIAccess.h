@@ -37,7 +37,7 @@
 // Action Methods
 
 - (void)restartDevice:(NSInteger)deviceIndex;
-- (void)restartDevices:(NSInteger)currentModel;
+- (void)restartDevices:(NSInteger)modelIndex;
 - (void)deleteModel:(NSInteger)modelIndex;
 - (void)deleteDevice:(NSInteger)deviceIndex;
 - (void)updateDevice:(NSInteger)deviceIndex :(NSString *)key :(NSString *)value;
