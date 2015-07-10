@@ -4,6 +4,8 @@ Sample Objective-C (Mac OS X) class wrapper for [Electric Imp’s Build API](htt
 
 BuildAPIAccess requires the (included) class Connexion, though this is a simple class for the bundles an [NSURLConnection](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSURLConnection_Class/index.html) and associated data.
 
+## Devices
+
 Devices are stored internally as [NSMutableDictionary](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableDictionary_Class/) objects with the following keys:
 
 Key | Type | Description | Editable?
@@ -16,6 +18,7 @@ agent_id | string | ID of the device’s paired agent | No
 agent_status | string | "offline" or "online" | No
 model_id | string | ID of the model the device is assigned to | Yes
 
+## Models
 
 Models are stored internally as [NSDictionary](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSDictionary_Class/) objects with the following keys:
 
@@ -24,6 +27,18 @@ Key | Type | Description | Editable?
 id | string | Unique identifier | No
 name | string | Human-friendly name | Yes
 device | array | An array of ID strings for the devices assigned to this model | No
+
+## Log Entries
+
+Log entries are returned as the *object* property of the [NSNotification](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSNotification_Class/index.html) object sent to the host application. This object will be of type *id* but is an instance of [NSArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSArray_Class/) containing zero or more [NSDictionary](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSDictionary_Class/) objects, each representing a single log entry using the following keys:
+
+Key | Type | Description
+--- | --- | ---
+timestamp	| string | The ISO 8601 timestamp at which the entry was posted
+type | string | The entry’s flag, eg. ”Agent”, “Device”, “Status”, etc.
+message | string | The logged information
+
+None of these keys’ values are editable.
 
 ## Build API Access Methods
 
@@ -123,8 +138,21 @@ These methods are called by the above Build API Access methods.
 
 ## Returning Data
 
-Requests for data are made asynchronously. When the date returns &ndash; or, in the case of data being uploaded or changes &ndash; the result is signalled to the host application through notifications, listed below. When data is returned, it is stored in BuildAPIAccess member properties as outlined in the Build API access methods listed above.
+Requests for data are made asynchronously. When the date returns &ndash; or, in the case of data being uploaded or changes &ndash; the result is signalled to the host application through notifications, listed below. When data is returned, it is stored in BuildAPIAccess member properties as outlined in the Build API access methods [listed above](#build-api-access-methods).
 
 Notificiation | Description
 --- | ---
 BuildAPIGotModelsList | Model list acquired and now accessible through the *models* property
+BuildAPIGotDevicesList | Device list acquired and now accessible through the *devices* property
+BuildAPIPostedCode | Code revision uploaded successfully
+BuildAPIDeviceRestarted | Device restarted as requested
+BuildAPIDeviceAssigned | Device successfully assigned to the specified model
+BuildAPIModelCreated | New model successfully created
+BuildAPIModelUpdated | Model information successfully updated on the server
+BuildAPIModelDeleted | Model successfully deleted
+BuildAPIDeviceUpdated | Device information successfully updated on the server
+BuildAPIDeviceDeleted | Device successfully ‘removed’ from your account
+BuildAPIGotCodeRev | Successfully retrieved the requested code revision. Device code added to the *deviceCode* property. Model code added to the *modelCode* property
+BuildAPIGotLogs | Successfully retrieved the requested log entries. The logs are sent with the notification as an [NSArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSArray_Class/) [log entry records](#log-entries)
+BuildAPILogStream | Successfully retrieved a freshly posted log entry. The log entry is sent with the notification as an [NSArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSArray_Class/) [log entry records](#log-entries)
+
