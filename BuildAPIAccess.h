@@ -28,7 +28,7 @@
 
 - (void)getModels;
 - (void)getDevices;
-- (void)createNewModel:(NSString *)modelName :(BOOL)isFactoryFirmware;
+- (void)createNewModel:(NSString *)modelNam;
 - (void)uploadCode:(NSString *)newDeviceCode :(NSString *)newAgentCode :(NSInteger)modelIndex;
 - (void)assignDevice:(NSInteger)deviceIndex toModel:(NSInteger)modelIndex;
 - (void)getCode:(NSString *)modelID;
