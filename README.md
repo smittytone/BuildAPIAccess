@@ -66,9 +66,9 @@ Also called by [*getInitialData:*](#--voidgetinitialdatansstring-harvey), this m
 
 Also alled by [*getInitialData:*](#--voidgetinitialdatansstring-harvey), this method results in a list of devices placed in the BuildAPIAccess NSMutableArray property *devices*.
 
-### - (void)createNewModel:(NSString *)modelName :(BOOL)isFactoryFirmware;
+### - (void)createNewModel:(NSString *)modelName;
 
-Creates a new model on the server with the name *modelName*. The second parameter is ignored &ndash; it is immediately set to `false` &ndash; and is reserved for future usage.
+Creates a new model on the server with the name *modelName*.
 
 ### - (void)uploadCode:(NSString *)newDeviceCode :(NSString *)newAgentCode :(NSInteger)modelIndex;
 
