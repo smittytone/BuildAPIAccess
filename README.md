@@ -8,6 +8,12 @@ BuildAPIAccess requires the (included) class Connexion, though this is a simple 
 
 Making use of the Build API requires an Electric Imp developer account and an API key associated with that account. API keys can be requested from Electric Imp, as [detailed here](https://electricimp.com/docs/buildapi/).
 
+## Licence
+
+BuildAPIAccess is offered under the terms of the MIT licence. 
+
+**A polite request** If you make use of BuildAPIAccess in any way, a credit and a link to this repository would be appreciated.
+
 ## Devices
 
 Devices are stored internally as [NSMutableDictionary](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableDictionary_Class/) objects with the following keys:
