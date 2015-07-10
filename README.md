@@ -16,6 +16,14 @@ Devices are stored internally as [NSMutableDictionary](https://developer.apple.c
 | agent_status | string | "offline" or "online" | No |
 | model_id | string | ID of the model the device is assigned to | Yes |
 
+Models are stored internally as [NSDictionary](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSDictionary_Class/) objects with the following keys:
+
+| Key | Type | Description | Editable? |
+| --- | ---- | ---- |
+| id | string | Unique identifier | No |
+| name | string | Human-friendly name | Yes |
+| device | array | An array of ID strings for the devices assigned to this model | No |
+
 ## Build API Access Methods
 
 BuildAPIAccess provides a number of methods, but these are the ones to call from your own application:
@@ -100,7 +108,7 @@ Call this method to stop the current logging stream.
 
 ## HTTPS Request Construction
 
-BuildAPIAccess provides the following convenience methods for construction HTTPS requests to the Electric Imp Cloud. Where a *bodyDictionary* parameter is required, pass an [NSDictionary]() object loaded with the key-value pairs you wish to change. Note that the Build API ignores keys that it does not allow users to change *(see above)*, and will ignore invalid keys.
+BuildAPIAccess provides the following convenience methods for construction HTTPS requests to the Electric Imp Cloud. Where a *bodyDictionary* parameter is required, pass an [NSDictionary](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSDictionary_Class/) object loaded with the key-value pairs you wish to change. Note that the Build API ignores keys that it does not allow users to change *(see above)*, and will ignore invalid keys.
 
 These methods are called by the above Build API Access methods.
 
@@ -111,3 +119,11 @@ These methods are called by the above Build API Access methods.
 ### - (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
 
 ### - (NSURLRequest *)makeDELETErequest:(NSString *)path;
+
+## Returning Data
+
+Requests for data are made asynchronously. When the date returns &ndash; or, in the case of data being uploaded or changes &ndash; the result is signalled to the host application through notifications, listed below. When data is returned, it is stored in BuildAPIAccess member properties as outlined in the Build API access methods listed above.
+
+Notificiation | Description
+--- | ---
+BuildAPIGotModelsList | Model list acquired and now accessible through the *models* property
