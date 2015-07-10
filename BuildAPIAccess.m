@@ -33,8 +33,8 @@
 		devices = [[NSMutableArray alloc] init];
 		models = [[NSMutableArray alloc] init];
 
-        loggedInFlag = NO;
-        errorMessage = @"";
+		loggedInFlag = NO;
+		errorMessage = @"";
 
 	}
 
@@ -45,30 +45,30 @@
 
 - (void)getInitialData:(NSString *)harvey
 {
-    if (loggedInFlag == NO)
-    {
-        if (harvey == nil || [harvey compare:@""] == NSOrderedSame)
-        {
-            errorMessage = @"[ERROR] In order to get app and device data, you must enter your API key in the Preferences.";
-            [self reportError];
-            return;
-        }
+	if (loggedInFlag == NO)
+	{
+		if (harvey == nil || [harvey compare:@""] == NSOrderedSame)
+		{
+			errorMessage = @"[ERROR] In order to get app and device data, you must enter your API key in the Preferences.";
+			[self reportError];
+			return;
+		}
 
-        _harvey = harvey;
-    }
+		_harvey = harvey;
+	}
 
-    // Get the data
+	// Get the data
 
-    _initialLoadFlag = YES;
-    [self getModels];
-    [self getDevices];
+	_initialLoadFlag = YES;
+	[self getModels];
+	[self getDevices];
 }
 
 
 
 - (void)clear
 {
-    _harvey = nil;
+	_harvey = nil;
 }
 
 
@@ -78,7 +78,7 @@
 
 - (void)getModels
 {
-    // Set up a GET request to the /models URL - gets all models
+	// Set up a GET request to the /models URL - gets all models
 
 	NSURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"models"]];
 	[self launchConnection:request :kConnectTypeGetModels];
@@ -88,7 +88,7 @@
 
 - (void)getDevices
 {
-    // Set up a GET request to the /devices URL - gets all devices
+	// Set up a GET request to the /devices URL - gets all devices
 
 	NSURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"devices"]];
 	[self launchConnection:request :kConnectTypeGetDevices];
@@ -98,23 +98,23 @@
 
 - (void)getCode:(NSString *)modelID
 {
-    // Set up a GET request to the /models/[id]/revisions URL
+	// Set up a GET request to the /models/[id]/revisions URL
 
-    NSString *urlString = [_baseURL stringByAppendingFormat:@"models/%@/revisions", modelID];
-    NSURLRequest *request = [self makeGETrequest:urlString];
-    [self launchConnection:request :kConnectTypeGetCodeLatestBuild];
-    _currentModelID = modelID;
+	NSString *urlString = [_baseURL stringByAppendingFormat:@"models/%@/revisions", modelID];
+	NSURLRequest *request = [self makeGETrequest:urlString];
+	[self launchConnection:request :kConnectTypeGetCodeLatestBuild];
+	_currentModelID = modelID;
 }
 
 
 
 - (void)getCodeRev:(NSString *)modelID :(NSInteger)build
 {
-    // Set up a GET request to the /models/[id]/revisions/[build] URL
+	// Set up a GET request to the /models/[id]/revisions/[build] URL
 
-    NSString *urlString = [_baseURL stringByAppendingFormat:@"models/%@/revisions/%li", modelID, (long)build];
-    NSURLRequest *request = [self makeGETrequest:urlString];
-    [self launchConnection:request :kConnectTypeGetCodeRev];
+	NSString *urlString = [_baseURL stringByAppendingFormat:@"models/%@/revisions/%li", modelID, (long)build];
+	NSURLRequest *request = [self makeGETrequest:urlString];
+	[self launchConnection:request :kConnectTypeGetCodeRev];
 }
 
 
@@ -157,30 +157,24 @@
 #pragma mark - Action Methods
 
 
-- (void)createNewModel:(NSString *)modelName :(BOOL)isFactoryFirmware
+- (void)createNewModel:(NSString *)modelName
 {
-    // Set up a POST request to the /models URL - we'll post the new model there
-	// Note isFactoryFirmware is not used by the Build API at this time, and is ignored here
+	// Set up a POST request to the /models URL - we'll post the new model there
 
-    NSArray *keys = [NSArray arrayWithObjects:@"name", @"is_factory", nil];
+	NSArray *keys = [NSArray arrayWithObjects:@"name", nil];
+	NSArray *values = [NSArray arrayWithObjects:modelName, nil];
+	NSDictionary *dict = [NSDictionary dictionaryWithObjects:values forKeys:keys];
+	NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:@"models"] :dict];
 
-    NSString *factoryModel = @"false";
-    //if (isFactoryFirmware == YES) factoryModel = @"true";
-
-    NSArray *values = [NSArray arrayWithObjects:modelName, factoryModel, nil];
-    NSDictionary *dict = [NSDictionary dictionaryWithObjects:values forKeys:keys];
-
-    NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:@"models"] :dict];
-
-    if (request != nil)
-    {
-        [self launchConnection:request :kConnectTypeNewModel];
-    }
-    else
-    {
-        errorMessage = @"[ERROR] Could not create a request to create the new app.";
-        [self reportError];
-    }
+	if (request != nil)
+	{
+		[self launchConnection:request :kConnectTypeNewModel];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to create the new app.";
+		[self reportError];
+	}
 }
 
 
@@ -258,7 +252,7 @@
 
 - (void)uploadCode:(NSString *)newDeviceCode :(NSString *)newAgentCode :(NSInteger)modelIndex
 {
-    // Set up a POST request to the /models/[ID]/revisions URL - we'll post the new code there
+	// Set up a POST request to the /models/[ID]/revisions URL - we'll post the new code there
 
 	if (modelIndex < 0 || modelIndex > models.count)
 	{
@@ -273,31 +267,31 @@
 	if (newDeviceCode == nil) newDeviceCode = @"";
 	if (newAgentCode == nil) newAgentCode = @"";
 
-    // Put the new code into a dictionary
+	// Put the new code into a dictionary
 
-    NSArray *keys = [NSArray arrayWithObjects:@"agent_code", @"device_code", nil];
-    NSArray *values = [NSArray arrayWithObjects:newAgentCode, newDeviceCode, nil];
-    NSDictionary *dict = [NSDictionary dictionaryWithObjects:values forKeys:keys];
+	NSArray *keys = [NSArray arrayWithObjects:@"agent_code", @"device_code", nil];
+	NSArray *values = [NSArray arrayWithObjects:newAgentCode, newDeviceCode, nil];
+	NSDictionary *dict = [NSDictionary dictionaryWithObjects:values forKeys:keys];
 
-    // Get the current model's ID using its index
+	// Get the current model's ID using its index
 
-    NSDictionary *mDict = [models objectAtIndex:modelIndex];
-    NSString *urlString = [@"models/" stringByAppendingString:[mDict objectForKey:@"id"]];
-    urlString = [urlString stringByAppendingString:@"/revisions"];
+	NSDictionary *mDict = [models objectAtIndex:modelIndex];
+	NSString *urlString = [@"models/" stringByAppendingString:[mDict objectForKey:@"id"]];
+	urlString = [urlString stringByAppendingString:@"/revisions"];
 
-    // Make the POST request to send the code
+	// Make the POST request to send the code
 
-    NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:urlString] :dict];
+	NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:urlString] :dict];
 
-    if (request != nil)
-    {
-        [self launchConnection:request :kConnectTypePostCode];
-    }
-    else
-    {
-        errorMessage = @"[ERROR] Could not create a request to upload the code to the app.";
-        [self reportError];
-    }
+	if (request != nil)
+	{
+		[self launchConnection:request :kConnectTypePostCode];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to upload the code to the app.";
+		[self reportError];
+	}
 }
 
 
@@ -324,36 +318,36 @@
 
 	// Get the current device's ID using its index; get the model too
 
-    NSDictionary *dDict = [devices objectAtIndex:deviceIndex];
-    NSDictionary *mDict = [models objectAtIndex:modelIndex];
-    NSString *urlString = [@"/devices/" stringByAppendingString:[dDict objectForKey:@"id"]];
+	NSDictionary *dDict = [devices objectAtIndex:deviceIndex];
+	NSDictionary *mDict = [models objectAtIndex:modelIndex];
+	NSString *urlString = [@"/devices/" stringByAppendingString:[dDict objectForKey:@"id"]];
 
-    // Put the new model ID into the dictionary to pass to the API
+	// Put the new model ID into the dictionary to pass to the API
 
-    NSArray *keys = [NSArray arrayWithObjects:@"model_id", nil];
-    NSArray *values = [NSArray arrayWithObjects:[mDict objectForKey:@"id"], nil];
-    NSDictionary *dict = [NSDictionary dictionaryWithObjects:values forKeys:keys];
+	NSArray *keys = [NSArray arrayWithObjects:@"model_id", nil];
+	NSArray *values = [NSArray arrayWithObjects:[mDict objectForKey:@"id"], nil];
+	NSDictionary *dict = [NSDictionary dictionaryWithObjects:values forKeys:keys];
 
-    // Make the PUT request to send the change
+	// Make the PUT request to send the change
 
-    NSURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingString:urlString] :dict];
+	NSURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingString:urlString] :dict];
 
-    if (request != nil)
-    {
-        [self launchConnection:request :kConnectTypeAssignDeviceToModel];
-    }
-    else
-    {
-        errorMessage = @"[ERROR] Could not create a request to assign the device.";
-        [self reportError];
-    }
+	if (request != nil)
+	{
+		[self launchConnection:request :kConnectTypeAssignDeviceToModel];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to assign the device.";
+		[self reportError];
+	}
 }
 
 
 
 - (void)restartDevice:(NSInteger)deviceIndex
 {
-    // Set up a POST request to the /devices/[ID]/restart URL - updates device with an unchanged model_id
+	// Set up a POST request to the /devices/[ID]/restart URL - updates device with an unchanged model_id
 
 	if (deviceIndex < 0 || deviceIndex > devices.count)
 	{
@@ -366,22 +360,22 @@
 	NSDictionary *dDict = [devices objectAtIndex:deviceIndex];
 	NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingFormat:@"devices/%@/restart", [dDict objectForKey:@"id"]] :nil];
 
-    if (request != nil)
-    {
-        [self launchConnection:request :kConnectTypeRestartDevice];
-    }
-    else
-    {
-        errorMessage = @"[ERROR] Can’t create a request to restart the device.";
-        [self reportError];
-    }
+	if (request != nil)
+	{
+		[self launchConnection:request :kConnectTypeRestartDevice];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Can’t create a request to restart the device.";
+		[self reportError];
+	}
 }
 
 
 
 - (void)restartDevices:(NSInteger)modelIndex
 {
-    // Set up a POST request to the /devices/[ID] URL - gets all models
+	// Set up a POST request to the /devices/[ID] URL - gets all models
 
 	if (modelIndex < 0 || modelIndex > models.count)
 	{
@@ -392,24 +386,24 @@
 	}
 
 	NSDictionary *mDict = [models objectAtIndex:modelIndex];
-    NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingFormat:@"models/%@/restart", [mDict objectForKey:@"id"]] :nil];
+	NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingFormat:@"models/%@/restart", [mDict objectForKey:@"id"]] :nil];
 
-    if (request != nil)
-    {
-        [self launchConnection:request :kConnectTypeRestartDevice];
-    }
-    else
-    {
-        errorMessage = @"[ERROR] Could not create a request to restart the app's devices.";
-        [self reportError];
-    }
+	if (request != nil)
+	{
+		[self launchConnection:request :kConnectTypeRestartDevice];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to restart the app's devices.";
+		[self reportError];
+	}
 }
 
 
 
 - (void)deleteDevice:(NSInteger)deviceIndex
 {
-    // Set up a DELETE request to the /devices/[id]
+	// Set up a DELETE request to the /devices/[id]
 
 	if (deviceIndex < 0 || deviceIndex > devices.count)
 	{
@@ -420,17 +414,17 @@
 	}
 
 	NSDictionary *dDict = [devices objectAtIndex:deviceIndex];
-    NSURLRequest *request = [self makeDELETErequest:[_baseURL stringByAppendingFormat:@"devices/%@", [dDict objectForKey:@"id"]]];
+	NSURLRequest *request = [self makeDELETErequest:[_baseURL stringByAppendingFormat:@"devices/%@", [dDict objectForKey:@"id"]]];
 
-    if (request != nil)
-    {
-        [self launchConnection:request :kConnectTypeDeleteDevice];
-    }
-    else
-    {
-        errorMessage = @"[ERROR] Could not create a request to delete the device.";
-        [self reportError];
-    }
+	if (request != nil)
+	{
+		[self launchConnection:request :kConnectTypeDeleteDevice];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to delete the device.";
+		[self reportError];
+	}
 }
 
 
@@ -459,23 +453,23 @@
 
 	// Put the new name into the dictionary to pass to the API
 
-    NSArray *keys = [NSArray arrayWithObjects:key, nil];
-    NSArray *values = [NSArray arrayWithObjects:value, nil];
-    NSDictionary *newDict = [NSDictionary dictionaryWithObjects:values forKeys:keys];
+	NSArray *keys = [NSArray arrayWithObjects:key, nil];
+	NSArray *values = [NSArray arrayWithObjects:value, nil];
+	NSDictionary *newDict = [NSDictionary dictionaryWithObjects:values forKeys:keys];
 
-    NSURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"devices/%@", [dDict objectForKey:@"id"]] :newDict];
+	NSURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"devices/%@", [dDict objectForKey:@"id"]] :newDict];
 
-    if (request != nil)
-    {
-        // TODO - add special case for unassigning a device kConnectTypeUnassignDevice
+	if (request != nil)
+	{
+		// TODO - add special case for unassigning a device kConnectTypeUnassignDevice
 
-        [self launchConnection:request :kConnectTypeUpdateDevice];
-    }
-    else
-    {
-        errorMessage = @"[ERROR] Could not create a request to update the device.";
-        [self reportError];
-    }
+		[self launchConnection:request :kConnectTypeUpdateDevice];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to update the device.";
+		[self reportError];
+	}
 }
 
 
@@ -570,9 +564,9 @@
 	[request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
 
 	if (bodyDictionary != nil)
-    {
-        [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:bodyDictionary options:0 error:&error]];
-    }
+	{
+		[request setHTTPBody:[NSJSONSerialization dataWithJSONObject:bodyDictionary options:0 error:&error]];
+	}
 
 	if (error)
 	{
@@ -610,10 +604,10 @@
 
 - (NSURLRequest *)makeDELETErequest:(NSString *)path
 {
-    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
-    [self setRequestAuthorization:request];
-    [request setHTTPMethod:@"DELETE"];
-    return request;
+	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
+	[self setRequestAuthorization:request];
+	[request setHTTPMethod:@"DELETE"];
+	return request;
 }
 
 
@@ -621,10 +615,10 @@
 - (void)setRequestAuthorization:(NSMutableURLRequest *)request
 {
 	if (_harvey != nil)
-    {
-        [request setValue:[@"Basic " stringByAppendingString:[self encodeBase64String:_harvey]] forHTTPHeaderField:@"Authorization"];
-        [request setTimeoutInterval:30.0];
-    }
+	{
+		[request setValue:[@"Basic " stringByAppendingString:[self encodeBase64String:_harvey]] forHTTPHeaderField:@"Authorization"];
+		[request setTimeoutInterval:30.0];
+	}
 }
 
 
@@ -638,32 +632,32 @@
 
 	Connexion *aConnexion = [[Connexion alloc] init];
 	aConnexion.actionCode = actionCode;
-    aConnexion.errorCode = -1;
+	aConnexion.errorCode = -1;
 	aConnexion.receivedData = [NSMutableData dataWithCapacity:0];
 
-    if (actionCode == kConnectTypeGetLogEntriesStreamed) [request setTimeoutInterval:3600.0];
+	if (actionCode == kConnectTypeGetLogEntriesStreamed) [request setTimeoutInterval:3600.0];
 
-    aConnexion.connexion = [[NSURLConnection alloc] initWithRequest:request delegate:self];
+	aConnexion.connexion = [[NSURLConnection alloc] initWithRequest:request delegate:self];
 
 	if (!aConnexion.connexion)
 	{
 		// Inform the user that the connection failed.
 
-        errorMessage = @"[ERROR] Could not establish a connection to the Electric Imp server.";
-        [self reportError];
+		errorMessage = @"[ERROR] Could not establish a connection to the Electric Imp server.";
+		[self reportError];
 	}
 	else
 	{
-        // Connection established successfully, so notify the main app to trigger the progress indicator
+		// Connection established successfully, so notify the main app to trigger the progress indicator
 		// and then add the new connexion to the list of current connections
 
-        if (_connexions.count < 1)
-        {
-            NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
-            [nc postNotificationName:@"BuildAPIProgressStart" object:nil];
-        }
+		if (_connexions.count < 1)
+		{
+			NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+			[nc postNotificationName:@"BuildAPIProgressStart" object:nil];
+		}
 
-        [_connexions addObject:aConnexion];
+		[_connexions addObject:aConnexion];
 	}
 }
 
@@ -694,8 +688,8 @@
 	else
 	{
 		bonaFides = [NSURLCredential credentialWithUser:[self encodeBase64String:_harvey]
-											   password:[self encodeBase64String:_harvey]
-											persistence:NSURLCredentialPersistenceNone];
+				password:[self encodeBase64String:_harvey]
+				persistence:NSURLCredentialPersistenceNone];
 	}
 
 	[[challenge sender] useCredential:bonaFides forAuthenticationChallenge:challenge];
@@ -732,11 +726,11 @@
 	// This delegate method is called when the server responds to the connection request
 	// Use it to trap certain status codes
 
-    NSHTTPURLResponse *rps = (NSHTTPURLResponse *)response;
-    NSInteger code = rps.statusCode;
+	NSHTTPURLResponse *rps = (NSHTTPURLResponse *)response;
+	NSInteger code = rps.statusCode;
 
-    if (code > 399 && code < 600)
-    {
+	if (code > 399 && code < 600)
+	{
 		// The API has responded with an error
 
 		if (code == 504)
@@ -755,7 +749,7 @@
 
 			if (aConnexion.connexion == connection) aConnexion.errorCode = code;
 		}
-    }
+	}
 }
 
 
@@ -795,11 +789,10 @@
 		{
 			theCurrentConnexion = aConnexion;
 
-            if (aConnexion.receivedData && aConnexion.receivedData.length > 0)
+			if (aConnexion.receivedData && aConnexion.receivedData.length > 0)
 			{
 				// If we have data in, decode it assuming it is JSON
-
-                parsedData = [NSJSONSerialization JSONObjectWithData:aConnexion.receivedData options:kNilOptions error:&error];
+				parsedData = [NSJSONSerialization JSONObjectWithData:aConnexion.receivedData options:kNilOptions error:&error];
 			}
 
 			if (error != nil)
@@ -808,18 +801,18 @@
 				// most likely a malformed request which returns a block of HTML
 
 				errorMessage = @"[ERROR] Received data could not be decoded. Is is JSON?";
-                errorMessage = [errorMessage stringByAppendingFormat:@" %@", (NSString *)aConnexion.receivedData];
+						errorMessage = [errorMessage stringByAppendingFormat:@" %@", (NSString *)aConnexion.receivedData];
 				[self reportError];
 				aConnexion.actionCode = kConnectTypeNone;
 			}
 
-            if (aConnexion.errorCode != -1)
-            {
+			if (aConnexion.errorCode != -1)
+			{
 				// Check for an error being reported by the server
 
 				errorMessage = [NSString stringWithFormat:@"[ERROR] {Code: %lu} ", aConnexion.errorCode];
 
-                if (parsedData)
+				if (parsedData)
 				{
 					// We managed to get sensible data back from the server
 					// This should be a description of the error, eg. unknown device, or a code syntax error
@@ -869,9 +862,9 @@
 					}
 				}
 
-                [self reportError];
+				[self reportError];
 				aConnexion.actionCode = kConnectTypeNone;
-            }
+			}
 		}
 	}
 
@@ -880,22 +873,22 @@
 	[connection cancel];
 	[_connexions removeObject:theCurrentConnexion];
 
-    if (_connexions.count < 1)
-    {
-        // There are no more current connections so tell the app to
+	if (_connexions.count < 1)
+	{
+		// There are no more current connections so tell the app to
 		// turn off the connection activity indicator
 
 		[nc postNotificationName:@"BuildAPIProgressStop" object:nil];
-    }
+	}
 
 	// Process the returned data according to the type of connection initiated
 
 	switch (theCurrentConnexion.actionCode)
 	{
-        case kConnectTypeNone:
-            break;
+		case kConnectTypeNone:
+			break;
 
-        case kConnectTypeGetModels:
+		case kConnectTypeGetModels:
 
 			// We asked for a list of all the models, so replace the current list with
 			// the newly returned data. This may have been called for an initial list at
@@ -903,34 +896,32 @@
 
 			if (parsedData)
 			{
-                if ([self checkStatus:parsedData] == 1)
-                {
+				if ([self checkStatus:parsedData] == 1)
+				{
 					[models removeAllObjects];
 
 					NSDictionary *mods = [parsedData objectForKey:@"models"];
 
-                    for (NSDictionary *model in mods)
-                    {
-                        // Add each model to the list
-                        // Each model has the following keys:
-                        // id - string
-                        // name - string
-                        // device - array of devices
-                        // is_factory - bool [NOT YET SUPPORTED]
+					for (NSDictionary *model in mods)
+					{
+						// Add each model to the list
+						// Each model has the following keys:
+						// id - string
+						// name - string
+						// device - array of devices
 
-                        [models addObject:model];
-                    }
+						[models addObject:model];
+					}
 
 					// Tell the main app to redisplay the models list
-
-                    //[mainInstance performSelector:@selector(listModels) withObject:nil];
+					
 					[nc postNotificationName:@"BuildAPIGotModelsList" object:nil];
 
 					// Is this the first time we are requesting the list in this run time?
 					// If so, record that we are logged in
 
 					if (_initialLoadFlag) loggedInFlag = YES;
-                }
+				}
 			}
 
 			break;
@@ -943,47 +934,45 @@
 
 			if (parsedData)
 			{
-                if ([self checkStatus:parsedData] == 1)
-                {
+				if ([self checkStatus:parsedData] == 1)
+				{
 					[devices removeAllObjects];
 
 					NSDictionary *devs = [parsedData objectForKey:@"devices"];
 
-                    for (NSDictionary *device in devs)
-                    {
-                        // Add each model to the list
-                        // Each model has the following keys:
-                        // id - string
-                        // name - string
-                        // is_factory - bool
-                        // powerstate - bool
-                        // rssi - integer
-                        // agent_id - string
-                        // agent_status - string
-                        // model_id - string
+					for (NSDictionary *device in devs)
+					{
+						// Add each model to the list
+						// Each model has the following keys:
+						// id - string
+						// name - string
+						// powerstate - bool
+						// rssi - integer
+						// agent_id - string
+						// agent_status - string
+						// model_id - string
 
 						// Convert the loaded device dictionary into a mutable dictionary as we may
 						// have the change values, ie. the name if it is <null>
 
 						NSMutableDictionary *newDevice = [NSMutableDictionary dictionaryWithDictionary:device];
-                        [devices addObject:newDevice];
-                    }
+						[devices addObject:newDevice];
+					}
 
 					// Tell the main app to redisplay the devices list
-
-                    //[mainInstance performSelector:@selector(listDevices) withObject:nil];
+					
 					[nc postNotificationName:@"BuildAPIGotDevicesList" object:nil];
 
 					// Is this the first time we are requesting the list in this run time?
 					// If so, future requests will not be, so clear the flag
 
 					if (_initialLoadFlag) _initialLoadFlag = NO;
-                }
+				}
 			}
 
 			break;
 
-        case kConnectTypePostCode:
+		case kConnectTypePostCode:
 
 			// We posted a new code revision to the current model,
 			// so just call the follow-up method in the main app
@@ -992,14 +981,13 @@
 			{
 				if ([self checkStatus:parsedData] == 1)
 				{
-					//[mainInstance performSelector:@selector(uploadCodeStageTwo) withObject:nil];
 					[nc postNotificationName:@"BuildAPIPostedCode" object:nil];
 				}
 			}
 
 			break;
 
-        case kConnectTypeRestartDevice:
+		case kConnectTypeRestartDevice:
 
 			// We asked that the current device or all the current model's device be restarted,
 			// so just call the follow-up method in the main app
@@ -1008,14 +996,13 @@
 			{
 				if ([self checkStatus:parsedData] == 1)
 				{
-					//[mainInstance performSelector:@selector(restarted) withObject:nil];
 					[nc postNotificationName:@"BuildAPIDeviceRestarted" object:nil];
 				}
 			}
 
 			break;
 
-        case kConnectTypeAssignDeviceToModel:
+		case kConnectTypeAssignDeviceToModel:
 
 			// We asked that the current device be assigned to another model,
 			// so just call the follow-up method in the main app
@@ -1024,16 +1011,15 @@
 			{
 				if ([self checkStatus:parsedData] == 1)
 				{
-					// [mainInstance performSelector:@selector(reassigned) withObject:nil];
 					[nc postNotificationName:@"BuildAPIDeviceAssigned" object:nil];
-                    [self getModels];
-                    [self getDevices];
+					[self getModels];
+					[self getDevices];
 				}
 			}
 
-            break;
+			break;
 
-        case kConnectTypeNewModel:
+		case kConnectTypeNewModel:
 
 			// We created a new model, so we need to update the models list so that the
 			// change is reflected in our local data.
@@ -1044,171 +1030,164 @@
 				{
 					// Tell the main app we have successfully created the model
 
-					//[mainInstance performSelector:@selector(createdModel) withObject:nil];
 					[nc postNotificationName:@"BuildAPIModelCreated" object:nil];
 
 					// Now get a new list of models, and then a new list of devices
 
-                    [self getModels];
+					[self getModels];
 					[self getDevices];
 				}
 			}
 
 			break;
 
-        case kConnectTypeDeleteModel:
+		case kConnectTypeDeleteModel:
 
 			// We deleted a new model, so we need to update the models list so that the
 			// change is reflected in our local data.
 
 			if (parsedData)
-            {
-                if ([self checkStatus:parsedData] == 1)
-                {
+			{
+				if ([self checkStatus:parsedData] == 1)
+				{
 					// Tell the main app we have successfully delete the model
 
-					//[mainInstance performSelector:@selector(deleteModelStageTwo) withObject:nil];
 					[nc postNotificationName:@"BuildAPIModelDeleted" object:nil];
 
 					// Now get a new list of models, and then a new list of devices
 
 					[self getModels];
-                    [self getDevices];
-                }
-            }
+					[self getDevices];
+				}
+			}
 
-            break;
+			break;
 
-        case kConnectTypeUpdateDevice:
+		case kConnectTypeUpdateDevice:
 
 			// We asked that the device information be updated, which may include a name-change or
 			// model assignment so we update the model and device lists so that the change
 			// is reflected in our local data.
 
 			if (parsedData)
-            {
-                if ([self checkStatus:parsedData] == 1)
-                {
+			{
+				if ([self checkStatus:parsedData] == 1)
+				{
 					// Tell the main app we have successfully updated the device
 
-					//[mainInstance performSelector:@selector(renameDeviceStageTwo) withObject:nil];
 					[nc postNotificationName:@"BuildAPIDeviceUpdated" object:nil];
 
 					// Now get a new list of models, and then a new list of devices
 
 					[self getModels];
-                    [self getDevices];
-                }
-            }
+					[self getDevices];
+				}
+			}
 
-            break;
+			break;
 
-        case kConnectTypeDeleteDevice:
+		case kConnectTypeDeleteDevice:
 
 			// We asked that the device be deleted, so we update the model and device lists
 			//  so that the change is reflected in our local data.
 
 			if (parsedData)
-            {
-                if ([self checkStatus:parsedData] == 1)
-                {
+			{
+				if ([self checkStatus:parsedData] == 1)
+				{
 					// Tell the main app we have successfully deleted the device
 
-					//[mainInstance performSelector:@selector(deleteDeviceStageTwo) withObject:nil];
 					[nc postNotificationName:@"BuildAPIDeviceDeleted" object:nil];
 
 					// Now get a new list of models, and then a new list of devices
 
 					[self getModels];
-                    [self getDevices];
-                }
-            }
+					[self getDevices];
+				}
+			}
 
-            break;
+			break;
 
-        case kConnectTypeUpdateModel:
+		case kConnectTypeUpdateModel:
 
 			// We asked that the model be updated, which may include a name-change or
 			// device assignment so we update the model and device lists so that the change
 			// is reflected in our local data.
 
 			if (parsedData)
-            {
-                if ([self checkStatus:parsedData] == 1)
-                {
+			{
+				if ([self checkStatus:parsedData] == 1)
+				{
 					// Tell the main app we have successfully updated the model
 
-					//[mainInstance performSelector:@selector(renameModelStageTwo) withObject:nil];
 					[nc postNotificationName:@"BuildAPIModelUpdated" object:nil];
 
 					// Now get a new list of models, and then a new list of devices
 
 					[self getModels];
-                    [self getDevices];
-                }
-            }
+					[self getDevices];
+				}
+			}
 
-            break;
+			break;
 
-        case kConnectTypeGetCodeLatestBuild:
+		case kConnectTypeGetCodeLatestBuild:
 
 			// We asked for the most recent code revision. Here we have received all the builds –
 			// we extract the version of the most recent entry, then request this particular build
 
 			if (parsedData)
-            {
-                if ([self checkStatus:parsedData] == 1)
-                {
-                    NSArray *code = [parsedData objectForKey:@"revisions"];
-                    NSDictionary *latestBuild = [code objectAtIndex:0];
-                    NSNumber *n = [latestBuild valueForKey:@"version"];
-                    [self getCodeRev:_currentModelID :n.integerValue];
-                }
-            }
+			{
+				if ([self checkStatus:parsedData] == 1)
+				{
+					NSArray *code = [parsedData objectForKey:@"revisions"];
+					NSDictionary *latestBuild = [code objectAtIndex:0];
+					NSNumber *n = [latestBuild valueForKey:@"version"];
+					[self getCodeRev:_currentModelID :n.integerValue];
+				}
+			}
 
-            break;
+			break;
 
-        case kConnectTypeGetCodeRev:
+		case kConnectTypeGetCodeRev:
 
 			// We asked for a code revision, which we make available to the main app
 
 			if (parsedData)
-            {
-                if ([self checkStatus:parsedData] == 1)
-                {
-                    NSDictionary *code = [parsedData objectForKey:@"revision"];
-                    deviceCode = [code objectForKey:@"device_code"];
-                    agentCode = [code objectForKey:@"agent_code"];
+			{
+				if ([self checkStatus:parsedData] == 1)
+				{
+					NSDictionary *code = [parsedData objectForKey:@"revision"];
+					deviceCode = [code objectForKey:@"device_code"];
+					agentCode = [code objectForKey:@"agent_code"];
 
-                    // Tell the main app we have the code in the deviceCode and agentCode properties
+					 // Tell the main app we have the code in the deviceCode and agentCode properties
 
-                    //[mainInstance performSelector:@selector(modelToProjectStageTwo) withObject:nil];
 					[nc postNotificationName:@"BuildAPIGotCodeRev" object:nil];
-                }
-            }
+				}
+			}
 
-            break;
+			break;
 
-        case kConnectTypeGetLogEntries:
+		case kConnectTypeGetLogEntries:
 
 			// We asked for all of a devices log entries, which we return to the main app
 
 			if (parsedData)
-            {
-                if ([self checkStatus:parsedData] == 1)
-                {
-                    NSArray *logs = [parsedData objectForKey:@"logs"];
+			{
+				if ([self checkStatus:parsedData] == 1)
+				{
+					NSArray *logs = [parsedData objectForKey:@"logs"];
 
-                    // Pass the ball back to the AppDelegate
+					// Pass the ball back to the AppDelegate
 
 					// Tell the main app we have the code in the deviceCode and agentCode properties
 
-					//[mainInstance performSelector:@selector(listLogs:) withObject:logs];
 					[nc postNotificationName:@"BuildAPIGotLogs" object:logs];
-                }
-            }
+				}
+			}
 
-            break;
+			break;
 
 		case kConnectTypeGetLogEntriesRanged:
 
@@ -1219,32 +1198,32 @@
 			{
 				if ([self checkStatus:parsedData] == 1)
 				{
-                    // Save the URL of the log stream and begin logging
+					// Save the URL of the log stream and begin logging
 
 					_logStreamURL = [kBaseAPIURL stringByAppendingString:[parsedData objectForKey:@"poll_url"]];
-                    [self startLogging];
+					[self startLogging];
 				}
 			}
 
 			break;
 
-        case kConnectTypeGetLogEntriesStreamed:
+		case kConnectTypeGetLogEntriesStreamed:
 
 			// We asked for a log stream and the first streamed entry has arrived. Send it to the main
 			// app to be displayed, and then re-commence logging
 
 			if (parsedData)
-            {
-                if ([self checkStatus:parsedData] == 1)
-                {
-                    [nc postNotificationName:@"BuildAPILogStream" object:[parsedData objectForKey:@"logs"]];
-                }
-            }
+			{
+				if ([self checkStatus:parsedData] == 1)
+				{
+					[nc postNotificationName:@"BuildAPILogStream" object:[parsedData objectForKey:@"logs"]];
+				}
+			}
 
 			[self startLogging];
 			break;
 
-        default:
+		default:
 			break;
 	}
 
@@ -1258,28 +1237,28 @@
 
 - (void)reportError
 {
-    [[NSNotificationCenter defaultCenter] postNotificationName:@"ToolsAPIError" object:nil];
+	[[NSNotificationCenter defaultCenter] postNotificationName:@"ToolsAPIError" object:nil];
 }
 
 
 
 - (NSInteger)checkStatus:(NSDictionary *)data
 {
-    // Before using data returned from the server, check that the success field is not false
+	// Before using data returned from the server, check that the success field is not false
 	// If it is, set up an error message
 
 	NSNumber *value = [data objectForKey:@"success"];
 
-    if (value.integerValue == 0)
-    {
-        // There has been an error reported by the API
+	if (value.integerValue == 0)
+	{
+		// There has been an error reported by the API
 
-        NSDictionary *err = [data objectForKey:@"error"];
-        errorMessage = [err objectForKey:@"message_short"];
-        [self reportError];
-    }
+		NSDictionary *err = [data objectForKey:@"error"];
+		errorMessage = [err objectForKey:@"message_short"];
+		[self reportError];
+	}
 
-    return value.integerValue;
+	return value.integerValue;
 }
 
 
