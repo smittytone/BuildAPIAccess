@@ -13,8 +13,8 @@
 
 {
 	NSMutableArray *_connexions;
-    NSDictionary *_logStreamDevice;
-    NSString *_baseURL, *_currentModelID, *_logStreamURL, *_lastStamp, *_harvey;
+	NSDictionary *_logStreamDevice;
+	NSString *_baseURL, *_currentModelID, *_logStreamURL, *_lastStamp, *_harvey;
 	BOOL _initialLoadFlag;
 }
 
@@ -43,7 +43,7 @@
 - (void)updateDevice:(NSInteger)deviceIndex :(NSString *)key :(NSString *)value;
 - (void)autoRenameDevice:(NSString *)devId;
 - (void)updateModel:(NSInteger)modelIndex :(NSString *)key :(NSString *)value;
-- (void)getLogsForDevice:(NSInteger)index :(NSString *)since :(BOOL)isStream;
+- (void)getLogsForDevice:(NSInteger)deviceIndex :(NSString *)since :(BOOL)isStream;
 - (void)startLogging;
 - (void)stopLogging;
 
