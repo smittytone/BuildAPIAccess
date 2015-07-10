@@ -7,7 +7,7 @@ BuildAPIAccess requires the (included) class Connexion, though this is a simple 
 Devices are stored internally as [NSMutableDictionary](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableDictionary_Class/) objects with the following keys:
 
 Key | Type | Description | Editable?
---- | ---- | ----
+--- | --- | --- | ---
 id | string | Unique identifier | No
 name | string | Human-friendly name | Yes
 powerstate | string | "offline" or "online" | No
