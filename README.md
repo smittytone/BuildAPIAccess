@@ -4,6 +4,10 @@ Sample Objective-C (Mac OS X) class wrapper for [Electric Imp’s Build API](htt
 
 BuildAPIAccess requires the (included) class Connexion, though this is a simple class for the bundles an [NSURLConnection](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSURLConnection_Class/index.html) and associated data.
 
+## Build API Authorization
+
+Making use of the Build API requires an Electric Imp developer account and an API key associated with that account. API keys can be requested from Electric Imp, as [detailed here](https://electricimp.com/docs/buildapi/).
+
 ## Devices
 
 Devices are stored internally as [NSMutableDictionary](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableDictionary_Class/) objects with the following keys:
@@ -112,11 +116,11 @@ The parameter *since* is a Unix timestamp and with limit the log entries returne
 
 Pass `YES` into the *isStream* parameter if you want to initiate log streaming.
 
-Currently, log entries can be streamed from only one device. To stream from another device, call [*stopLogging:*]() then call [*getLogsForDevice:*](#--voidgetlogsfordevicensintegerdeviceindex-nsstring-since-boolisstream) with the new device’s *deviceIndex* value.
+Currently, log entries can be streamed from only one device. To stream from another device, call [*stopLogging:*](#--voidstoplogging) then call [*getLogsForDevice:*](#--voidgetlogsfordevicensintegerdeviceindex-nsstring-since-boolisstream) with the new device’s *deviceIndex* value.
 
 ### - (void)startLogging;
 
-Having initiated log streaming using [*getLogsForDevice:*](#--voidgetlogsfordevicensintegerdeviceindex-nsstring-since-boolisstream), this method is called automatically. But if your application uses [*stopLogging:*]() to halt logging, this method can be called to recommence logging.
+Having initiated log streaming using [*getLogsForDevice:*](#--voidgetlogsfordevicensintegerdeviceindex-nsstring-since-boolisstream), this method is called automatically. But if your application uses [*stopLogging:*](#--voidstoplogging) to halt logging, this method can be called to recommence logging.
 
 ### - (void)stopLogging;
 
@@ -124,7 +128,7 @@ Call this method to stop the current logging stream.
 
 ## HTTPS Request Construction
 
-BuildAPIAccess provides the following convenience methods for construction HTTPS requests to the Electric Imp Cloud. Where a *bodyDictionary* parameter is required, pass an [NSDictionary](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSDictionary_Class/) object loaded with the key-value pairs you wish to change. Note that the Build API ignores keys that it does not allow users to change *(see above)*, and will ignore invalid keys.
+BuildAPIAccess provides the following convenience methods for construction HTTPS requests to the Electric Imp Cloud. Where a *bodyDictionary* parameter is required, pass an [NSDictionary](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSDictionary_Class/) object loaded with the key-value pairs you wish to change. Note that the Build API ignores keys that it does not allow users to change *([see above](#devices))*, and will ignore invalid keys.
 
 These methods are called by the above Build API Access methods.
 
@@ -135,6 +139,10 @@ These methods are called by the above Build API Access methods.
 #### - (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
 
 #### - (NSURLRequest *)makeDELETErequest:(NSString *)path;
+
+## Signalling Connections
+
+BuildAPIAccess maintains a list of active connections. When a connection is completed for whatever reason, it is removed from the list. If there are no connections in flight, the list will be empty. When a connection is added to the empty list, BuildAPIAccess will signal this by sending the notification `BuildAPIProgressStart`. When the last listed connection completes, it will send the notification `BuildAPIProgressStop`. This is so that the host app can maintain a progress indicator which is visible so long as at least one connection is in flight (but gives to indication as to the progress of individual connections).
 
 ## Returning Data
 
@@ -156,3 +164,6 @@ BuildAPIGotCodeRev | Successfully retrieved the requested code revision. Device 
 BuildAPIGotLogs | Successfully retrieved the requested log entries. The logs are sent with the notification as an [NSArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSArray_Class/) [log entry records](#log-entries)
 BuildAPILogStream | Successfully retrieved a freshly posted log entry. The log entry is sent with the notification as an [NSArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSArray_Class/) [log entry records](#log-entries)
 
+## Error Reporting
+
+Errors arising from connectivity, or through the application’s interaction with the Build API, are announced by the notification `ToolsAPIError`. When the application receives this notifcation, it should read the BuildAPIAccess instance’s *errorMessage* property for more information.
