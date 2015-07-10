@@ -16,6 +16,8 @@ Devices are stored internally as [NSMutableDictionary](https://developer.apple.c
 | agent_status | string | "offline" or "online" | No |
 | model_id | string | ID of the model the device is assigned to | Yes |
 
+## Build API Access Methods
+
 BuildAPIAccess provides a number of methods, but these are the ones to call from your own application:
 
 ### - (void)getInitialData:(NSString *)harvey;
@@ -24,11 +26,11 @@ Load up lists of models and devices from the Electric Imp Cloud. First time roun
 
 ### - (void)getModels;
 
-Also called by getInitialData:, this method results in a list of models placed in the BuildAPIAccess NSMutableArray property *models*.
+Also called by *getInitialData:*, this method results in a list of models placed in the BuildAPIAccess NSMutableArray property *models*.
 
 ### - (void)getDevices;
 
-Also alled by getInitialData:, this method results in a list of devices placed in the BuildAPIAccess NSMutableArray property *devices*.
+Also alled by *getInitialData:*, this method results in a list of devices placed in the BuildAPIAccess NSMutableArray property *devices*.
 
 ### - (void)createNewModel:(NSString *)modelName :(BOOL)isFactoryFirmware;
 
@@ -74,16 +76,38 @@ Remove the device at index *deviceIndex* within the property *devices* from the 
 
 Update the information stored on the server for the device at index *deviceIndex* within the property *devices*. This is used to set or alter a single key within the key-value record. 
 
-- (void)autoRenameDevice:(NSString *)devId;
-- (void)updateModel:(NSInteger)modelIndex :(NSString *)key :(NSString *)value;
-- (void)getLogsForDevice:(NSInteger)index :(NSString *)since :(BOOL)isStream;
-- (void)startLogging;
+### - (void)updateModel:(NSInteger)modelIndex :(NSString *)key :(NSString *)value;
+
+Update the information stored on the server for the model at index *modelIndex* within the property *models*. This is used to set or alter a single key within the key-value record. 
+
+### - (void)getLogsForDevice:(NSInteger)deviceIndex :(NSString *)since :(BOOL)isStream;
+
+Get the current set of log entries stored on the server for the device at index *deviceIndex* within the property *devices*. 
+
+The parameter *since* is a Unix timestamp and with limit the log entries returned to those posted on or after the timestamp. Pass an empty string, `""`, to get all the most recent log entries (up to a server-imposed maximum of 200).
+
+Pass `YES` into the *isStream* parameter if you want to initiate log streaming.
+
+Currently, log entries can be streamed from only one device. To stream from another device, call *stopLogging:* then call *getLogsForDevice:* with the new device’s *deviceIndex* value.
+
+### - (void)startLogging;
+
+Having initiated log streaming using *getLogsForDevice:*, this method is called automatically. But if your application uses *stopLogging:* to halt logging, this method can be called to recommence logging.
+
 - (void)stopLogging;
 
-// HTTP Request Construction Methods
+Call this method to stop the current logging stream.
 
-- (NSURLRequest *)makeGETrequest:(NSString *)path;
-- (NSMutableURLRequest *)makePUTrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
-- (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
-- (NSURLRequest *)makeDELETErequest:(NSString *)path;
-- (void)setRequestAuthorization:(NSMutableURLRequest *)req
+## HTTPS Request Construction
+
+BuildAPIAccess provides the following convenience methods for construction HTTPS requests to the Electric Imp Cloud. Where a *bodyDictionary* parameter is required, pass an [NSDictionary]() object loaded with the key-value pairs you wish to change. Note that the Build API ignores keys that it does not allow users to change *(see above)*, and will ignore invalid keys.
+
+These methods are called by the above Build API Access methods.
+
+### - (NSURLRequest *)makeGETrequest:(NSString *)path;
+
+### - (NSMutableURLRequest *)makePUTrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
+
+### - (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
+
+### - (NSURLRequest *)makeDELETErequest:(NSString *)path;
