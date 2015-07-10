@@ -50,11 +50,11 @@ Load up lists of models and devices from the Electric Imp Cloud. First time roun
 
 ### - (void)getModels;
 
-Also called by *getInitialData:*, this method results in a list of models placed in the BuildAPIAccess NSMutableArray property *models*.
+Also called by [*getInitialData:*](#--voidgetinitialdatansstring-harvey), this method results in a list of models placed in the BuildAPIAccess NSMutableArray property *models*.
 
 ### - (void)getDevices;
 
-Also alled by *getInitialData:*, this method results in a list of devices placed in the BuildAPIAccess NSMutableArray property *devices*.
+Also alled by [*getInitialData:*](#--voidgetinitialdatansstring-harvey), this method results in a list of devices placed in the BuildAPIAccess NSMutableArray property *devices*.
 
 ### - (void)createNewModel:(NSString *)modelName :(BOOL)isFactoryFirmware;
 
@@ -112,13 +112,13 @@ The parameter *since* is a Unix timestamp and with limit the log entries returne
 
 Pass `YES` into the *isStream* parameter if you want to initiate log streaming.
 
-Currently, log entries can be streamed from only one device. To stream from another device, call *stopLogging:* then call *getLogsForDevice:* with the new device’s *deviceIndex* value.
+Currently, log entries can be streamed from only one device. To stream from another device, call [*stopLogging:*]() then call [*getLogsForDevice:*](#--voidgetlogsfordevicensintegerdeviceindex-nsstring-since-boolisstream) with the new device’s *deviceIndex* value.
 
 ### - (void)startLogging;
 
-Having initiated log streaming using *getLogsForDevice:*, this method is called automatically. But if your application uses *stopLogging:* to halt logging, this method can be called to recommence logging.
+Having initiated log streaming using [*getLogsForDevice:*](#--voidgetlogsfordevicensintegerdeviceindex-nsstring-since-boolisstream), this method is called automatically. But if your application uses [*stopLogging:*]() to halt logging, this method can be called to recommence logging.
 
-- (void)stopLogging;
+### - (void)stopLogging;
 
 Call this method to stop the current logging stream.
 
