@@ -113,13 +113,13 @@ BuildAPIAccess provides the following convenience methods for construction HTTPS
 
 These methods are called by the above Build API Access methods.
 
-### - (NSURLRequest *)makeGETrequest:(NSString *)path;
+#### - (NSURLRequest *)makeGETrequest:(NSString *)path;
 
-### - (NSMutableURLRequest *)makePUTrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
+#### - (NSMutableURLRequest *)makePUTrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
 
-### - (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
+#### - (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
 
-### - (NSURLRequest *)makeDELETErequest:(NSString *)path;
+#### - (NSURLRequest *)makeDELETErequest:(NSString *)path;
 
 ## Returning Data
 
