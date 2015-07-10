@@ -19,11 +19,11 @@ model_id | string | ID of the model the device is assigned to | Yes
 
 Models are stored internally as [NSDictionary](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSDictionary_Class/) objects with the following keys:
 
-Key | Type | Description | Editable? |
---- | ---- | ---- |
-id | string | Unique identifier | No |
-name | string | Human-friendly name | Yes |
-device | array | An array of ID strings for the devices assigned to this model | No |
+Key | Type | Description | Editable?
+--- | --- | --- | ---
+id | string | Unique identifier | No
+name | string | Human-friendly name | Yes
+device | array | An array of ID strings for the devices assigned to this model | No
 
 ## Build API Access Methods
 
