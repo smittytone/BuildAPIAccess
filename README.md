@@ -6,15 +6,16 @@ BuildAPIAccess requires the (included) class Connexion, though this is a simple 
 
 Devices are stored internally as [NSMutableDictionary](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableDictionary_Class/) objects with the following keys:
 
-Key | Type | Description | Editable? |
---- | ---- | ---- |
-id | string | Unique identifier | No |
-name | string | Human-friendly name | Yes |
-powerstate | string | "offline" or "online" | No |
-rssi | integer | Local WiFi signal strength | No |
-agent_id | string | ID of the device’s paired agent | No |
-agent_status | string | "offline" or "online" | No |
-model_id | string | ID of the model the device is assigned to | Yes |
+Key | Type | Description | Editable?
+--- | ---- | ----
+id | string | Unique identifier | No
+name | string | Human-friendly name | Yes
+powerstate | string | "offline" or "online" | No
+rssi | integer | Local WiFi signal strength | No
+agent_id | string | ID of the device’s paired agent | No
+agent_status | string | "offline" or "online" | No
+model_id | string | ID of the model the device is assigned to | Yes
+
 
 Models are stored internally as [NSDictionary](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSDictionary_Class/) objects with the following keys:
 
