@@ -1237,7 +1237,7 @@
 
 - (void)reportError
 {
-	[[NSNotificationCenter defaultCenter] postNotificationName:@"ToolsAPIError" object:nil];
+	[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIError" object:nil];
 }
 
 
