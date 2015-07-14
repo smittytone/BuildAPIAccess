@@ -172,4 +172,4 @@ BuildAPILogStream | Successfully retrieved a freshly posted log entry. The log e
 
 ## Error Reporting
 
-Errors arising from connectivity, or through the application’s interaction with the Build API, are announced by the notification `ToolsAPIError`. When the application receives this notifcation, it should read the BuildAPIAccess instance’s *errorMessage* property for more information.
+Errors arising from connectivity, or through the application’s interaction with the Build API, are announced by the notification `BuildAPIError`. When the application receives this notifcation, it should read the BuildAPIAccess instance’s *errorMessage* property for more information.
