@@ -9,41 +9,45 @@
 #import "Connexion.h"
 
 
-@interface BuildAPIAccess : NSObject <NSURLConnectionDataDelegate>
+@interface BuildAPIAccess : NSObject <NSURLConnectionDataDelegate, NSURLSessionDataDelegate, NSURLSessionTaskDelegate>
 
 {
 	NSMutableArray *_connexions;
-	NSDictionary *_logStreamDevice;
-	NSString *_baseURL, *_currentModelID, *_logStreamURL, *_lastStamp, *_harvey;
-	BOOL _initialLoadFlag;
+	NSString *_logStreamDevice, *_baseURL, *_currentModelID, *_logStreamURL, *_lastStamp, *_harvey;
+	BOOL _followOnFlag, _useSessionFlag;
 }
 
 
 // Initialization Methods
 
-- (void)getInitialData:(NSString *)harvey;
-- (void)clear;
+- (id)initForNSURLSession;
+- (id)initForNSURLConnection;
+- (void)clrk;
+- (void)setk:(NSString *)harvey;
 
 // Data Request Methods
 
 - (void)getModels;
 - (void)getDevices;
 - (void)createNewModel:(NSString *)modelNam;
-- (void)uploadCode:(NSString *)newDeviceCode :(NSString *)newAgentCode :(NSInteger)modelIndex;
-- (void)assignDevice:(NSInteger)deviceIndex toModel:(NSInteger)modelIndex;
 - (void)getCode:(NSString *)modelID;
 - (void)getCodeRev:(NSString *)modelID :(NSInteger)build;
+- (void)getLogsForDevice:(NSString *)deviceID :(NSString *)since :(BOOL)isStream;
 
 // Action Methods
 
-- (void)restartDevice:(NSInteger)deviceIndex;
-- (void)restartDevices:(NSInteger)modelIndex;
-- (void)deleteModel:(NSInteger)modelIndex;
-- (void)deleteDevice:(NSInteger)deviceIndex;
-- (void)updateDevice:(NSInteger)deviceIndex :(NSString *)key :(NSString *)value;
-- (void)autoRenameDevice:(NSString *)devId;
-- (void)updateModel:(NSInteger)modelIndex :(NSString *)key :(NSString *)value;
-- (void)getLogsForDevice:(NSInteger)deviceIndex :(NSString *)since :(BOOL)isStream;
+- (void)updateModel:(NSString *)modelID :(NSString *)key :(NSString *)value;
+- (void)uploadCode:(NSString *)modelID :(NSString *)newDeviceCode :(NSString *)newAgentCode;
+- (void)deleteModel:(NSString *)modelID;
+- (void)assignDevice:(NSString *)deviceID toModel:(NSString *)modelID;
+- (void)restartDevice:(NSString *)deviceID;
+- (void)restartDevices:(NSString *)modelID;
+- (void)deleteDevice:(NSString *)deviceID;
+- (void)updateDevice:(NSString *)deviceID :(NSString *)key :(NSString *)value;
+- (void)autoRenameDevice:(NSString *)deviceID;
+
+// Logging Methods
+
 - (void)startLogging;
 - (void)stopLogging;
 
@@ -58,6 +62,7 @@
 // Connection Methods
 
 - (void)launchConnection:(id)request :(NSInteger)actionCode;
+- (void)relaunchConnection:(id)userInfo;
 
 // Misc Methods
 
@@ -76,7 +81,6 @@
 @property (nonatomic, strong) NSString *statusMessage;
 @property (nonatomic, strong) NSString *deviceCode;
 @property (nonatomic, strong) NSString *agentCode;
-@property (nonatomic, assign) bool loggedInFlag;
 
 
 @end

@@ -10,7 +10,7 @@ Making use of the Build API requires an Electric Imp developer account and an AP
 
 ## Licence
 
-BuildAPIAccess is offered under the terms of the MIT licence. 
+BuildAPIAccess is offered under the terms of the MIT licence.
 
 **A polite request** If you make use of BuildAPIAccess in any way, a credit and a link to this repository would be appreciated.
 
@@ -49,6 +49,15 @@ type | string | The entry’s flag, eg. ”Agent”, “Device”, “Status”,
 message | string | The logged information
 
 None of these keys’ values are editable.
+
+## Initialization Methods
+
+BuildAPIAccess provides two convenience initializers (constructors):
+
+- initForNSURLSession
+- initForNSURLConnection
+
+Both initialize the BuildAPIAccess instance to make use of, respectively, Apple’s NSURLSession and NSURLConnection connectivity systems. iOS and Mac OS X support both modes, though NSURLSession is the mechanism Apple recommends. Indeed, tvOS *only* supports NSURLSession.
 
 ## Build API Access Methods
 
@@ -108,15 +117,15 @@ Remove the device at index *deviceIndex* within the property *devices* from the 
 
 ### - (void)updateDevice:(NSInteger)deviceIndex :(NSString *)key :(NSString *)value;
 
-Update the information stored on the server for the device at index *deviceIndex* within the property *devices*. This is used to set or alter a single key within the key-value record. 
+Update the information stored on the server for the device at index *deviceIndex* within the property *devices*. This is used to set or alter a single key within the key-value record.
 
 ### - (void)updateModel:(NSInteger)modelIndex :(NSString *)key :(NSString *)value;
 
-Update the information stored on the server for the model at index *modelIndex* within the property *models*. This is used to set or alter a single key within the key-value record. 
+Update the information stored on the server for the model at index *modelIndex* within the property *models*. This is used to set or alter a single key within the key-value record.
 
 ### - (void)getLogsForDevice:(NSInteger)deviceIndex :(NSString *)since :(BOOL)isStream;
 
-Get the current set of log entries stored on the server for the device at index *deviceIndex* within the property *devices*. 
+Get the current set of log entries stored on the server for the device at index *deviceIndex* within the property *devices*.
 
 The parameter *since* is a Unix timestamp and with limit the log entries returned to those posted on or after the timestamp. Pass an empty string, `""`, to get all the most recent log entries (up to a server-imposed maximum of 200).
 
