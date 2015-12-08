@@ -13,7 +13,7 @@
 
 {
 	NSMutableArray *_connexions;
-	NSString *_logStreamDevice, *_baseURL, *_currentModelID, *_logStreamURL, *_lastStamp, *_harvey;
+	NSString *_logDevice, *_baseURL, *_currentModelID, *_logURL, *_lastStamp, *_harvey;
 	BOOL _followOnFlag, _useSessionFlag;
 }
 
@@ -23,7 +23,7 @@
 - (id)initForNSURLSession;
 - (id)initForNSURLConnection;
 - (void)clrk;
-- (void)setk:(NSString *)apiKey;
+- (void)setk:(NSString *)harvey;
 
 // Data Request Methods
 
@@ -64,8 +64,10 @@
 - (void)launchConnection:(id)request :(NSInteger)actionCode;
 - (void)relaunchConnection:(id)userInfo;
 
-// Misc Methods
+// NSURLSession/NSURLConnection Joint Methods
 
+- (NSDictionary *)processConnection:(Connexion *)connexion;
+- (void)processResult:(Connexion *)connexion :(NSDictionary *)data;
 - (void)reportError;
 - (NSInteger)checkStatus:(NSDictionary *)data;
 
