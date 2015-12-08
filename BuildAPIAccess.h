@@ -12,9 +12,9 @@
 @interface BuildAPIAccess : NSObject <NSURLConnectionDataDelegate, NSURLSessionDataDelegate, NSURLSessionTaskDelegate>
 
 {
-	NSMutableArray *_connexions;
-	NSString *_logDevice, *_baseURL, *_currentModelID, *_logURL, *_lastStamp, *_harvey;
-	BOOL _followOnFlag, _useSessionFlag;
+    NSMutableArray *_connexions;
+    NSString *_logDevice, *_baseURL, *_currentModelID, *_logURL, *_lastStamp, *_harvey;
+    BOOL _followOnFlag, _useSessionFlag;
 }
 
 
