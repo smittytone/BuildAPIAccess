@@ -65,9 +65,9 @@
 
 
 
-- (void)setk:(NSString *)harvey
+- (void)setk:(NSString *)apiKey
 {
-	if (harvey.length > 0) _harvey = harvey;
+	if (apiKey.length > 0) _harvey = apiKey;
 }
 
 
