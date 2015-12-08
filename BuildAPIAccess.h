@@ -23,7 +23,7 @@
 - (id)initForNSURLSession;
 - (id)initForNSURLConnection;
 - (void)clrk;
-- (void)setk:(NSString *)harvey;
+- (void)setk:(NSString *)apiKey;
 
 // Data Request Methods
 
