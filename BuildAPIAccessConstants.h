@@ -3,9 +3,11 @@
 //  Copyright (c) 2015 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
+// BuildAPIAccess 1.1.1
 
-#ifndef Squinter_BuildAPIAccessContants_h
-#define Squinter_BuildAPIAccessContants_h
+
+#ifndef BuildAPIContants_h
+#define BuildAPIContants_h
 
 
 #define kConnectTypeNone					0
@@ -34,6 +36,9 @@
 
 #define kAllLogs 0
 #define kStreamLogs -1
+
+#define kServerSendsSuccess 1
+#define kServerSendsFailure 0
 
 
 #endif
