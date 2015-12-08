@@ -1,8 +1,10 @@
 # BuildAPIAccess
 
-Sample Objective-C (Mac OS X) class wrapper for [Electric Imp’s Build API](https://electricimp.com/docs/buildapi/).
+An Objective-C (Mac OS X / iOS / tvOS) class wrapper for [Electric Imp’s Build API](https://electricimp.com/docs/buildapi/).
 
-BuildAPIAccess requires the (included) class Connexion, though this is a simple class for the bundles an [NSURLConnection](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSURLConnection_Class/index.html) and associated data.
+BuildAPIAccess requires the (included) class Connexion, a simple convenience class for bundling either an [NSURLConnection](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSURLConnection_Class/index.html) or [NSURLSession](https://developer.apple.com/library/prerelease/mac/documentation/Foundation/Reference/NSURLSession_class/index.html) instance and associated Build API connection data.
+
+BuildAPIAccess 1.1 supports both NSURLSession and NSURLConnection. The former is Apple’s preferred mechanism and the only one of the two supported by tvOS. For more information, see [Initialization Methods](#Initialization-Methods). 
 
 ## Build API Authorization
 
@@ -54,18 +56,23 @@ None of these keys’ values are editable.
 
 BuildAPIAccess provides two convenience initializers (constructors):
 
-- initForNSURLSession
-- initForNSURLConnection
+### - (id)initForNSURLSession;
+### - (id)initForNSURLConnection;
 
-Both initialize the BuildAPIAccess instance to make use of, respectively, Apple’s NSURLSession and NSURLConnection connectivity systems. iOS and Mac OS X support both modes, though NSURLSession is the mechanism Apple recommends. Indeed, tvOS *only* supports NSURLSession.
+Both methods initialize the BuildAPIAccess instance to make use of, respectively, Apple’s NSURLSession and NSURLConnection connectivity systems. iOS and Mac OS X support both modes, though NSURLSession is the mechanism Apple recommends. Indeed, tvOS *only* supports NSURLSession.
+
+## Authorization Methods
+
+### - (void)setk:(NSString *)apiKey;
+### - (void)clrk;
+
+Use the first method to pass to the BuildAPIAcess instance the user’s Build API key, stored only for the lifetime of the instance. It is up to your host app to persist the API key across launches.
+
+The second method can be used to clear the instance’s copy of the key.
 
 ## Build API Access Methods
 
 BuildAPIAccess provides a number of methods, but these are the ones to call from your own application:
-
-### - (void)getInitialData:(NSString *)harvey;
-
-Load up lists of models and devices from the Electric Imp Cloud. First time round, pass in your API key.
 
 ### - (void)getModels;
 
