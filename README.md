@@ -1,4 +1,4 @@
-# BuildAPIAccess
+# BuildAPIAccess 1.1.1
 
 An Objective-C (Mac OS X / iOS / tvOS) class wrapper for [Electric Imp’s Build API](https://electricimp.com/docs/buildapi/).
 
