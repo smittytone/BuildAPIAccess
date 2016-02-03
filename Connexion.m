@@ -3,6 +3,8 @@
 //  Copyright (c) 2014-15 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
+// BuildAPIAccess 1.1.1
+
 
 #import "Connexion.h"
 
@@ -10,7 +12,7 @@
 @implementation Connexion
 
 
-@synthesize actionCode, connexion, receivedData, errorCode, task;
+@synthesize actionCode, connexion, data, errorCode, task;
 
 
 
@@ -20,7 +22,7 @@
 	{
 		connexion = nil;
 		task = nil;
-		receivedData = nil;
+		data = nil;
 		actionCode = -1;
 		errorCode = -1;
 	}

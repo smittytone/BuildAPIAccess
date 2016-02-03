@@ -3,6 +3,8 @@
 //  Copyright (c) 2015 Tony Smith. All rights reserved.
 //  Issued under MIT licence
 
+// BuildAPIAccess 1.1.1
+
 
 #import <Foundation/Foundation.h>
 #import "BuildAPIAccessConstants.h"
@@ -12,9 +14,9 @@
 @interface BuildAPIAccess : NSObject <NSURLConnectionDataDelegate, NSURLSessionDataDelegate, NSURLSessionTaskDelegate>
 
 {
-	NSMutableArray *_connexions;
-	NSString *_logStreamDevice, *_baseURL, *_currentModelID, *_logStreamURL, *_lastStamp, *_harvey;
-	BOOL _followOnFlag, _useSessionFlag;
+    NSMutableArray *_connexions;
+    NSString *_logDevice, *_baseURL, *_currentModelID, *_logURL, *_lastStamp, *_harvey;
+    BOOL _followOnFlag, _useSessionFlag;
 }
 
 
@@ -64,8 +66,10 @@
 - (void)launchConnection:(id)request :(NSInteger)actionCode;
 - (void)relaunchConnection:(id)userInfo;
 
-// Misc Methods
+// NSURLSession/NSURLConnection Joint Methods
 
+- (NSDictionary *)processConnection:(Connexion *)connexion;
+- (void)processResult:(Connexion *)connexion :(NSDictionary *)data;
 - (void)reportError;
 - (NSInteger)checkStatus:(NSDictionary *)data;
 
