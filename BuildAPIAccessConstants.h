@@ -1,6 +1,5 @@
 
-//  Created by Tony Smith on 30/06/2015.
-//  Copyright (c) 2015 Tony Smith. All rights reserved.
+//  Copyright (c) 2015-16 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
 // BuildAPIAccess 1.1.1

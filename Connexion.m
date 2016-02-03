@@ -1,5 +1,5 @@
 
-//  Copyright (c) 2014-15 Tony Smith. All rights reserved.
+//  Copyright (c) 2014-16 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
 // BuildAPIAccess 1.1.1
