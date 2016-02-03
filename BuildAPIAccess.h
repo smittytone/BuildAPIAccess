@@ -1,7 +1,6 @@
 
-//  Created by Tony Smith on 09/02/2015.
 //  Copyright (c) 2015 Tony Smith. All rights reserved.
-//  Issued under MIT licence
+//  Issued under the MIT licence
 
 // BuildAPIAccess 1.1.1
 
@@ -55,11 +54,10 @@
 
 // HTTP Request Construction Methods
 
-- (NSURLRequest *)makeGETrequest:(NSString *)path;
+- (NSMutableURLRequest *)makeGETrequest:(NSString *)path;
 - (NSMutableURLRequest *)makePUTrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
 - (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
-- (NSURLRequest *)makeDELETErequest:(NSString *)path;
-- (void)setRequestAuthorization:(NSMutableURLRequest *)request;
+- (NSMutableURLRequest *)makeDELETErequest:(NSString *)path;
 
 // Connection Methods
 
@@ -70,13 +68,19 @@
 
 - (NSDictionary *)processConnection:(Connexion *)connexion;
 - (void)processResult:(Connexion *)connexion :(NSDictionary *)data;
-- (void)reportError;
 - (NSInteger)checkStatus:(NSDictionary *)data;
 
 // Base64 Methods
 
 - (NSString *)encodeBase64String:(NSString *)plainString;
 - (NSString *)decodeBase64String:(NSString *)base64String;
+
+// Utility Methods
+
+- (NSDictionary *)makeDictionary:(NSString *)key :(NSString *)value;
+- (NSMutableURLRequest *)makeRequest:(NSString *)verb :(NSString *)path;
+- (void)setRequestAuthorization:(NSMutableURLRequest *)request;
+- (void)reportError;
 
 
 @property (nonatomic, strong) NSMutableArray *devices;
