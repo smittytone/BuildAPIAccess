@@ -1,10 +1,10 @@
-# BuildAPIAccess 1.1.1
+# BuildAPIAccess 1.1.2
 
 An Objective-C (Mac OS X / iOS / tvOS) class wrapper for [Electric Imp’s Build API](https://electricimp.com/docs/buildapi/).
 
 BuildAPIAccess requires the (included) class Connexion, a simple convenience class for bundling either an [NSURLConnection](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSURLConnection_Class/index.html) or [NSURLSession](https://developer.apple.com/library/prerelease/mac/documentation/Foundation/Reference/NSURLSession_class/index.html) instance and associated Build API connection data.
 
-BuildAPIAccess 1.1.1 supports both NSURLSession and NSURLConnection. The former is Apple’s preferred mechanism and the only one of the two supported by tvOS. For more information, see [Initialization Methods](#initialization-methods).
+BuildAPIAccess 1.1.2 supports both NSURLSession and NSURLConnection. The former is Apple’s preferred mechanism and the only one of the two supported by tvOS. For more information, see [Initialization Methods](#initialization-methods).
 
 ## Build API Authorization
 
