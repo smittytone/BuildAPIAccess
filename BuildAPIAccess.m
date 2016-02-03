@@ -1,6 +1,5 @@
 
-//  Created by Tony Smith on 09/02/2015.
-//  Copyright (c) 2015 Tony Smith. All rights reserved.
+//  Copyright (c) 2015-16 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
 // BuildAPIAccess 1.1.1
@@ -20,10 +19,12 @@
 
 - (id)init
 {
+    // Generic initializer - should not be called directly
+
     if (self = [super init])
     {
         // Public entities
-        
+
         devices = [[NSMutableArray alloc] init];
         models = [[NSMutableArray alloc] init];
 
@@ -39,7 +40,7 @@
         _harvey = nil;
         _useSessionFlag = NO;
     }
-    
+
     return self;
 }
 
@@ -52,7 +53,6 @@
 }
 
 
-
 - (id)initForNSURLConnection
 {
     return [self init];
@@ -61,6 +61,8 @@
 
 - (void)clrk
 {
+    // Clear the saved API k
+
     _harvey = nil;
 }
 
@@ -68,6 +70,8 @@
 
 - (void)setk:(NSString *)harvey
 {
+    // Set the API k used by the BuildAPIAccess instance
+
     if (harvey.length > 0) _harvey = harvey;
 }
 
@@ -79,7 +83,7 @@
 - (void)getModels
 {
     // Set up a GET request to the /models URL - gets all models
-    
+
     NSURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"models"]];
 
     if (request)
@@ -88,17 +92,16 @@
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to list your apps.";
+        errorMessage = @"[ERROR] Could not create a request to list your models.";
         [self reportError];
     }
 }
 
 
-
 - (void)getDevices
 {
     // Set up a GET request to the /devices URL - gets all devices
-    
+
     NSURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"devices"]];
 
     if (request)
@@ -113,18 +116,17 @@
 }
 
 
-
 - (void)getCode:(NSString *)modelID
 {
     // Set up a GET request to the /models/[id]/revisions URL
 
     if (modelID == nil || modelID.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to get the app’s current code build: invalid app ID.";
+        errorMessage = @"[ERROR] Could not create a request to get the model’s current code build: invalid model ID.";
         [self reportError];
         return;
     }
-    
+
     NSString *urlString = [_baseURL stringByAppendingFormat:@"models/%@/revisions", modelID];
     NSURLRequest *request = [self makeGETrequest:urlString];
 
@@ -135,20 +137,19 @@
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to get the app’s current code build.";
+        errorMessage = @"[ERROR] Could not create a request to get the model’s current code build.";
         [self reportError];
     }
 }
 
 
-
 - (void)getCodeRev:(NSString *)modelID :(NSInteger)build
 {
     // Set up a GET request to the /models/[id]/revisions/[build] URL
-    
+
     if (modelID == nil || modelID.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to get the required code build: invalid app ID.";
+        errorMessage = @"[ERROR] Could not create a request to get the required code build: invalid model ID.";
         [self reportError];
         return;
     }
@@ -159,7 +160,7 @@
         [self reportError];
         return;
     }
-    
+
     NSString *urlString = [_baseURL stringByAppendingFormat:@"models/%@/revisions/%li", modelID, (long)build];
     NSURLRequest *request = [self makeGETrequest:urlString];
 
@@ -175,21 +176,20 @@
 }
 
 
-
 - (void)getLogsForDevice:(NSString *)deviceID :(NSString *)since :(BOOL)isStream
 {
     // Set up a GET request to the /device/[id]/logs URL
-    
+
     if (deviceID == nil || deviceID.length == 0)
     {
         errorMessage = @"[ERROR] Could not create a request to get logs from the device: invalid device ID.";
         [self reportError];
         return;
     }
-    
+
     NSString *urlString = [_baseURL stringByAppendingFormat:@"devices/%@/logs", deviceID];
     NSInteger action = kConnectTypeNone;
-    
+
     if (isStream)
     {
         action = kConnectTypeGetLogEntriesRanged;
@@ -200,7 +200,7 @@
         action = kConnectTypeGetLogEntries;
         if ([since compare:@""] != NSOrderedSame) urlString = [urlString stringByAppendingFormat:@"?since=%@", since];
     }
-    
+
     NSURLRequest *request = [self makeGETrequest:urlString];
 
     if (request)
@@ -225,143 +225,135 @@
 
     if (modelName == nil || modelName.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to create the new app: invalid app name.";
+        errorMessage = @"[ERROR] Could not create a request to create the new model: invalid model name.";
         [self reportError];
         return;
     }
-    
-    NSArray *keys = [NSArray arrayWithObjects:@"name", nil];
-    NSArray *values = [NSArray arrayWithObjects:modelName, nil];
-    NSDictionary *dict = [NSDictionary dictionaryWithObjects:values forKeys:keys];
+
+    NSDictionary *dict = [self makeDictionary:@"name" :modelName];
     NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:@"models"] :dict];
-    
+
     if (request)
     {
         [self launchConnection:request :kConnectTypeNewModel];
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to create the new app.";
+        errorMessage = @"[ERROR] Could not create a request to create the new model.";
         [self reportError];
     }
 }
 
 
-
 - (void)updateModel:(NSString *)modelID :(NSString *)key :(NSString *)value
 {
     // Make a PUT request to send the change
-    
+
     if (modelID == nil || modelID.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to update the app: invalid app ID.";
+        errorMessage = @"[ERROR] Could not create a request to update the model: invalid model ID.";
         [self reportError];
         return;
     }
-    
+
     if (key == nil || key.length == 0)
     {
         // Malformed key? Report error and bail
-        
-        errorMessage = @"[ERROR] Could not create a request to update the app.";
+
+        errorMessage = @"[ERROR] Could not create a request to update the model: invalid data field name.";
         [self reportError];
         return;
     }
-    
+
     // Put the new name into the dictionary to pass to the API
-    
-    NSArray *keys = [NSArray arrayWithObjects:key, nil];
-    NSArray *values = [NSArray arrayWithObjects:value, nil];
-    NSDictionary *newDict = [NSDictionary dictionaryWithObjects:values forKeys:keys];
+
+    NSDictionary *newDict = [self makeDictionary:key :value];
     NSURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"models/%@", modelID] :newDict];
-    
+
     if (request)
     {
         [self launchConnection:request :kConnectTypeUpdateModel];
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to update the app.";
+        errorMessage = @"[ERROR] Could not create a request to update the model.";
         [self reportError];
     }
 }
 
 
-
 - (void)deleteModel:(NSString *)modelID
 {
     // Set up a DELETE request to the /models/[id]
-    
+
     if (modelID == nil || modelID.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to delete the app: invalid app ID.";
+        errorMessage = @"[ERROR] Could not create a request to delete the model: invalid model ID.";
         [self reportError];
         return;
     }
-    
+
     NSURLRequest *request = [self makeDELETErequest:[_baseURL stringByAppendingFormat:@"models/%@", modelID]];
-    
+
     if (request)
     {
         [self launchConnection:request :kConnectTypeDeleteModel];
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to delete the app.";
+        errorMessage = @"[ERROR] Could not create a request to delete the model.";
         [self reportError];
     }
 }
 
 
-
 - (void)uploadCode:(NSString *)modelID :(NSString *)newDeviceCode :(NSString *)newAgentCode
 {
     // Set up a POST request to the /models/[ID]/revisions URL - we'll post the new code there
-    
+
     if (modelID == nil || modelID.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to upload the code: invalid app ID.";
+        errorMessage = @"[ERROR] Could not create a request to upload the code: invalid model ID.";
         [self reportError];
         return;
     }
-    
+
     // Replace nil code parameters with empty strings
-    
+
     if (newDeviceCode == nil) newDeviceCode = @"";
     if (newAgentCode == nil) newAgentCode = @"";
-    
+
     // Put the new code into a dictionary
-    
+
     NSArray *keys = [NSArray arrayWithObjects:@"agent_code", @"device_code", nil];
     NSArray *values = [NSArray arrayWithObjects:newAgentCode, newDeviceCode, nil];
     NSDictionary *dict = [NSDictionary dictionaryWithObjects:values forKeys:keys];
 
     // Make the POST request to send the code
-    
+
     NSString *urlString = [@"models/" stringByAppendingString:modelID];
     urlString = [urlString stringByAppendingString:@"/revisions"];
     NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:urlString] :dict];
-    
+
     if (request)
     {
         [self launchConnection:request :kConnectTypePostCode];
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to upload the code to the app.";
+        errorMessage = @"[ERROR] Could not create a request to upload the code to the model.";
         [self reportError];
     }
 }
 
 
-
 - (void)assignDevice:(NSString *)deviceID toModel:(NSString *)modelID
 {
     // Set up a PUT request to assign a device to a model
-    
+
     if (modelID == nil || modelID.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to assign the device: invalid app ID.";
+        errorMessage = @"[ERROR] Could not create a request to assign the device: invalid model ID.";
         [self reportError];
         return;
     }
@@ -374,17 +366,15 @@
     }
 
     NSString *urlString = [@"devices/" stringByAppendingString:deviceID];
-    
+
     // Put the new model ID into the dictionary to pass to the API
-    
-    NSArray *keys = [NSArray arrayWithObjects:@"model_id", nil];
-    NSArray *values = [NSArray arrayWithObjects:modelID, nil];
-    NSDictionary *dict = [NSDictionary dictionaryWithObjects:values forKeys:keys];
-    
+
+    NSDictionary *dict = [self makeDictionary:@"model_id" :modelID];
+
     // Make the PUT request to send the change
-    
+
     NSURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingString:urlString] :dict];
-    
+
     if (request)
     {
         [self launchConnection:request :kConnectTypeAssignDeviceToModel];
@@ -397,20 +387,19 @@
 }
 
 
-
 - (void)restartDevice:(NSString *)deviceID
 {
     // Set up a POST request to the /devices/[ID]/restart URL - updates device with an unchanged model_id
-    
+
     if (deviceID == nil || deviceID.length == 0)
     {
         errorMessage = @"[ERROR] Could not create a request to restart the device: invalid device ID.";
         [self reportError];
         return;
     }
-    
+
     NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingFormat:@"devices/%@/restart", deviceID] :nil];
-    
+
     if (request)
     {
         [self launchConnection:request :kConnectTypeRestartDevice];
@@ -423,46 +412,44 @@
 }
 
 
-
 - (void)restartDevices:(NSString *)modelID
 {
     // Set up a POST request to the /models/[ID] URL - gets all models
-    
+
     if (modelID == nil || modelID.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to reastart the app’s device: invalid app ID.";
+        errorMessage = @"[ERROR] Could not create a request to restart all the model’s device: invalid model ID.";
         [self reportError];
         return;
     }
 
     NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingFormat:@"models/%@/restart", modelID] :nil];
-    
+
     if (request)
     {
         [self launchConnection:request :kConnectTypeRestartDevice];
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to restart the app’s devices.";
+        errorMessage = @"[ERROR] Could not create a request to restart all the model’s devices.";
         [self reportError];
     }
 }
 
 
-
 - (void)deleteDevice:(NSString *)deviceID
 {
     // Set up a DELETE request to the /devices/[id]
-    
+
     if (deviceID == nil || deviceID.length == 0)
     {
         errorMessage = @"[ERROR] Could not create a request to delete the device: invalid device ID.";
         [self reportError];
         return;
     }
-    
+
     NSURLRequest *request = [self makeDELETErequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID]];
-    
+
     if (request)
     {
         [self launchConnection:request :kConnectTypeDeleteDevice];
@@ -475,39 +462,35 @@
 }
 
 
-
 - (void)updateDevice:(NSString *)deviceID :(NSString *)key :(NSString *)value
 {
     // Make the PUT request to send the change
-    
+
     if (deviceID == nil || deviceID.length == 0)
     {
         errorMessage = @"[ERROR] Could not create a request to update the device: invalid device ID.";
         [self reportError];
         return;
     }
-    
+
     if (key == nil || key.length == 0)
     {
         // Malformed key? Report error and bail
-        
+
         errorMessage = @"[ERROR] Could not create a request to update the device: invalid device property.";
         [self reportError];
         return;
     }
-    
+
     // Put the new name into the dictionary to pass to the API
-    
-    NSArray *keys = [NSArray arrayWithObjects:key, nil];
-    NSArray *values = [NSArray arrayWithObjects:value, nil];
-    NSDictionary *newDict = [NSDictionary dictionaryWithObjects:values forKeys:keys];
-    
+
+    NSDictionary *newDict = [self makeDictionary:key :value];
     NSURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID] :newDict];
-    
+
     if (request)
     {
         // TODO - add special case for unassigning a device kConnectTypeUnassignDevice
-        
+
         [self launchConnection:request :kConnectTypeUpdateDevice];
     }
     else
@@ -518,22 +501,19 @@
 }
 
 
-
 - (void)autoRenameDevice:(NSString *)deviceID
 {
     // This method should be used SOLELY to change the name of new, unassigned device
     // from <NULL> to their own id. It is called when the devices are listed
-    
+
     // Put the new name (which matches id) into the dictionary to pass to the API
-    
-    NSArray *keys = [NSArray arrayWithObjects:@"name", nil];
-    NSArray *values = [NSArray arrayWithObjects:deviceID, nil];
-    NSDictionary *newDict = [NSDictionary dictionaryWithObjects:values forKeys:keys];
-    
+
+    NSDictionary *newDict = [self makeDictionary:@"name" :deviceID];
+
     // Make the PUT request to send the change
-    
+
     NSURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID] :newDict];
-    
+
     if (request)
     {
         [self launchConnection:request :kConnectTypeUpdateDevice];
@@ -569,13 +549,12 @@
 }
 
 
-
 - (void)stopLogging
 {
     if (_connexions.count == 0) return;
-    
+
     _logDevice = nil;
-    
+
     for (Connexion *aConnexion in _connexions)
     {
         if (aConnexion.actionCode == kConnectTypeGetLogEntriesStreamed)
@@ -584,11 +563,11 @@
             [_connexions removeObject:aConnexion];
         }
     }
-    
+
     if (_connexions.count < 1)
     {
         // No more connexions? Tell the app to hide the activity indicator
-        
+
         [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
     }
 }
@@ -598,28 +577,22 @@
 #pragma mark - HTTP Request Construction Methods
 
 
-- (NSURLRequest *)makeGETrequest:(NSString *)path
+- (NSMutableURLRequest *)makeGETrequest:(NSString *)path
 {
-    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
-    [self setRequestAuthorization:request];
-    [request setHTTPMethod:@"GET"];
-    return request;
+    return [self makeRequest:@"GET" :path];
 }
-
 
 
 - (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)bodyDictionary
 {
     NSError *error = nil;
-    
-    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
-    [self setRequestAuthorization:request];
-    [request setHTTPMethod:@"POST"];
+
+    NSMutableURLRequest *request = [self makeRequest:@"POST" :path];
     [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-    
+
     if (bodyDictionary)
         [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:bodyDictionary options:0 error:&error]];
-    
+
     if (error)
     {
         return nil;
@@ -629,19 +602,16 @@
         return request;
     }
 }
-
 
 
 - (NSMutableURLRequest *)makePUTrequest:(NSString *)path :(NSDictionary *)bodyDictionary
 {
     NSError *error = nil;
-    
-    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
-    [self setRequestAuthorization:request];
-    [request setHTTPMethod:@"PUT"];
+
+    NSMutableURLRequest *request = [self makeRequest:@"PUT" :path];
     [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
     [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:bodyDictionary options:0 error:&error]];
-    
+
     if (error)
     {
         return nil;
@@ -653,29 +623,9 @@
 }
 
 
-
-- (NSURLRequest *)makeDELETErequest:(NSString *)path
+- (NSMutableURLRequest *)makeDELETErequest:(NSString *)path
 {
-    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
-    [self setRequestAuthorization:request];
-    [request setHTTPMethod:@"DELETE"];
-    return request;
-}
-
-
-
-- (void)setRequestAuthorization:(NSMutableURLRequest *)request
-{
-    if (_harvey != nil)
-    {
-        [request setValue:[@"Basic " stringByAppendingString:[self encodeBase64String:_harvey]] forHTTPHeaderField:@"Authorization"];
-        [request setTimeoutInterval:30.0];
-    }
-    else
-    {
-        errorMessage = @"Unauthorized";
-        [self reportError];
-    }
+    return [self makeRequest:@"DELETE" :path];
 }
 
 
@@ -683,48 +633,47 @@
 #pragma mark - Connection Method
 
 
-- (void)launchConnection:(id)request :(NSInteger)actionCode
+- (void)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode
 {
-    NSMutableURLRequest *req = (NSMutableURLRequest *)request;
-
     // Create a default connexion object to store connection details
-    
+
     Connexion *aConnexion = [[Connexion alloc] init];
     aConnexion.actionCode = actionCode;
     aConnexion.errorCode = -1;
     aConnexion.data = [NSMutableData dataWithCapacity:0];
-    
-    if (actionCode == kConnectTypeGetLogEntriesStreamed) [req setTimeoutInterval:3600.0];
-    
+
+    if (actionCode == kConnectTypeGetLogEntriesStreamed) [request setTimeoutInterval:3600.0];
+
     if (_useSessionFlag)
     {
         // Use NSURLSession for the connection. Compatible with iOS, tvOS and Mac OS X
 
         NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration] delegate:self delegateQueue:[NSOperationQueue mainQueue]];
-        aConnexion.task = [session dataTaskWithRequest:req];
+        aConnexion.task = [session dataTaskWithRequest:request];
         [aConnexion.task resume];
     }
     else
     {
         // Use NSURLConnection for the connection. Compatible with iOS and Mac OS X, but not tvOS
+        // NOTE This approach has been deprecated by Apple
 
-        aConnexion.connexion = [[NSURLConnection alloc] initWithRequest:req delegate:self];
-        
+        aConnexion.connexion = [[NSURLConnection alloc] initWithRequest:request delegate:self];
+
         if (!aConnexion.connexion)
         {
             // Inform the user that the connection failed.
-            
-            errorMessage = @"[ERROR] Could not establish a connection to the Electric Imp server.";
+
+            errorMessage = @"[ERROR] Could not establish a connection to the Electric Imp Cloud.";
             [self reportError];
             return;
         }
     }
-    
+
     if (_connexions.count < 1)
     {
         // Connection established successfully, so notify the main app to trigger the progress indicator
         // and then add the new connexion to the list of current connections
-        
+
         [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStart" object:nil];
     }
 
@@ -755,14 +704,13 @@
 }
 
 
-
 - (void)connection:(NSURLConnection *)connection didReceiveAuthenticationChallenge:(NSURLAuthenticationChallenge *)challenge
 {
     // Because the Build API uses Basic authentication, this is probably unnecessary,
     // but retain for future use as required
 
     NSURLCredential *bonaFides;
-    
+
     if (challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust)
     {
         bonaFides = [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust];
@@ -773,47 +721,45 @@
                                                password:[self encodeBase64String:_harvey]
                                             persistence:NSURLCredentialPersistenceNone];
     }
-    
+
     [[challenge sender] useCredential:bonaFides forAuthenticationChallenge:challenge];
 }
-
 
 
 - (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error
 {
     // Inform the host app that there was a connection failure
-    
+
     errorMessage = @"[ERROR] Could not connect to the Electric Imp server.";
     [self reportError];
-    
+
     // Terminate the failed connection and remove it from the list of current connections
-    
+
     [connection cancel];
     [_connexions removeObject:connection];
-    
+
     if (_connexions.count < 1)
     {
         // If there are no current connections, tell the app to
         // turn off the connection activity indicator
-        
+
         [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
     }
 }
-
 
 
 - (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
 {
     // This delegate method is called when the server responds to the connection request
     // Use it to trap certain status codes
-    
+
     NSHTTPURLResponse *rps = (NSHTTPURLResponse *)response;
     NSInteger code = rps.statusCode;
-    
+
     if (code > 399)
     {
         // The API has responded with a status code that indicates an error
-        
+
         if (code == 429)
         {
             // Build API rate limit hit
@@ -821,11 +767,11 @@
             for (Connexion *aConnexion in _connexions)
             {
                 // Run through the connections in our list and add the incoming error code to the correct one
-                
-                if (aConnexion.connexion == connection) 
+
+                if (aConnexion.connexion == connection)
                 {
                     // This request has been rate-limited, so we need to recall it in 1+ seconds
-                    
+
                     NSArray *values = [NSArray arrayWithObjects:[connection.originalRequest copy], [NSNumber numberWithInteger:aConnexion.actionCode], nil];
                     NSArray *keys = [NSArray arrayWithObjects:@"request", @"actioncode", nil];
                     NSDictionary *dict =[NSDictionary dictionaryWithObjects:values forKeys:keys];
@@ -841,7 +787,7 @@
                     }
                 }
             }
-        } 
+        }
         else if (code == 504)
         {
             // Bad Gateway error received - this usually occurs during log streaming
@@ -869,7 +815,7 @@
             for (Connexion *aConnexion in _connexions)
             {
                 // Run through the connections in our list and add the incoming error code to the correct one
-                
+
                 if (aConnexion.connexion == connection) aConnexion.errorCode = code;
             }
         }
@@ -884,7 +830,6 @@
 }
 
 
-
 - (void)relaunchConnection:(id)userInfo
 {
     // This method is called in response to the receipt of a status code 429 from the server,
@@ -897,20 +842,18 @@
 }
 
 
-
 - (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
 {
     // This delegate method is called when the server sends some data back
     // Add it to the correct connexion object
-    
+
     for (Connexion *aConnexion in _connexions)
     {
         // Run through the connections in our list and add the incoming data to the correct one
-        
+
         if (aConnexion.connexion == connection) [aConnexion.data appendData:data];
     }
 }
-
 
 
 - (void)connectionDidFinishLoading:(NSURLConnection *)connection
@@ -918,27 +861,27 @@
     // All the data has been supplied by the server in response to a connection
     // Parse the data and, according to the connection activity - update device, create model etc –
     // apply the results
-    
+
     Connexion *theCurrentConnexion;
     id parsedData = nil;
-    
+
     for (Connexion *aConnexion in _connexions)
     {
         // Run through the connections in the list and find the one that has just finished loading
-        
+
         if (aConnexion.connexion == connection)
         {
             theCurrentConnexion = aConnexion;
             parsedData = [self processConnection:aConnexion];
         }
     }
-    
+
     // End the finished connection and remove it from the list of current connections
-    
+
     [connection cancel];
 
     if (theCurrentConnexion.actionCode != kConnectTypeNone) [self processResult:theCurrentConnexion :parsedData];
-    
+
     theCurrentConnexion = nil;
 }
 
@@ -953,7 +896,7 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
  completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler
 {
     NSURLCredential *bonaFides;
-    
+
     if (challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust)
     {
         bonaFides = [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust];
@@ -964,10 +907,9 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
                                                password:[self encodeBase64String:_harvey]
                                             persistence:NSURLCredentialPersistenceNone];
     }
-    
+
     completionHandler(NSURLSessionAuthChallengeUseCredential, bonaFides);
 }
-
 
 
 - (void)URLSession:(NSURLSession *)session
@@ -1024,7 +966,7 @@ didReceiveResponse:(NSURLResponse *)response
             if (_logDevice != nil)
             {
                 // We are still streaming to just recommence logging
-                
+
                 [self startLogging];
 
                 // Still need to cancel the current connection record
@@ -1037,7 +979,7 @@ didReceiveResponse:(NSURLResponse *)response
                 }
 
                 if (conn != nil) [_connexions removeObject:conn];
-                
+
                 completionHandler(NSURLSessionResponseCancel);
 
                 return;
@@ -1048,7 +990,7 @@ didReceiveResponse:(NSURLResponse *)response
             for (Connexion *aConnexion in _connexions)
             {
                 // Run through the connections in our list and add the incoming error code to the correct one
-                
+
                 if (aConnexion.task == dataTask) aConnexion.errorCode = code;
             }
         }
@@ -1058,20 +1000,18 @@ didReceiveResponse:(NSURLResponse *)response
 }
 
 
-
 - (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask didReceiveData:(NSData *)data
 {
     // This delegate method is called when the server sends some data back
     // Add the data to the correct connexion object
-    
+
     for (Connexion *aConnexion in _connexions)
     {
         // Run through the connections in our list and add the incoming data to the correct one
-        
+
         if (aConnexion.task == dataTask) [aConnexion.data appendData:data];
     }
 }
-
 
 
 - (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error
@@ -1099,7 +1039,7 @@ didReceiveResponse:(NSURLResponse *)response
                 [_connexions removeObject:aConnexion];
             }
         }
-        
+
         if (_logDevice == nil)
         {
             if (_connexions.count < 1)
@@ -1113,23 +1053,23 @@ didReceiveResponse:(NSURLResponse *)response
 
         return;
     }
-    
+
     Connexion *theCurrentConnexion;
     id parsedData = nil;
 
     for (Connexion *aConnexion in _connexions)
     {
         // Run through the connections in the list and find the one that has just finished loading
-        
+
         if (aConnexion.task == task)
         {
             theCurrentConnexion = aConnexion;
             parsedData = [self processConnection:aConnexion];
         }
     }
-    
+
     // End the finished connection and remove it from the list of current connections
-    
+
     [task cancel];
 
     if (theCurrentConnexion.actionCode != kConnectTypeNone) [self processResult:theCurrentConnexion :parsedData];
@@ -1140,6 +1080,7 @@ didReceiveResponse:(NSURLResponse *)response
 
 
 #pragma mark - Joint NSURLSession/NSURLConnection Methods
+
 
 - (NSDictionary *)processConnection:(Connexion *)connexion
 {
@@ -1254,7 +1195,6 @@ didReceiveResponse:(NSURLResponse *)response
 
     return parsedData;
 }
-
 
 
 - (void)processResult:(Connexion *)connexion :(NSDictionary *)data
@@ -1472,28 +1412,28 @@ didReceiveResponse:(NSURLResponse *)response
                 case kConnectTypeGetCodeRev:
                 {
                     // We asked for a code revision, which we make available to the main app
-                    
+
                     NSDictionary *code = [data objectForKey:@"revision"];
                     deviceCode = [code objectForKey:@"device_code"];
                     agentCode = [code objectForKey:@"agent_code"];
-                            
+
                     // Tell the main app we have the code in the deviceCode and agentCode properties
-                    
+
                     [nc postNotificationName:@"BuildAPIGotCodeRev" object:nil];
-                    
+
                     break;
                 }
 
                 case kConnectTypeGetLogEntries:
                 {
                     // We asked for all of a devices log entries, which we return to the main app
-                    
+
                     NSArray *logs = [data objectForKey:@"logs"];
-                            
+
                     // Pass the ball back to the AppDelegate
-                    
+
                     // Tell the main app we have the code in the deviceCode and agentCode properties
-                    
+
                     [nc postNotificationName:@"BuildAPIGotLogs" object:logs];
 
                     break;
@@ -1503,9 +1443,9 @@ didReceiveResponse:(NSURLResponse *)response
                 {
                     // We asked for a log stream. The first time through the process, we only access the poll_url
                     // property, which we use to generate a second request, for the 'streamed' data
-                    
+
                     // Save the URL of the log stream and begin logging
-                            
+
                     _logURL = [kBaseAPIURL stringByAppendingString:[data objectForKey:@"poll_url"]];
                     [self startLogging];
 
@@ -1516,7 +1456,7 @@ didReceiveResponse:(NSURLResponse *)response
                 {
                     // We asked for a log stream and the first streamed entry has arrived. Send it to the main
                     // app to be displayed, and then re-commence logging
-                    
+
                     [nc postNotificationName:@"BuildAPILogStream" object:[data objectForKey:@"logs"]];
                     [self startLogging];
 
@@ -1531,32 +1471,22 @@ didReceiveResponse:(NSURLResponse *)response
 }
 
 
-
-- (void)reportError
-{
-    // Signal the host app that we have an error message for it to display (in 'errorMessage')
-
-    [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIError" object:self];
-}
-
-
-
 - (NSInteger)checkStatus:(NSDictionary *)data
 {
     // Before using data returned from the server, check that the success field is not false
     // If it is, set up an error message. 1 = success; 0 = failure
-    
+
     NSNumber *value = [data objectForKey:@"success"];
-    
+
     if (value.integerValue == 0)
     {
         // There has been an error reported by the API
-        
+
         NSDictionary *err = [data objectForKey:@"error"];
         errorMessage = [err objectForKey:@"message_short"];
         [self reportError];
     }
-    
+
     return value.integerValue;
 }
 
@@ -1581,6 +1511,47 @@ didReceiveResponse:(NSURLResponse *)response
     return decodedString;
 }
 
+
+#pragma mark - Utility Methods
+
+- (NSDictionary *)makeDictionary:(NSString *)key :(NSString *)value
+{
+    NSArray *keys = [NSArray arrayWithObjects:key, nil];
+    NSArray *values = [NSArray arrayWithObjects:value, nil];
+    return [NSDictionary dictionaryWithObjects:values forKeys:keys];
+}
+
+
+- (NSMutableURLRequest *)makeRequest:(NSString *)verb :(NSString *)path
+{
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
+    [self setRequestAuthorization:request];
+    [request setHTTPMethod:verb];
+    return request;
+}
+
+
+- (void)setRequestAuthorization:(NSMutableURLRequest *)request
+{
+    if (_harvey != nil)
+    {
+        [request setValue:[@"Basic " stringByAppendingString:[self encodeBase64String:_harvey]] forHTTPHeaderField:@"Authorization"];
+        [request setTimeoutInterval:30.0];
+    }
+    else
+    {
+        errorMessage = @"Unauthorized";
+        [self reportError];
+    }
+}
+
+
+- (void)reportError
+{
+    // Signal the host app that we have an error message for it to display (in 'errorMessage')
+
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIError" object:self];
+}
 
 
 @end
