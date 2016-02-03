@@ -4,7 +4,7 @@ An Objective-C (Mac OS X / iOS / tvOS) class wrapper for [Electric Imp’s Build
 
 BuildAPIAccess requires the (included) class Connexion, a simple convenience class for bundling either an [NSURLConnection](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSURLConnection_Class/index.html) or [NSURLSession](https://developer.apple.com/library/prerelease/mac/documentation/Foundation/Reference/NSURLSession_class/index.html) instance and associated Build API connection data.
 
-BuildAPIAccess 1.1 supports both NSURLSession and NSURLConnection. The former is Apple’s preferred mechanism and the only one of the two supported by tvOS. For more information, see [Initialization Methods](#initialization-methods). 
+BuildAPIAccess 1.1.1 supports both NSURLSession and NSURLConnection. The former is Apple’s preferred mechanism and the only one of the two supported by tvOS. For more information, see [Initialization Methods](#initialization-methods).
 
 ## Build API Authorization
 
@@ -14,7 +14,7 @@ Making use of the Build API requires an Electric Imp developer account and an AP
 
 BuildAPIAccess is offered under the terms of the MIT licence.
 
-**A polite request** If you make use of BuildAPIAccess in any way, a credit and a link to this repository would be appreciated.
+**A polite request** If you make use of BuildAPIAccess in any way, a credit and a link to this repository would be much appreciated.
 
 ## Devices
 
@@ -86,53 +86,49 @@ Also alled by [*getInitialData:*](#--voidgetinitialdatansstring-harvey), this me
 
 Creates a new model on the server with the name *modelName*.
 
-### - (void)uploadCode:(NSString *)newDeviceCode :(NSString *)newAgentCode :(NSInteger)modelIndex;
+### - (void)uploadCode:(NSString *)modelID :(NSString *)newDeviceCode :(NSString *)newAgentCode;
 
-Upload device and agent code, stored in strings, to the model at index *modelIndex* within the property *models*.
+Upload device and agent code, stored in strings, to the model with ID *modelID*.
 
-### - (void)assignDevice:(NSInteger)deviceIndex toModel:(NSInteger)modelIndex;
+### - (void)assignDevice:(NSString *)deviceID toModel:(NSString *)modelID;
 
-Associate the device at index *deviceIndex* within the property *devices* with the model at index *modelIndex* within the property *models*.
+Associate the device with ID *deviceID* to the model with ID *modelID*.
 
 ### - (void)getCode:(NSString *)modelID;
 
-Get the most recent agent and device code from the model with an ID *modelID*. Code is stored in the BuildAPIAccess NSString properties *deviceCode* and *agentCode*.
+Get the most recent agent and device code from the model with ID *modelID*. This code is stored in the BuildAPIAccess NSString properties *deviceCode* and *agentCode*.
 
-**TODO** Add an interface that supplies not the model ID but the model’s index within the property *models*.
+### - (void)getCodeRev:(NSString *)modelID :(NSInteger)build;
 
-- (void)getCodeRev:(NSString *)modelID :(NSInteger)build;
+Get a specific agent and device code revision - build number *build* - from the model with an ID *modelID*. This code is stored in the BuildAPIAccess NSString properties *deviceCode* and *agentCode*.
 
-Get a specific agent and device code revision from the model with an ID *modelID*. Code is stored in the BuildAPIAccess NSString properties *deviceCode* and *agentCode*.
+### - (void)restartDevice:(NSString *)deviceID;
 
-**TODO** Add an interface that supplies not the model ID but the model’s index within the property *models*.
+Force the device with ID *deviceID* to restart.
 
-### - (void)restartDevice:(NSInteger)deviceIndex;
+### - (void)restartDevices:(NSString *)modelID;
 
-Force the device at index *deviceIndex* within the property *devices* to restart.
+Force all the devices assigned to the model of ID *modelID* to restart.
 
-### - (void)restartDevices:(NSInteger)modelIndex;
+### - (void)deleteDevice:(NSString *)deviceID;
 
-Force all the devices assigned to the model at index *modelIndex* within the property *models* to restart.
+Remove the device of ID *deviceID* from the server. Note that this doesn’t actually remove the device from the user’s Electric Imp account *(see the [Build API Delete Device documentation](https://electricimp.com/docs/buildapi/device/delete/))*
 
-### - (void)deleteModel:(NSInteger)modelIndex;
+### - (void)deteleModel:(NSString *)modelID;
 
-Remove the model at index *modelIndex* within the property *models* from the server.
+Delete the model with ID *modelID*.
 
-### - (void)deleteDevice:(NSInteger)deviceIndex;
+### - (void)updateDevice:(NSString *)deviceID :(NSString *)key :(NSString *)value;
 
-Remove the device at index *deviceIndex* within the property *devices* from the server. Note that this doesn’t actually remove the device from the user’s Electric Imp account *(see the [Build API Delete Device documentation](https://electricimp.com/docs/buildapi/device/delete/)
+Update the information stored on the server for the device of ID *deviceID*. This is used to set or alter a single key within the key-value record.
 
-### - (void)updateDevice:(NSInteger)deviceIndex :(NSString *)key :(NSString *)value;
+### - (void)updateModel:(NSString *)modelID :(NSString *)key :(NSString *)value;
 
-Update the information stored on the server for the device at index *deviceIndex* within the property *devices*. This is used to set or alter a single key within the key-value record.
+Update the information stored on the server for the model of *modelID*. This is used to set or alter a single key within the key-value record.
 
-### - (void)updateModel:(NSInteger)modelIndex :(NSString *)key :(NSString *)value;
+### - (void)getLogsForDevice:(NSString *)deviceID :(NSString *)since :(BOOL)isStream;
 
-Update the information stored on the server for the model at index *modelIndex* within the property *models*. This is used to set or alter a single key within the key-value record.
-
-### - (void)getLogsForDevice:(NSInteger)deviceIndex :(NSString *)since :(BOOL)isStream;
-
-Get the current set of log entries stored on the server for the device at index *deviceIndex* within the property *devices*.
+Get the current set of log entries stored on the server for the device of ID *deviceID*.
 
 The parameter *since* is a Unix timestamp and with limit the log entries returned to those posted on or after the timestamp. Pass an empty string, `""`, to get all the most recent log entries (up to a server-imposed maximum of 200).
 
@@ -142,7 +138,7 @@ Currently, log entries can be streamed from only one device. To stream from anot
 
 ### - (void)startLogging;
 
-Having initiated log streaming using [*getLogsForDevice:*](#--voidgetlogsfordevicensintegerdeviceindex-nsstring-since-boolisstream), this method is called automatically. But if your application uses [*stopLogging:*](#--voidstoplogging) to halt logging, this method can be called to recommence logging.
+Having initiated log streaming using [*getLogsForDevice:::*](#--voidgetlogsfordevicensintegerdeviceindex-nsstring-since-boolisstream), this method is called automatically. But if your application uses [*stopLogging:*](#--voidstoplogging) to halt logging, this method can be called to recommence logging.
 
 ### - (void)stopLogging;
 
@@ -154,13 +150,13 @@ BuildAPIAccess provides the following convenience methods for construction HTTPS
 
 These methods are called by the above Build API Access methods.
 
-#### - (NSURLRequest *)makeGETrequest:(NSString *)path;
+#### - (NSMutableURLRequest *)makeGETrequest:(NSString *)path;
 
 #### - (NSMutableURLRequest *)makePUTrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
 
 #### - (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
 
-#### - (NSURLRequest *)makeDELETErequest:(NSString *)path;
+#### - (NSMutableURLRequest *)makeDELETErequest:(NSString *)path;
 
 ## Signalling Connections
 
