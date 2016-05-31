@@ -32,12 +32,13 @@
 #define kConnectTypeLogin					100
 
 
-#define kBaseAPIURL @"https://build.electricimp.com"
+#define kBaseAPIURL @"https://beta-build.electricimp.com"
 #define kAPIVersion @"/v4/"
 
 
 #define kAllLogs 0
 #define kStreamLogs -1
+#define kStreamTimeout 300
 
 
 #define kServerSendsSuccess 1

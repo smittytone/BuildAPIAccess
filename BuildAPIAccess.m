@@ -86,7 +86,7 @@
 {
     // Set up a GET request to the /models URL - gets all models
 
-    NSURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"models"]];
+    NSMutableURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"models"]];
 
     if (request)
     {
@@ -113,7 +113,7 @@
 {
     // Set up a GET request to the /devices URL - gets all devices
 
-    NSURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"devices"]];
+    NSMutableURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"devices"]];
 
     if (request)
     {
@@ -140,7 +140,7 @@
     }
 
     NSString *urlString = [_baseURL stringByAppendingFormat:@"models/%@/revisions", modelID];
-    NSURLRequest *request = [self makeGETrequest:urlString];
+    NSMutableURLRequest *request = [self makeGETrequest:urlString];
 
     if (request)
     {
@@ -175,7 +175,7 @@
     }
 
     NSString *urlString = [_baseURL stringByAppendingFormat:@"models/%@/revisions/%li", modelID, (long)build];
-    NSURLRequest *request = [self makeGETrequest:urlString];
+    NSMutableURLRequest *request = [self makeGETrequest:urlString];
 
     if (request)
     {
@@ -215,7 +215,7 @@
         if ([since compare:@""] != NSOrderedSame) urlString = [urlString stringByAppendingFormat:@"?since=%@", since];
     }
 
-    NSURLRequest *request = [self makeGETrequest:urlString];
+    NSMutableURLRequest *request = [self makeGETrequest:urlString];
 
     if (request)
     {
@@ -245,7 +245,7 @@
     }
 
     NSDictionary *dict = [self makeDictionary:@"name" :modelName];
-    NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:@"models"] :dict];
+    NSMutableURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:@"models"] :dict];
 
     if (request)
     {
@@ -283,7 +283,7 @@
     // Put the new name into the dictionary to pass to the API
 
     NSDictionary *newDict = [self makeDictionary:key :value];
-    NSURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"models/%@", modelID] :newDict];
+    NSMutableURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"models/%@", modelID] :newDict];
 
     if (request)
     {
@@ -309,7 +309,7 @@
         return;
     }
 
-    NSURLRequest *request = [self makeDELETErequest:[_baseURL stringByAppendingFormat:@"models/%@", modelID]];
+    NSMutableURLRequest *request = [self makeDELETErequest:[_baseURL stringByAppendingFormat:@"models/%@", modelID]];
 
     if (request)
     {
@@ -350,7 +350,7 @@
 
     NSString *urlString = [@"models/" stringByAppendingString:modelID];
     urlString = [urlString stringByAppendingString:@"/revisions"];
-    NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:urlString] :dict];
+    NSMutableURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:urlString] :dict];
 
     if (request)
     {
@@ -391,7 +391,7 @@
 
     // Make the PUT request to send the change
 
-    NSURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingString:urlString] :dict];
+    NSMutableURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingString:urlString] :dict];
 
     if (request)
     {
@@ -417,7 +417,7 @@
         return;
     }
 
-    NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingFormat:@"devices/%@/restart", deviceID] :nil];
+    NSMutableURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingFormat:@"devices/%@/restart", deviceID] :nil];
 
     if (request)
     {
@@ -443,7 +443,7 @@
         return;
     }
 
-    NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingFormat:@"models/%@/restart", modelID] :nil];
+    NSMutableURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingFormat:@"models/%@/restart", modelID] :nil];
 
     if (request)
     {
@@ -469,7 +469,7 @@
         return;
     }
 
-    NSURLRequest *request = [self makeDELETErequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID]];
+    NSMutableURLRequest *request = [self makeDELETErequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID]];
 
     if (request)
     {
@@ -507,7 +507,7 @@
     // Put the new name into the dictionary to pass to the API
 
     NSDictionary *newDict = [self makeDictionary:key :value];
-    NSURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID] :newDict];
+    NSMutableURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID] :newDict];
 
     if (request)
     {
@@ -535,7 +535,7 @@
 
     // Make the PUT request to send the change
 
-    NSURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID] :newDict];
+    NSMutableURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID] :newDict];
 
     if (request)
     {
@@ -865,7 +865,7 @@
     // ie. we have been rate-limited. A timer will bring us here in 1.0 seconds
 
     NSDictionary *dict = (NSDictionary *)userInfo;
-    NSURLRequest *request = [dict objectForKey:@"request"];
+    NSMutableURLRequest *request = [dict objectForKey:@"request"];
     NSInteger actionCode = [[dict objectForKey:@"actioncode"] integerValue];
     [self launchConnection:request :actionCode];
 }

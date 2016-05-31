@@ -62,7 +62,7 @@
 
 // Connection Methods
 
-- (void)launchConnection:(id)request :(NSInteger)actionCode;
+- (void)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode;
 - (void)relaunchConnection:(id)userInfo;
 
 // NSURLSession/NSURLConnection Joint Methods
