@@ -1,14 +1,14 @@
-# BuildAPIAccess 1.1.2
+# BuildAPIAccess 1.1.3
 
 An Objective-C (Mac OS X / iOS / tvOS) class wrapper for [Electric Imp’s Build API](https://electricimp.com/docs/buildapi/).
 
 BuildAPIAccess requires the (included) class Connexion, a simple convenience class for bundling either an [NSURLConnection](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSURLConnection_Class/index.html) or [NSURLSession](https://developer.apple.com/library/prerelease/mac/documentation/Foundation/Reference/NSURLSession_class/index.html) instance and associated Build API connection data.
 
-BuildAPIAccess 1.1.2 supports both NSURLSession and NSURLConnection. The former is Apple’s preferred mechanism and the only one of the two supported by tvOS. For more information, see [Initialization Methods](#initialization-methods).
+BuildAPIAccess 1.1.3 supports both NSURLSession and NSURLConnection. The former is Apple’s preferred mechanism and the only one of the two supported by tvOS. For more information, see [Initialization Methods](#initialization-methods).
 
 ## Build API Authorization
 
-Making use of the Build API requires an Electric Imp developer account and an API key associated with that account. API keys can be requested from Electric Imp, as [detailed here](https://electricimp.com/docs/buildapi/).
+Making use of the Build API requires an Electric Imp developer account and an API key associated with that account. API keys can be retrieved using the Electric Imp IDE, as [detailed here](https://electricimp.com/docs/buildapi/).
 
 ## Licence
 
@@ -52,6 +52,10 @@ message | string | The logged information
 
 None of these keys’ values are editable.
 
+## Installing BuildAPIAccess
+
+Drag the files `BuildAPIAccess.h`, `BuildAPIAccess.m`, `BuildAPIAccessConstants.h`, `Connexion.h` and `Connexion.m` into Xcode’s Project Navigator (with your project loaded). Make sure you copy the files to your project &mdash; there is a checkbox in the ‘Add files...’ window for this. Add `#import "BuildAPI.h"` to the header of the code that will make use of BuildAPIAccess and in which you will instantiate one or more *BuildAPIAccess* objects.
+
 ## Initialization Methods
 
 BuildAPIAccess provides two convenience initializers (constructors):
@@ -76,11 +80,11 @@ BuildAPIAccess provides a number of methods, but these are the ones to call from
 
 ### - (void)getModels;
 
-Also called by [*getInitialData:*](#--voidgetinitialdatansstring-harvey), this method results in a list of models placed in the BuildAPIAccess NSMutableArray property *models*.
+This method results in a list of current models placed in the BuildAPIAccess NSMutableArray property *models*.
 
 ### - (void)getDevices;
 
-Also alled by [*getInitialData:*](#--voidgetinitialdatansstring-harvey), this method results in a list of devices placed in the BuildAPIAccess NSMutableArray property *devices*.
+This method results in a list of current devices placed in the BuildAPIAccess NSMutableArray property *devices*.
 
 ### - (void)createNewModel:(NSString *)modelName;
 
@@ -164,9 +168,9 @@ BuildAPIAccess maintains a list of active connections. When a connection is comp
 
 ## Returning Data
 
-Requests for data are made asynchronously. When the date returns &ndash; or, in the case of data being uploaded or changes &ndash; the result is signalled to the host application through notifications, listed below. When data is returned, it is stored in BuildAPIAccess member properties as outlined in the Build API access methods [listed above](#build-api-access-methods).
+Requests for data are made asynchronously. When the data returns &mdash; or, in the case of data being uploaded or changed, confirmation is made by the server &mdash; the result is signalled to the host application through notifications, listed below. When data is returned, it is stored in BuildAPIAccess member properties as outlined in the Build API access methods [listed above](#build-api-access-methods).
 
-Notificiation | Description
+Notification | Description
 --- | ---
 BuildAPIGotModelsList | Model list acquired and now accessible through the *models* property
 BuildAPIGotDevicesList | Device list acquired and now accessible through the *devices* property
@@ -184,4 +188,4 @@ BuildAPILogStream | Successfully retrieved a freshly posted log entry. The log e
 
 ## Error Reporting
 
-Errors arising from connectivity, or through the application’s interaction with the Build API, are announced by the notification `BuildAPIError`. When the application receives this notifcation, it should read the BuildAPIAccess instance’s *errorMessage* property for more information.
+Errors arising from connectivity, or through the application’s interaction with the Build API, are announced by the notification `BuildAPIError`. When the application receives this notification, it should read the BuildAPIAccess instance’s *errorMessage* property for more information.

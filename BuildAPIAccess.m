@@ -2,7 +2,8 @@
 //  Copyright (c) 2015-16 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
-// BuildAPIAccess 1.1.2
+//  BuildAPIAccess 1.1.3
+
 
 #import "BuildAPIAccess.h"
 
@@ -38,7 +39,7 @@
         _logURL = nil;
         _baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
         _harvey = nil;
-        _useSessionFlag = NO;
+        _useSessionFlag = YES;
     }
 
     return self;
@@ -47,15 +48,15 @@
 
 - (id)initForNSURLSession
 {
-    self = [self init];
-    _useSessionFlag = YES;
-    return self;
+    return [self init];
 }
 
 
 - (id)initForNSURLConnection
 {
-    return [self init];
+    self = [self init];
+    _useSessionFlag = NO;
+    return self;
 }
 
 
@@ -98,6 +99,7 @@
 }
 
 
+
 - (void)getDevices
 {
     // Set up a GET request to the /devices URL - gets all devices
@@ -116,13 +118,14 @@
 }
 
 
+
 - (void)getCode:(NSString *)modelID
 {
     // Set up a GET request to the /models/[id]/revisions URL
 
     if (modelID == nil || modelID.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to get the model’s current code build: invalid model ID.";
+        errorMessage = @"[ERROR] Could not create a request to get the model's current code build: invalid model ID.";
         [self reportError];
         return;
     }
@@ -137,10 +140,11 @@
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to get the model’s current code build.";
+        errorMessage = @"[ERROR] Could not create a request to get the model's current code build.";
         [self reportError];
     }
 }
+
 
 
 - (void)getCodeRev:(NSString *)modelID :(NSInteger)build
@@ -174,6 +178,7 @@
         [self reportError];
     }
 }
+
 
 
 - (void)getLogsForDevice:(NSString *)deviceID :(NSString *)since :(BOOL)isStream
@@ -245,6 +250,7 @@
 }
 
 
+
 - (void)updateModel:(NSString *)modelID :(NSString *)key :(NSString *)value
 {
     // Make a PUT request to send the change
@@ -282,6 +288,7 @@
 }
 
 
+
 - (void)deleteModel:(NSString *)modelID
 {
     // Set up a DELETE request to the /models/[id]
@@ -305,6 +312,7 @@
         [self reportError];
     }
 }
+
 
 
 - (void)uploadCode:(NSString *)modelID :(NSString *)newDeviceCode :(NSString *)newAgentCode
@@ -347,6 +355,7 @@
 }
 
 
+
 - (void)assignDevice:(NSString *)deviceID toModel:(NSString *)modelID
 {
     // Set up a PUT request to assign a device to a model
@@ -387,6 +396,7 @@
 }
 
 
+
 - (void)restartDevice:(NSString *)deviceID
 {
     // Set up a POST request to the /devices/[ID]/restart URL - updates device with an unchanged model_id
@@ -410,6 +420,7 @@
         [self reportError];
     }
 }
+
 
 
 - (void)restartDevices:(NSString *)modelID
@@ -437,6 +448,7 @@
 }
 
 
+
 - (void)deleteDevice:(NSString *)deviceID
 {
     // Set up a DELETE request to the /devices/[id]
@@ -460,6 +472,7 @@
         [self reportError];
     }
 }
+
 
 
 - (void)updateDevice:(NSString *)deviceID :(NSString *)key :(NSString *)value
@@ -499,6 +512,7 @@
         [self reportError];
     }
 }
+
 
 
 - (void)autoRenameDevice:(NSString *)deviceID
@@ -583,6 +597,7 @@
 }
 
 
+
 - (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)bodyDictionary
 {
     NSError *error = nil;
@@ -604,6 +619,7 @@
 }
 
 
+
 - (NSMutableURLRequest *)makePUTrequest:(NSString *)path :(NSDictionary *)bodyDictionary
 {
     NSError *error = nil;
@@ -621,6 +637,7 @@
         return request;
     }
 }
+
 
 
 - (NSMutableURLRequest *)makeDELETErequest:(NSString *)path
@@ -704,6 +721,7 @@
 }
 
 
+
 - (void)connection:(NSURLConnection *)connection didReceiveAuthenticationChallenge:(NSURLAuthenticationChallenge *)challenge
 {
     // Because the Build API uses Basic authentication, this is probably unnecessary,
@@ -726,6 +744,7 @@
 }
 
 
+
 - (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error
 {
     // Inform the host app that there was a connection failure
@@ -746,6 +765,7 @@
         [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
     }
 }
+
 
 
 - (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
@@ -830,6 +850,7 @@
 }
 
 
+
 - (void)relaunchConnection:(id)userInfo
 {
     // This method is called in response to the receipt of a status code 429 from the server,
@@ -840,6 +861,7 @@
     NSInteger actionCode = [[dict objectForKey:@"actioncode"] integerValue];
     [self launchConnection:request :actionCode];
 }
+
 
 
 - (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
@@ -854,6 +876,7 @@
         if (aConnexion.connexion == connection) [aConnexion.data appendData:data];
     }
 }
+
 
 
 - (void)connectionDidFinishLoading:(NSURLConnection *)connection
@@ -910,6 +933,7 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
 
     completionHandler(NSURLSessionAuthChallengeUseCredential, bonaFides);
 }
+
 
 
 - (void)URLSession:(NSURLSession *)session
@@ -1000,6 +1024,7 @@ didReceiveResponse:(NSURLResponse *)response
 }
 
 
+
 - (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask didReceiveData:(NSData *)data
 {
     // This delegate method is called when the server sends some data back
@@ -1012,6 +1037,7 @@ didReceiveResponse:(NSURLResponse *)response
         if (aConnexion.task == dataTask) [aConnexion.data appendData:data];
     }
 }
+
 
 
 - (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error
@@ -1107,6 +1133,11 @@ didReceiveResponse:(NSURLResponse *)response
         errorMessage = @"[ERROR] Received data could not be decoded. Is is JSON?";
         errorMessage = [errorMessage stringByAppendingFormat:@" %@", (NSString *)connexion.data];
         [self reportError];
+
+        // Are we streaming logs? If so continue (the user may cancel)
+
+        if (_logDevice) [self startLogging];
+
         connexion.errorCode = -1;
         connexion.actionCode = kConnectTypeNone;
     }
@@ -1197,6 +1228,7 @@ didReceiveResponse:(NSURLResponse *)response
 }
 
 
+
 - (void)processResult:(Connexion *)connexion :(NSDictionary *)data
 {
     // If there has been no error recorded, we can now process the data returned by the server
@@ -1275,6 +1307,23 @@ didReceiveResponse:(NSURLResponse *)response
                         // have the change values, ie. the name if it is <null>
 
                         NSMutableDictionary *newDevice = [NSMutableDictionary dictionaryWithDictionary:device];
+
+                        // Check for unexpected null values for certain keys
+
+                        NSString *deviceState = [newDevice valueForKey:@"powerstate"];
+						if ((NSNull *)deviceState == [NSNull null])
+						{
+							// 'powerstate' is null for some unexpected reason - assume device is offline
+							[newDevice setObject:@"offline" forKey:@"powerstate"];
+						}
+
+						deviceState = [newDevice valueForKey:@"agent_status"];
+						if ((NSNull *)deviceState == [NSNull null])
+						{
+							// 'agent_status' is null for some unexpected reason - assume agent is offline
+							[newDevice setObject:@"offline" forKey:@"agent_status"];
+						}
+
                         [devices addObject:newDevice];
                     }
 
@@ -1471,6 +1520,7 @@ didReceiveResponse:(NSURLResponse *)response
 }
 
 
+
 - (NSInteger)checkStatus:(NSDictionary *)data
 {
     // Before using data returned from the server, check that the success field is not false
@@ -1512,7 +1562,9 @@ didReceiveResponse:(NSURLResponse *)response
 }
 
 
+
 #pragma mark - Utility Methods
+
 
 - (NSDictionary *)makeDictionary:(NSString *)key :(NSString *)value
 {
@@ -1520,6 +1572,7 @@ didReceiveResponse:(NSURLResponse *)response
     NSArray *values = [NSArray arrayWithObjects:value, nil];
     return [NSDictionary dictionaryWithObjects:values forKeys:keys];
 }
+
 
 
 - (NSMutableURLRequest *)makeRequest:(NSString *)verb :(NSString *)path
@@ -1531,6 +1584,7 @@ didReceiveResponse:(NSURLResponse *)response
 }
 
 
+
 - (void)setRequestAuthorization:(NSMutableURLRequest *)request
 {
     if (_harvey != nil)
@@ -1540,7 +1594,7 @@ didReceiveResponse:(NSURLResponse *)response
     }
     else
     {
-        errorMessage = @"Unauthorized";
+        errorMessage = @"Accessing the Build API requires an API key.";
         [self reportError];
     }
 }

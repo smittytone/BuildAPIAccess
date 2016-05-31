@@ -2,11 +2,12 @@
 //  Copyright (c) 2015-16 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
-// BuildAPIAccess 1.1.2
+//  BuildAPIAccess 1.1.3
 
 
 #ifndef BuildAPIContants_h
 #define BuildAPIContants_h
+
 
 
 #define kConnectTypeNone					0
@@ -30,14 +31,18 @@
 #define kConnectTypeGetRevision				99
 #define kConnectTypeLogin					100
 
+
 #define kBaseAPIURL @"https://build.electricimp.com"
 #define kAPIVersion @"/v4/"
+
 
 #define kAllLogs 0
 #define kStreamLogs -1
 
+
 #define kServerSendsSuccess 1
 #define kServerSendsFailure 0
+
 
 
 #endif
