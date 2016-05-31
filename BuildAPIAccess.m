@@ -100,6 +100,14 @@
 
 
 
+- (void)getModels:(BOOL)withDevices {
+
+	if (withDevices) _followOnFlag = YES;
+	[self getModels];
+}
+
+
+
 - (void)getDevices
 {
     // Set up a GET request to the /devices URL - gets all devices

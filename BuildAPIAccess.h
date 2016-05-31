@@ -29,6 +29,7 @@
 // Data Request Methods
 
 - (void)getModels;
+- (void)getModels:(BOOL)withDevices;
 - (void)getDevices;
 - (void)createNewModel:(NSString *)modelNam;
 - (void)getCode:(NSString *)modelID;
