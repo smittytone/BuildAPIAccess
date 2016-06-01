@@ -157,7 +157,7 @@ The parameter *since* is a Unix timestamp and with limit the log entries returne
 
 Pass `YES` into the *isStream* parameter if you want to initiate log streaming.
 
-Currently, log entries can be streamed from only one device. To stream from another device, call [*stopLogging:*](#--voidstoplogging) then call [*getLogsForDevice:*](#--voidgetlogsfordevicensstring-deviceid-nsstring-since-boolisstream) with the new device’s *deviceIndex* value.
+Currently, log entries can be streamed from only one device. To stream from another device, call [*stopLogging:*](#--voidstoplogging) then call [*getLogsForDevice:::*](#--voidgetlogsfordevicensstring-deviceid-nsstring-since-boolisstream) with the new device’s *deviceIndex* value.
 
 ### - (void)startLogging
 
