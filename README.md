@@ -12,9 +12,11 @@ Making use of the Build API requires an Electric Imp developer account and an AP
 
 ## Licence
 
-BuildAPIAccess is offered under the terms of the MIT licence.
+BuildAPIAccess is &copy; Tony Smith, 2015-2016 and is offered under the terms of the MIT licence.
 
 **A polite request** If you make use of BuildAPIAccess in any way, a credit and a link to this repository would be much appreciated.
+
+The BuildAPI is &copy; Electric Imp, 2014-2016.
 
 ## Devices
 
