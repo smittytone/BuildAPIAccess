@@ -4,11 +4,11 @@ An Objective-C (Mac OS X / iOS / tvOS) class wrapper for [Electric Imp’s Build
 
 BuildAPIAccess requires the (included) class Connexion, a simple convenience class for bundling either an [NSURLConnection](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSURLConnection_Class/index.html) or [NSURLSession](https://developer.apple.com/library/prerelease/mac/documentation/Foundation/Reference/NSURLSession_class/index.html) instance and associated Build API connection data.
 
-BuildAPIAccess 1.1.3 supports both NSURLSession and NSURLConnection. The former is Apple’s preferred mechanism and the only one of the two supported by tvOS. For more information, see [Initialization Methods](#initialization-methods).
+BuildAPIAccess 1.1.3 supports both NSURLSession and NSURLConnection. The former is Apple’s preferred mechanism and the only one of the two supported by tvOS. For more information, see [Initialization Methods](#buildapiaccess-initialization-methods).
 
 ### Build API Authorization
 
-Making use of the Build API requires an Electric Imp account and a Build API key associated with that account. Build API keys can be generated using the  Electric Imp IDE, as [detailed here](/docs/buildapi/keys/).
+Making use of the Build API requires an Electric Imp account and a Build API key associated with that account. Build API keys can be generated using the  Electric Imp IDE, as [detailed here](https://electricimp.com/docs/buildapi/keys/).
 
 Each *BuildAPIAccess* instance does not maintain a permanent record of the selected account’s Build API Key; this is the task of the host application. *BuildAPIAccess* does require this information, so methods are provided to pass an account’s Build API Key into *BuildAPIAccess* instances.
 
@@ -58,7 +58,7 @@ Key | Type | Description | Editable?
 
 A model’s code revisions are not retained by *BuildAPIAccess* but are retrieved when required on a per-build basis. When a given code revision is requested, the device and agent code files it comprises are stored, respectively, in the public properties *deviceCode* and *agentCode* as strings. Should a subsequent revision be retrieved from the same model or a different one, these properties’ values will be overwritten.
 
-If the host application wishes to maintain a full local record of all of a model’s code revisions, it will need it iterate through each build. A call to the method [*getCode:*](#getcode) will record the latest build number in the public property *latestBuild*.
+If the host application wishes to maintain a full local record of all of a model’s code revisions, it will need it iterate through each build. A call to the method [*getCode:*](#--voidgetcodensstring-modelid) will record the latest build number in the public property *latestBuild*.
 
 ## Installing BuildAPIAccess
 
@@ -72,7 +72,7 @@ Drag the files `BuildAPIAccess.h`, `BuildAPIAccess.m`, `BuildAPIAccessConstants.
 | *models* | NSMutableArray | Empty array | Contains zero or more model records in NSDictionary form |
 | *deviceCode* | NSString | Empty string | The most recently retrieved code revision’s device code |
 | *agentCode* | NSString | Empty string | The most recently retrieved code revision’s agent code |
-| *latestBuild* | NSInteger | -1 | The latest build number of the most recently request model. This is not set until [*getCode:*](#getcode) is called |
+| *latestBuild* | NSInteger | -1 | The latest build number of the most recently request model. This is not set until [*getCode:*](#--voidgetcodensstring-modelid) is called |
 | *errorMesage* | NSString | Empty string | The most recently reported BuildAPIAccess error message |
 
 ## BuildAPIAccess Initialization Methods
@@ -157,11 +157,11 @@ The parameter *since* is a Unix timestamp and with limit the log entries returne
 
 Pass `YES` into the *isStream* parameter if you want to initiate log streaming.
 
-Currently, log entries can be streamed from only one device. To stream from another device, call [*stopLogging:*](#--voidstoplogging) then call [*getLogsForDevice:*](#--voidgetlogsfordevicensintegerdeviceindex-nsstring-since-boolisstream) with the new device’s *deviceIndex* value.
+Currently, log entries can be streamed from only one device. To stream from another device, call [*stopLogging:*](#--voidstoplogging) then call [*getLogsForDevice:*](#--voidgetlogsfordevicensstring-deviceid-nsstring-since-boolisstream) with the new device’s *deviceIndex* value.
 
 ### - (void)startLogging
 
-Having initiated log streaming using [*getLogsForDevice:::*](#--voidgetlogsfordevicensintegerdeviceindex-nsstring-since-boolisstream), this method is called automatically. But if your application uses [*stopLogging:*](#--voidstoplogging) to halt logging, this method can be called to recommence logging.
+Having initiated log streaming using [*getLogsForDevice:::*](#--voidgetlogsfordevicensstring-deviceid-nsstring-since-boolisstream), this method is called automatically. But if your application uses [*stopLogging:*](#--voidstoplogging) to halt logging, this method can be called to recommence logging.
 
 ### - (void)stopLogging
 
@@ -187,7 +187,7 @@ BuildAPIAccess maintains a list of active connections. When a connection is comp
 
 ## Returning Data
 
-Requests for data are made asynchronously. When the data returns &mdash; or, in the case of data being uploaded or changed, confirmation is made by the server &mdash; the result is signalled to the host application through notifications, listed below. When data is returned, it is stored in BuildAPIAccess member properties as outlined in the Build API access methods [listed above](#build-api-access-methods).
+Requests for data are made asynchronously. When the data returns &mdash; or, in the case of data being uploaded or changed, confirmation is made by the server &mdash; the result is signalled to the host application through notifications, listed below. When data is returned, it is stored in BuildAPIAccess member properties as outlined in the Build API access methods [listed above](#buildapiaccess-methods).
 
 Notification | Description
 --- | ---
