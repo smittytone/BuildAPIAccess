@@ -60,6 +60,14 @@ A model’s code revisions are not retained by *BuildAPIAccess* but are retrieve
 
 If the host application wishes to maintain a full local record of all of a model’s code revisions, it will need it iterate through each build. A call to the method [*getCode:*](#--voidgetcodensstring-modelid) will record the latest build number in the public property *latestBuild*.
 
+## BuildAPIAccess Version History
+
+### 1.1.3
+
+- Add *codeErrors* property to record [server-reported code syntax errors](#code-syntax-errors).
+- Streamline HTTP request assembly.
+- Code improvements and minor bug fixes.
+
 ## Installing BuildAPIAccess
 
 Drag the files `BuildAPIAccess.h`, `BuildAPIAccess.m`, `BuildAPIAccessConstants.h`, `Connexion.h` and `Connexion.m` into Xcode’s Project Navigator (with your project loaded). Make sure you copy the files to your project &mdash; there is a checkbox in the ‘Add files...’ window for this. Add `#import "BuildAPI.h"` to the header of the code that will make use of BuildAPIAccess and in which you will instantiate one or more *BuildAPIAccess* objects.
