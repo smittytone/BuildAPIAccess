@@ -86,10 +86,12 @@
 
 @property (nonatomic, strong) NSMutableArray *devices;
 @property (nonatomic, strong) NSMutableArray *models;
+@property (nonatomic, strong) NSMutableArray *codeErrors;
 @property (nonatomic, strong) NSString *errorMessage;
 @property (nonatomic, strong) NSString *statusMessage;
 @property (nonatomic, strong) NSString *deviceCode;
 @property (nonatomic, strong) NSString *agentCode;
+
 
 
 @end

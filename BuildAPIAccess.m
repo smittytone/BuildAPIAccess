@@ -12,6 +12,7 @@
 
 
 @synthesize devices, models, errorMessage, statusMessage, deviceCode, agentCode;
+@synthesize codeErrors;
 
 
 
@@ -1018,7 +1019,7 @@ didReceiveResponse:(NSURLResponse *)response
 		// React to a passed client-side error - most likely a timeout or inability to resolve the URL
 		// First, notify the host app
 
-		errorMessage = @"[ERROR] Could not connect to the Electric Imp server.";
+		errorMessage = @"[SERVER ERROR] Could not connect to the Electric Imp server.";
 		[self reportError];
 
 		// Next, terminate the failed connection and remove it from the list of current connections
@@ -1094,7 +1095,7 @@ didReceiveResponse:(NSURLResponse *)response
 
 		// TODO?? Better interpret the HTML
 
-		errorMessage = @"[ERROR] Received data could not be decoded. Is is JSON?";
+		errorMessage = @"[SERVER ERROR] Received data could not be decoded. Is is JSON?";
 		errorMessage = [errorMessage stringByAppendingFormat:@" %@", (NSString *)connexion.data];
 		[self reportError];
 
@@ -1111,7 +1112,7 @@ didReceiveResponse:(NSURLResponse *)response
 		// Check for an error being reported by the server. This will have been set for the current connection
 		// by either of the didReceiveResponse: methods
 
-		errorMessage = [NSString stringWithFormat:@"[ERROR] {Code: %lu} ", connexion.errorCode];
+		errorMessage = [NSString stringWithFormat:@"[SERVER ERROR] [Code: %lu] ", connexion.errorCode];
 
 		if (parsedData != nil)
 		{
@@ -1122,6 +1123,15 @@ didReceiveResponse:(NSURLResponse *)response
 			errorMessage = [errorMessage stringByAppendingString:errString];
 			errString = [errDict objectForKey:@"code"];
 
+            if (codeErrors == nil)
+            {
+                codeErrors = [[NSMutableArray alloc] init];
+            }
+            else
+            {
+                [codeErrors removeAllObjects];
+            }
+            
 			// Is the problem a code syntax error?
 
 			if ([errString compare:@"CompileFailed"] == NSOrderedSame)
@@ -1142,7 +1152,7 @@ didReceiveResponse:(NSURLResponse *)response
 				{
 					// We have error(s) in the agent Squirrel - decode and report them
 
-					errorMessage = [errorMessage stringByAppendingString:@"\n Agent Code errors:"];
+					errorMessage = [errorMessage stringByAppendingString:@"\n  Agent Code errors:"];
 
 					for (NSUInteger j = 0 ; j < aArray.count ; ++j)
 					{
@@ -1150,6 +1160,15 @@ didReceiveResponse:(NSURLResponse *)response
 						NSNumber *row = [errDict valueForKey:@"row"];
 						NSNumber *col = [errDict valueForKey:@"column"];
 						errorMessage = [errorMessage stringByAppendingFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue];
+
+                        // Preserve the error details, and add extra keys - 'message' and 'type' -
+                        // to the error record dictionary
+
+                        NSMutableDictionary *aDict = [NSMutableDictionary dictionaryWithDictionary:errDict];
+                        [aDict setObject:@"agent" forKey:@"type"];
+                        [aDict setObject:[NSString stringWithFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue] forKey:@"message"];
+
+                        [codeErrors addObject:aDict];
 					}
 				}
 
@@ -1157,7 +1176,7 @@ didReceiveResponse:(NSURLResponse *)response
 				{
 					// We have error(s) in the device Squirrel - decode and report them
 
-					errorMessage = [errorMessage stringByAppendingString:@"\n Device Code errors:"];
+					errorMessage = [errorMessage stringByAppendingString:@"\n  Device Code errors:"];
 
 					for (NSUInteger j = 0 ; j < dArray.count ; ++j)
 					{
@@ -1165,6 +1184,12 @@ didReceiveResponse:(NSURLResponse *)response
 						NSNumber *row = [errDict valueForKey:@"row"];
 						NSNumber *col = [errDict valueForKey:@"column"];
 						errorMessage = [errorMessage stringByAppendingFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue];
+
+                        NSMutableDictionary *aDict = [NSMutableDictionary dictionaryWithDictionary:errDict];
+                        [aDict setObject:[NSString stringWithFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue] forKey:@"message"];
+                        [aDict setObject:@"device" forKey:@"type"];
+
+                        [codeErrors addObject:aDict];
 					}
 				}
 			}
@@ -1172,7 +1197,16 @@ didReceiveResponse:(NSURLResponse *)response
 
 		// Report the error via notifications and clear the connection's action code
 
-		if (!(connexion.errorCode == 504 && _logDevice != nil)) [self reportError];
+		if (!(connexion.errorCode == 504 && _logDevice != nil))
+        {
+            [self reportError];
+
+            // Clear 'parsedData' so that 'processResult:', called immediately after 'processConnection:',
+            // does not double-report the error
+            
+            parsedData = nil;
+        }
+
 		connexion.actionCode = kConnectTypeNone;
 	}
 

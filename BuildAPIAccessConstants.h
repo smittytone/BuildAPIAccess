@@ -32,7 +32,7 @@
 #define kConnectTypeLogin					100
 
 
-#define kBaseAPIURL @"https://beta-build.electricimp.com"
+#define kBaseAPIURL @"https://build.electricimp.com"
 #define kAPIVersion @"/v4/"
 
 
