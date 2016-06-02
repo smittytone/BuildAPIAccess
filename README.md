@@ -68,12 +68,13 @@ Drag the files `BuildAPIAccess.h`, `BuildAPIAccess.m`, `BuildAPIAccessConstants.
 
 | Property | Type | Default | Notes |
 | --- | --- | --- | --- |
-| *devices* | NSMutableArray | Empty array | Contains zero or more device records in NSDictionary form |
-| *models* | NSMutableArray | Empty array | Contains zero or more model records in NSDictionary form |
-| *deviceCode* | NSString | Empty string | The most recently retrieved code revision’s device code |
-| *agentCode* | NSString | Empty string | The most recently retrieved code revision’s agent code |
-| *latestBuild* | NSInteger | -1 | The latest build number of the most recently request model. This is not set until [*getCode:*](#--voidgetcodensstring-modelid) is called |
-| *errorMesage* | NSString | Empty string | The most recently reported BuildAPIAccess error message |
+| *devices* | [NSMutableArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/) | Empty array | Contains zero or more device records in NSDictionary form |
+| *models* | [NSMutableArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/) | Empty array | Contains zero or more model records in NSDictionary form |
+| *codeErrors* | [NSMutableArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/) | Empty array | Contains zero or more coder syntax error records **New in 1.1.3**<br>in NSDictionary form |
+| *deviceCode* | [NSString](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSString_Class/) | Empty string | The most recently retrieved code revision’s device code |
+| *agentCode* | [NSString](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSString_Class/) | Empty string | The most recently retrieved code revision’s agent code |
+| *latestBuild* | [NSInteger](https://developer.apple.com/library/ios/documentation/Cocoa/Reference/Foundation/Miscellaneous/Foundation_DataTypes/#//apple_ref/c/tdef/NSInteger) | -1 | The latest build number of the most recently request model. This is not set until [*getCode:*](#--voidgetcodensstring-modelid) is called |
+| *errorMesage* | [NSString](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSString_Class/) | Empty string | The most recently reported BuildAPIAccess error message |
 
 ## BuildAPIAccess Initialization Methods
 
@@ -208,3 +209,18 @@ BuildAPILogStream | Successfully retrieved a freshly posted log entry. The log e
 ## Error Reporting
 
 Errors arising from connectivity, or through the application’s interaction with the Build API, are announced by the notification `BuildAPIError`. When the application receives this notification, it should read the BuildAPIAccess instance’s *errorMessage* property for more information.
+
+### Code Syntax Errors
+
+Code uploaded to the Electric Imp Cloud via the Build API is automatically checked for syntax errors. These are reported using the standard error message reporting system: a list of all the errors is added to the BuildAPIAccess instance‘s *errorMessage* property.
+
+From BuildAPIAccess 1.1.3 on, a new property *codeErrors* has been added. It is an [NSMutableArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/) containing zero or more code error records. These records are NSMutableDictionary objects containing the following keys:
+
+Key | Type | Notes
+--- | --- | ---
+*message* | String | A human readable error message |
+*type* | String | `"device"` or `"agent"` &mdash; which code unit contains the error |
+*row* | NSNumber | The line number of the *compiled code* in which the error was detected |
+*col* | NSNumber | The column at which the error was detected |
+
+Note that *codeErrors* is cleared every time code is uploaded &mdash; it only contains the results of the most recent syntax check.
