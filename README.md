@@ -70,7 +70,7 @@ Drag the files `BuildAPIAccess.h`, `BuildAPIAccess.m`, `BuildAPIAccessConstants.
 | --- | --- | --- | --- |
 | *devices* | [NSMutableArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/) | Empty array | Contains zero or more device records in NSDictionary form |
 | *models* | [NSMutableArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/) | Empty array | Contains zero or more model records in NSDictionary form |
-| *codeErrors* | [NSMutableArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/) | Empty array | Contains zero or more coder syntax error records **New in 1.1.3**<br>in NSDictionary form |
+| *codeErrors* | [NSMutableArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/) | Empty array | Contains zero or more coder syntax error records in NSDictionary form **New in 1.1.3** |
 | *deviceCode* | [NSString](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSString_Class/) | Empty string | The most recently retrieved code revision’s device code |
 | *agentCode* | [NSString](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSString_Class/) | Empty string | The most recently retrieved code revision’s agent code |
 | *latestBuild* | [NSInteger](https://developer.apple.com/library/ios/documentation/Cocoa/Reference/Foundation/Miscellaneous/Foundation_DataTypes/#//apple_ref/c/tdef/NSInteger) | -1 | The latest build number of the most recently request model. This is not set until [*getCode:*](#--voidgetcodensstring-modelid) is called |
@@ -214,7 +214,7 @@ Errors arising from connectivity, or through the application’s interaction wit
 
 Code uploaded to the Electric Imp Cloud via the Build API is automatically checked for syntax errors. These are reported using the standard error message reporting system: a list of all the errors is added to the BuildAPIAccess instance‘s *errorMessage* property.
 
-From BuildAPIAccess 1.1.3 on, a new property *codeErrors* has been added. It is an [NSMutableArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/) containing zero or more code error records. These records are NSMutableDictionary objects containing the following keys:
+From BuildAPIAccess 1.1.3 on, a new property *codeErrors* has been added. It is an [NSMutableArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/) containing zero or more code error records. These records are [NSMutableDictionary](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableDictionary_Class/) objects containing the following keys:
 
 Key | Type | Notes
 --- | --- | ---
