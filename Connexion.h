@@ -16,6 +16,9 @@
 // and associated data ie. it has no methods, just five properties:
 
 
+- (instancetype)init;
+
+
 @property (nonatomic, strong) NSURLConnection *connexion;
 @property (nonatomic, strong) NSURLSessionTask *task;
 @property (nonatomic, strong) NSMutableData *data;

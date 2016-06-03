@@ -48,13 +48,13 @@
 }
 
 
-- (id)initForNSURLSession
+- (instancetype)initForNSURLSession
 {
     return [self init];
 }
 
 
-- (id)initForNSURLConnection
+- (instancetype)initForNSURLConnection
 {
     self = [self init];
     _useSessionFlag = NO;
@@ -102,9 +102,9 @@
 
 
 
-- (void)getModels:(BOOL)withDevices {
-
-	if (withDevices) _followOnFlag = YES;
+- (void)getModels:(BOOL)withDevices
+{
+	_followOnFlag = withDevices;
 	[self getModels];
 }
 

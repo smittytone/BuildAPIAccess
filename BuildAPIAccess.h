@@ -21,8 +21,9 @@
 
 // Initialization Methods
 
-- (id)initForNSURLSession;
-- (id)initForNSURLConnection;
+- (instancetype)init NS_DESIGNATED_INITIALIZER;
+- (instancetype)initForNSURLSession;
+- (instancetype)initForNSURLConnection;
 - (void)clrk;
 - (void)setk:(NSString *)harvey;
 
@@ -31,13 +32,13 @@
 - (void)getModels;
 - (void)getModels:(BOOL)withDevices;
 - (void)getDevices;
-- (void)createNewModel:(NSString *)modelNam;
 - (void)getCode:(NSString *)modelID;
 - (void)getCodeRev:(NSString *)modelID :(NSInteger)build;
 - (void)getLogsForDevice:(NSString *)deviceID :(NSString *)since :(BOOL)isStream;
 
 // Action Methods
 
+- (void)createNewModel:(NSString *)modelName;
 - (void)updateModel:(NSString *)modelID :(NSString *)key :(NSString *)value;
 - (void)uploadCode:(NSString *)modelID :(NSString *)newDeviceCode :(NSString *)newAgentCode;
 - (void)deleteModel:(NSString *)modelID;
