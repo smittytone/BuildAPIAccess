@@ -551,7 +551,7 @@
 
 
 
-#pragma mark – Logging Methods
+#pragma mark - Logging Methods
 
 
 - (void)startLogging
@@ -715,206 +715,219 @@
 
 - (BOOL)connection:(NSURLConnection *)connection canAuthenticateAgainstProtectionSpace:(NSURLProtectionSpace *)protectionSpace
 {
-    // Because the Build API uses Basic authentication, this is probably unnecessary,
-    // but retain for future use as required
+	// Because the Build API uses Basic authentication, this is probably unnecessary,
+	// but retain for future use as required
 
-    if (protectionSpace.authenticationMethod == NSURLAuthenticationMethodHTTPBasic ||
-        protectionSpace.authenticationMethod == NSURLAuthenticationMethodDefault)
-    {
-        return YES;
-    }
-    else
-    {
-        return NO;
-    }
+	if (protectionSpace.authenticationMethod == NSURLAuthenticationMethodHTTPBasic ||
+		protectionSpace.authenticationMethod == NSURLAuthenticationMethodDefault)
+	{
+		return YES;
+	}
+	else
+	{
+		return NO;
+	}
 }
 
 
 
 - (void)connection:(NSURLConnection *)connection didReceiveAuthenticationChallenge:(NSURLAuthenticationChallenge *)challenge
 {
-    // Because the Build API uses Basic authentication, this is probably unnecessary,
-    // but retain for future use as required
+	// Because the Build API uses Basic authentication, this is probably unnecessary,
+	// but retain for future use as required
 
-    NSURLCredential *bonaFides;
+	NSURLCredential *bonaFides;
 
-    if (challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust)
-    {
-        bonaFides = [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust];
-    }
-    else
-    {
-        bonaFides = [NSURLCredential credentialWithUser:[self encodeBase64String:_harvey]
-                                               password:[self encodeBase64String:_harvey]
-                                            persistence:NSURLCredentialPersistenceNone];
-    }
+	if (challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust)
+	{
+		bonaFides = [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust];
+	}
+	else
+	{
+		bonaFides = [NSURLCredential credentialWithUser:[self encodeBase64String:_harvey]
+											   password:[self encodeBase64String:_harvey]
+											persistence:NSURLCredentialPersistenceNone];
+	}
 
-    [[challenge sender] useCredential:bonaFides forAuthenticationChallenge:challenge];
+	[[challenge sender] useCredential:bonaFides forAuthenticationChallenge:challenge];
 }
 
 
 
 - (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error
 {
-    // Inform the host app that there was a connection failure
+	// Inform the host app that there was a connection failure
 
-    errorMessage = @"[ERROR] Could not connect to the Electric Imp server.";
-    [self reportError];
+	errorMessage = @"[ERROR] Could not connect to the Electric Imp server.";
+	[self reportError];
 
-    // Terminate the failed connection and remove it from the list of current connections
+	// Terminate the failed connection and remove it from the list of current connections
 
-    [connection cancel];
-    [_connexions removeObject:connection];
+	[connection cancel];
+	[_connexions removeObject:connection];
 
-    if (_connexions.count < 1)
-    {
-        // If there are no current connections, tell the app to
-        // turn off the connection activity indicator
+	if (_connexions.count < 1)
+	{
+		// If there are no current connections, tell the app to
+		// turn off the connection activity indicator
 
-        [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-    }
+		[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+	}
 }
 
 
 
 - (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
 {
-    // This delegate method is called when the server responds to the connection request
-    // Use it to trap certain status codes
+	// This delegate method is called when the server responds to the connection request
+	// Use it to trap certain status codes
 
-    NSHTTPURLResponse *rps = (NSHTTPURLResponse *)response;
-    NSInteger code = rps.statusCode;
+	NSHTTPURLResponse *rps = (NSHTTPURLResponse *)response;
+	NSInteger code = rps.statusCode;
 
-    if (code > 399)
-    {
-        // The API has responded with a status code that indicates an error
+	if (code > 399)
+	{
+		// The API has responded with a status code that indicates an error
 
-        if (code == 429)
-        {
-            // Build API rate limit hit
+		if (code == 429)
+		{
+			// Build API rate limit hit
 
-            for (Connexion *aConnexion in _connexions)
-            {
-                // Run through the connections in our list and add the incoming error code to the correct one
+			Connexion *conn = nil;
 
-                if (aConnexion.connexion == connection)
-                {
-                    // This request has been rate-limited, so we need to recall it in 1+ seconds
+			for (Connexion *aConnexion in _connexions)
+			{
+				// Run through the connections in our list and add the incoming error code to the correct one
 
-                    NSArray *values = [NSArray arrayWithObjects:[connection.originalRequest copy], [NSNumber numberWithInteger:aConnexion.actionCode], nil];
-                    NSArray *keys = [NSArray arrayWithObjects:@"request", @"actioncode", nil];
-                    NSDictionary *dict =[NSDictionary dictionaryWithObjects:values forKeys:keys];
-                    [NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(relaunchConnection:) userInfo:dict repeats:NO];
-                    [_connexions removeObject:aConnexion];
-                    [connection cancel];
+				if (aConnexion.connexion == connection)
+				{
+					// This request has been rate-limited, so we need to recall it in 1+ seconds
 
-                    if (_connexions.count < 1)
-                    {
-                        // No active connections left, so notify the host app
+					NSArray *values = [NSArray arrayWithObjects:[connection.originalRequest copy], [NSNumber numberWithInteger:aConnexion.actionCode], nil];
+					NSArray *keys = [NSArray arrayWithObjects:@"request", @"actioncode", nil];
+					NSDictionary *dict =[NSDictionary dictionaryWithObjects:values forKeys:keys];
+					[NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(relaunchConnection:) userInfo:dict repeats:NO];
+					conn = aConnexion;
+				}
+			}
 
-                        [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-                    }
-                }
-            }
-        }
-        else if (code == 504)
-        {
-            // Bad Gateway error received - this usually occurs during log streaming
+			[connection cancel];
 
-            if (_logDevice != nil)
-            {
-                // We are still streaming so just cancel the current connection...
+			if (conn != nil) [_connexions removeObject:conn];
 
-                for (Connexion *aConnexion in _connexions)
-                {
-                    if (aConnexion.connexion == connection) [_connexions removeObject:aConnexion];
-                }
+			if (_connexions.count < 1)
+			{
+				// No active connections left, so notify the host app
 
-                [connection cancel];
+				[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+			}
 
-                // ...and recommence logging
+			return;
+		}
 
-                [self startLogging];
-            }
-        }
-        else
-        {
-            // Any other error
+		if (code == 504)
+		{
+			// Bad Gateway error received - this usually occurs during log streaming
 
-            for (Connexion *aConnexion in _connexions)
-            {
-                // Run through the connections in our list and add the incoming error code to the correct one
+			if (_logDevice != nil)
+			{
+				// We are still streaming so just cancel the current connection...
 
-                if (aConnexion.connexion == connection) aConnexion.errorCode = code;
-            }
-        }
-    }
-    else if (code > 299 && code < 400)
-    {
-        // This is a redirect code not an error. This *should* not occur,
-        // but here is a point to trap it just in case
+				Connexion *conn = nil;
 
-        NSLog(@"Redirect Status code received");
-    }
+				for (Connexion *aConnexion in _connexions)
+				{
+					if (aConnexion.connexion == connection) conn = aConnexion;
+				}
+
+				[connection cancel];
+				if (conn != nil) [_connexions removeObject:conn];
+
+				// ...and recommence logging
+
+				[self startLogging];
+			}
+		}
+		else
+		{
+			// Allow the connection to pass because we'll handle the error later
+
+			for (Connexion *aConnexion in _connexions)
+			{
+				// Run through the connections in our list and add the incoming error code to the correct one
+
+				if (aConnexion.connexion == connection) aConnexion.errorCode = code;
+			}
+		}
+	}
+	else if (code > 299 && code < 400)
+	{
+
+		// This is a redirect code not an error. This *should* not occur,
+		// but here is a point to trap it just in case
+
+		errorMessage = [NSString stringWithFormat:@"[WARNING] Server redirect status code received: %li", (long)code];
+		[self reportError];
+	}
 }
 
 
 
 - (void)relaunchConnection:(id)userInfo
 {
-    // This method is called in response to the receipt of a status code 429 from the server,
-    // ie. we have been rate-limited. A timer will bring us here in 1.0 seconds
+	// This method is called in response to the receipt of a status code 429 from the server,
+	// ie. we have been rate-limited. A timer will bring us here in 1.0 seconds
 
-    NSDictionary *dict = (NSDictionary *)userInfo;
-    NSMutableURLRequest *request = [dict objectForKey:@"request"];
-    NSInteger actionCode = [[dict objectForKey:@"actioncode"] integerValue];
-    [self launchConnection:request :actionCode];
+	NSDictionary *dict = (NSDictionary *)userInfo;
+	NSMutableURLRequest *request = [dict objectForKey:@"request"];
+	NSInteger actionCode = [[dict objectForKey:@"actioncode"] integerValue];
+	[self launchConnection:request :actionCode];
 }
 
 
 
 - (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
 {
-    // This delegate method is called when the server sends some data back
-    // Add it to the correct connexion object
+	// This delegate method is called when the server sends some data back
+	// Add it to the correct connexion object
 
-    for (Connexion *aConnexion in _connexions)
-    {
-        // Run through the connections in our list and add the incoming data to the correct one
+	for (Connexion *aConnexion in _connexions)
+	{
+		// Run through the connections in our list and add the incoming data to the correct one
 
-        if (aConnexion.connexion == connection) [aConnexion.data appendData:data];
-    }
+		if (aConnexion.connexion == connection) [aConnexion.data appendData:data];
+	}
 }
 
 
 
 - (void)connectionDidFinishLoading:(NSURLConnection *)connection
 {
-    // All the data has been supplied by the server in response to a connection
-    // Parse the data and, according to the connection activity - update device, create model etc –
-    // apply the results
+	// All the data has been supplied by the server in response to a connection
+	// Parse the data and, according to the connection activity - update device, create model etc –
+	// apply the results
 
-    Connexion *theCurrentConnexion;
-    id parsedData = nil;
+	Connexion *theCurrentConnexion;
+	id parsedData = nil;
 
-    for (Connexion *aConnexion in _connexions)
-    {
-        // Run through the connections in the list and find the one that has just finished loading
+	for (Connexion *aConnexion in _connexions)
+	{
+		// Run through the connections in the list and find the one that has just finished loading
 
-        if (aConnexion.connexion == connection)
-        {
-            theCurrentConnexion = aConnexion;
-            parsedData = [self processConnection:aConnexion];
-        }
-    }
+		if (aConnexion.connexion == connection)
+		{
+			theCurrentConnexion = aConnexion;
+			parsedData = [self processConnection:aConnexion];
+		}
+	}
 
-    // End the finished connection and remove it from the list of current connections
+	// End the finished connection and remove it from the list of current connections
 
-    [connection cancel];
+	[connection cancel];
 
-    if (theCurrentConnexion.actionCode != kConnectTypeNone) [self processResult:theCurrentConnexion :parsedData];
+	if (theCurrentConnexion.actionCode != kConnectTypeNone) [self processResult:theCurrentConnexion :parsedData];
 
-    theCurrentConnexion = nil;
+	theCurrentConnexion = nil;
 }
 
 
