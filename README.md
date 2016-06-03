@@ -91,7 +91,7 @@ BuildAPIAccess provides two convenience initializers (constructors):
 ### - (id)initForNSURLSession
 ### - (id)initForNSURLConnection
 
-Both methods initialize the BuildAPIAccess instance to make use of, respectively, Apple’s NSURLSession and NSURLConnection connectivity systems. iOS and Mac OS X support both modes, though NSURLSession is the mechanism Apple recommends. Indeed, tvOS *only* supports NSURLSession.
+Both methods initialize the BuildAPIAccess instance to make use of, respectively, Apple’s NSURLSession and NSURLConnection connectivity systems. iOS and Mac OS X support both modes, though NSURLSession is the mechanism Apple recommends. Indeed, tvOS *only* supports NSURLSession. As such, BuildAPIAccess now defaults to NSURLSession.
 
 ## BuildAPIAccess Authorization Methods
 
