@@ -2,7 +2,8 @@
 //  Copyright (c) 2015-16 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
-// BuildAPIAccess 1.1.2
+//  BuildAPIAccess 1.1.3
+
 
 #import "BuildAPIAccess.h"
 
@@ -11,13 +12,14 @@
 
 
 @synthesize devices, models, errorMessage, statusMessage, deviceCode, agentCode;
+@synthesize codeErrors;
 
 
 
 #pragma mark - Initialization Methods
 
 
-- (id)init
+- (instancetype)init
 {
     // Generic initializer - should not be called directly
 
@@ -36,26 +38,27 @@
         _lastStamp = nil;
         _logDevice = nil;
         _logURL = nil;
-        _baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
         _harvey = nil;
-        _useSessionFlag = NO;
+        _useSessionFlag = YES;
+
+		_baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
     }
 
     return self;
 }
 
 
-- (id)initForNSURLSession
+- (instancetype)initForNSURLSession
 {
-    self = [self init];
-    _useSessionFlag = YES;
-    return self;
+    return [self init];
 }
 
 
-- (id)initForNSURLConnection
+- (instancetype)initForNSURLConnection
 {
-    return [self init];
+    self = [self init];
+    _useSessionFlag = NO;
+    return self;
 }
 
 
@@ -84,7 +87,7 @@
 {
     // Set up a GET request to the /models URL - gets all models
 
-    NSURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"models"]];
+    NSMutableURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"models"]];
 
     if (request)
     {
@@ -98,11 +101,20 @@
 }
 
 
+
+- (void)getModels:(BOOL)withDevices
+{
+	_followOnFlag = withDevices;
+	[self getModels];
+}
+
+
+
 - (void)getDevices
 {
     // Set up a GET request to the /devices URL - gets all devices
 
-    NSURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"devices"]];
+    NSMutableURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"devices"]];
 
     if (request)
     {
@@ -116,19 +128,20 @@
 }
 
 
+
 - (void)getCode:(NSString *)modelID
 {
     // Set up a GET request to the /models/[id]/revisions URL
 
     if (modelID == nil || modelID.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to get the model’s current code build: invalid model ID.";
+        errorMessage = @"[ERROR] Could not create a request to get the model's current code build: invalid model ID.";
         [self reportError];
         return;
     }
 
     NSString *urlString = [_baseURL stringByAppendingFormat:@"models/%@/revisions", modelID];
-    NSURLRequest *request = [self makeGETrequest:urlString];
+    NSMutableURLRequest *request = [self makeGETrequest:urlString];
 
     if (request)
     {
@@ -137,10 +150,11 @@
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to get the model’s current code build.";
+        errorMessage = @"[ERROR] Could not create a request to get the model's current code build.";
         [self reportError];
     }
 }
+
 
 
 - (void)getCodeRev:(NSString *)modelID :(NSInteger)build
@@ -162,7 +176,7 @@
     }
 
     NSString *urlString = [_baseURL stringByAppendingFormat:@"models/%@/revisions/%li", modelID, (long)build];
-    NSURLRequest *request = [self makeGETrequest:urlString];
+    NSMutableURLRequest *request = [self makeGETrequest:urlString];
 
     if (request)
     {
@@ -174,6 +188,7 @@
         [self reportError];
     }
 }
+
 
 
 - (void)getLogsForDevice:(NSString *)deviceID :(NSString *)since :(BOOL)isStream
@@ -201,7 +216,7 @@
         if ([since compare:@""] != NSOrderedSame) urlString = [urlString stringByAppendingFormat:@"?since=%@", since];
     }
 
-    NSURLRequest *request = [self makeGETrequest:urlString];
+    NSMutableURLRequest *request = [self makeGETrequest:urlString];
 
     if (request)
     {
@@ -231,7 +246,7 @@
     }
 
     NSDictionary *dict = [self makeDictionary:@"name" :modelName];
-    NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:@"models"] :dict];
+    NSMutableURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:@"models"] :dict];
 
     if (request)
     {
@@ -243,6 +258,7 @@
         [self reportError];
     }
 }
+
 
 
 - (void)updateModel:(NSString *)modelID :(NSString *)key :(NSString *)value
@@ -268,7 +284,7 @@
     // Put the new name into the dictionary to pass to the API
 
     NSDictionary *newDict = [self makeDictionary:key :value];
-    NSURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"models/%@", modelID] :newDict];
+    NSMutableURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"models/%@", modelID] :newDict];
 
     if (request)
     {
@@ -282,6 +298,7 @@
 }
 
 
+
 - (void)deleteModel:(NSString *)modelID
 {
     // Set up a DELETE request to the /models/[id]
@@ -293,7 +310,7 @@
         return;
     }
 
-    NSURLRequest *request = [self makeDELETErequest:[_baseURL stringByAppendingFormat:@"models/%@", modelID]];
+    NSMutableURLRequest *request = [self makeDELETErequest:[_baseURL stringByAppendingFormat:@"models/%@", modelID]];
 
     if (request)
     {
@@ -305,6 +322,7 @@
         [self reportError];
     }
 }
+
 
 
 - (void)uploadCode:(NSString *)modelID :(NSString *)newDeviceCode :(NSString *)newAgentCode
@@ -333,7 +351,7 @@
 
     NSString *urlString = [@"models/" stringByAppendingString:modelID];
     urlString = [urlString stringByAppendingString:@"/revisions"];
-    NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:urlString] :dict];
+    NSMutableURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:urlString] :dict];
 
     if (request)
     {
@@ -345,6 +363,7 @@
         [self reportError];
     }
 }
+
 
 
 - (void)assignDevice:(NSString *)deviceID toModel:(NSString *)modelID
@@ -373,7 +392,7 @@
 
     // Make the PUT request to send the change
 
-    NSURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingString:urlString] :dict];
+    NSMutableURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingString:urlString] :dict];
 
     if (request)
     {
@@ -387,6 +406,7 @@
 }
 
 
+
 - (void)restartDevice:(NSString *)deviceID
 {
     // Set up a POST request to the /devices/[ID]/restart URL - updates device with an unchanged model_id
@@ -398,7 +418,7 @@
         return;
     }
 
-    NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingFormat:@"devices/%@/restart", deviceID] :nil];
+    NSMutableURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingFormat:@"devices/%@/restart", deviceID] :nil];
 
     if (request)
     {
@@ -412,6 +432,7 @@
 }
 
 
+
 - (void)restartDevices:(NSString *)modelID
 {
     // Set up a POST request to the /models/[ID] URL - gets all models
@@ -423,7 +444,7 @@
         return;
     }
 
-    NSURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingFormat:@"models/%@/restart", modelID] :nil];
+    NSMutableURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingFormat:@"models/%@/restart", modelID] :nil];
 
     if (request)
     {
@@ -437,6 +458,7 @@
 }
 
 
+
 - (void)deleteDevice:(NSString *)deviceID
 {
     // Set up a DELETE request to the /devices/[id]
@@ -448,7 +470,7 @@
         return;
     }
 
-    NSURLRequest *request = [self makeDELETErequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID]];
+    NSMutableURLRequest *request = [self makeDELETErequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID]];
 
     if (request)
     {
@@ -460,6 +482,7 @@
         [self reportError];
     }
 }
+
 
 
 - (void)updateDevice:(NSString *)deviceID :(NSString *)key :(NSString *)value
@@ -485,7 +508,7 @@
     // Put the new name into the dictionary to pass to the API
 
     NSDictionary *newDict = [self makeDictionary:key :value];
-    NSURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID] :newDict];
+    NSMutableURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID] :newDict];
 
     if (request)
     {
@@ -501,6 +524,7 @@
 }
 
 
+
 - (void)autoRenameDevice:(NSString *)deviceID
 {
     // This method should be used SOLELY to change the name of new, unassigned device
@@ -512,7 +536,7 @@
 
     // Make the PUT request to send the change
 
-    NSURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID] :newDict];
+    NSMutableURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID] :newDict];
 
     if (request)
     {
@@ -527,7 +551,7 @@
 
 
 
-#pragma mark – Logging Methods
+#pragma mark - Logging Methods
 
 
 - (void)startLogging
@@ -583,6 +607,7 @@
 }
 
 
+
 - (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)bodyDictionary
 {
     NSError *error = nil;
@@ -604,6 +629,7 @@
 }
 
 
+
 - (NSMutableURLRequest *)makePUTrequest:(NSString *)path :(NSDictionary *)bodyDictionary
 {
     NSError *error = nil;
@@ -623,6 +649,7 @@
 }
 
 
+
 - (NSMutableURLRequest *)makeDELETErequest:(NSString *)path
 {
     return [self makeRequest:@"DELETE" :path];
@@ -639,7 +666,6 @@
 
     Connexion *aConnexion = [[Connexion alloc] init];
     aConnexion.actionCode = actionCode;
-    aConnexion.errorCode = -1;
     aConnexion.data = [NSMutableData dataWithCapacity:0];
 
     if (actionCode == kConnectTypeGetLogEntriesStreamed) [request setTimeoutInterval:3600.0];
@@ -669,7 +695,7 @@
         }
     }
 
-    if (_connexions.count < 1)
+    if (_connexions.count == 0)
     {
         // Connection established successfully, so notify the main app to trigger the progress indicator
         // and then add the new connexion to the list of current connections
@@ -689,200 +715,219 @@
 
 - (BOOL)connection:(NSURLConnection *)connection canAuthenticateAgainstProtectionSpace:(NSURLProtectionSpace *)protectionSpace
 {
-    // Because the Build API uses Basic authentication, this is probably unnecessary,
-    // but retain for future use as required
+	// Because the Build API uses Basic authentication, this is probably unnecessary,
+	// but retain for future use as required
 
-    if (protectionSpace.authenticationMethod == NSURLAuthenticationMethodHTTPBasic ||
-        protectionSpace.authenticationMethod == NSURLAuthenticationMethodDefault)
-    {
-        return YES;
-    }
-    else
-    {
-        return NO;
-    }
+	if (protectionSpace.authenticationMethod == NSURLAuthenticationMethodHTTPBasic ||
+		protectionSpace.authenticationMethod == NSURLAuthenticationMethodDefault)
+	{
+		return YES;
+	}
+	else
+	{
+		return NO;
+	}
 }
+
 
 
 - (void)connection:(NSURLConnection *)connection didReceiveAuthenticationChallenge:(NSURLAuthenticationChallenge *)challenge
 {
-    // Because the Build API uses Basic authentication, this is probably unnecessary,
-    // but retain for future use as required
+	// Because the Build API uses Basic authentication, this is probably unnecessary,
+	// but retain for future use as required
 
-    NSURLCredential *bonaFides;
+	NSURLCredential *bonaFides;
 
-    if (challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust)
-    {
-        bonaFides = [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust];
-    }
-    else
-    {
-        bonaFides = [NSURLCredential credentialWithUser:[self encodeBase64String:_harvey]
-                                               password:[self encodeBase64String:_harvey]
-                                            persistence:NSURLCredentialPersistenceNone];
-    }
+	if (challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust)
+	{
+		bonaFides = [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust];
+	}
+	else
+	{
+		bonaFides = [NSURLCredential credentialWithUser:[self encodeBase64String:_harvey]
+											   password:[self encodeBase64String:_harvey]
+											persistence:NSURLCredentialPersistenceNone];
+	}
 
-    [[challenge sender] useCredential:bonaFides forAuthenticationChallenge:challenge];
+	[[challenge sender] useCredential:bonaFides forAuthenticationChallenge:challenge];
 }
+
 
 
 - (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error
 {
-    // Inform the host app that there was a connection failure
+	// Inform the host app that there was a connection failure
 
-    errorMessage = @"[ERROR] Could not connect to the Electric Imp server.";
-    [self reportError];
+	errorMessage = @"[ERROR] Could not connect to the Electric Imp server.";
+	[self reportError];
 
-    // Terminate the failed connection and remove it from the list of current connections
+	// Terminate the failed connection and remove it from the list of current connections
 
-    [connection cancel];
-    [_connexions removeObject:connection];
+	[connection cancel];
+	[_connexions removeObject:connection];
 
-    if (_connexions.count < 1)
-    {
-        // If there are no current connections, tell the app to
-        // turn off the connection activity indicator
+	if (_connexions.count < 1)
+	{
+		// If there are no current connections, tell the app to
+		// turn off the connection activity indicator
 
-        [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-    }
+		[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+	}
 }
+
 
 
 - (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
 {
-    // This delegate method is called when the server responds to the connection request
-    // Use it to trap certain status codes
+	// This delegate method is called when the server responds to the connection request
+	// Use it to trap certain status codes
 
-    NSHTTPURLResponse *rps = (NSHTTPURLResponse *)response;
-    NSInteger code = rps.statusCode;
+	NSHTTPURLResponse *rps = (NSHTTPURLResponse *)response;
+	NSInteger code = rps.statusCode;
 
-    if (code > 399)
-    {
-        // The API has responded with a status code that indicates an error
+	if (code > 399)
+	{
+		// The API has responded with a status code that indicates an error
 
-        if (code == 429)
-        {
-            // Build API rate limit hit
+		if (code == 429)
+		{
+			// Build API rate limit hit
 
-            for (Connexion *aConnexion in _connexions)
-            {
-                // Run through the connections in our list and add the incoming error code to the correct one
+			Connexion *conn = nil;
 
-                if (aConnexion.connexion == connection)
-                {
-                    // This request has been rate-limited, so we need to recall it in 1+ seconds
+			for (Connexion *aConnexion in _connexions)
+			{
+				// Run through the connections in our list and add the incoming error code to the correct one
 
-                    NSArray *values = [NSArray arrayWithObjects:[connection.originalRequest copy], [NSNumber numberWithInteger:aConnexion.actionCode], nil];
-                    NSArray *keys = [NSArray arrayWithObjects:@"request", @"actioncode", nil];
-                    NSDictionary *dict =[NSDictionary dictionaryWithObjects:values forKeys:keys];
-                    [NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(relaunchConnection:) userInfo:dict repeats:NO];
-                    [_connexions removeObject:aConnexion];
-                    [connection cancel];
+				if (aConnexion.connexion == connection)
+				{
+					// This request has been rate-limited, so we need to recall it in 1+ seconds
 
-                    if (_connexions.count < 1)
-                    {
-                        // No active connections left, so notify the host app
+					NSArray *values = [NSArray arrayWithObjects:[connection.originalRequest copy], [NSNumber numberWithInteger:aConnexion.actionCode], nil];
+					NSArray *keys = [NSArray arrayWithObjects:@"request", @"actioncode", nil];
+					NSDictionary *dict =[NSDictionary dictionaryWithObjects:values forKeys:keys];
+					[NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(relaunchConnection:) userInfo:dict repeats:NO];
+					conn = aConnexion;
+				}
+			}
 
-                        [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-                    }
-                }
-            }
-        }
-        else if (code == 504)
-        {
-            // Bad Gateway error received - this usually occurs during log streaming
+			[connection cancel];
 
-            if (_logDevice != nil)
-            {
-                // We are still streaming so just cancel the current connection...
+			if (conn != nil) [_connexions removeObject:conn];
 
-                for (Connexion *aConnexion in _connexions)
-                {
-                    if (aConnexion.connexion == connection) [_connexions removeObject:aConnexion];
-                }
+			if (_connexions.count < 1)
+			{
+				// No active connections left, so notify the host app
 
-                [connection cancel];
+				[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+			}
 
-                // ...and recommence logging
+			return;
+		}
 
-                [self startLogging];
-            }
-        }
-        else
-        {
-            // Any other error
+		if (code == 504)
+		{
+			// Bad Gateway error received - this usually occurs during log streaming
 
-            for (Connexion *aConnexion in _connexions)
-            {
-                // Run through the connections in our list and add the incoming error code to the correct one
+			if (_logDevice != nil)
+			{
+				// We are still streaming so just cancel the current connection...
 
-                if (aConnexion.connexion == connection) aConnexion.errorCode = code;
-            }
-        }
-    }
-    else if (code > 299 && code < 400)
-    {
-        // This is a redirect code not an error. This *should* not occur,
-        // but here is a point to trap it just in case
+				Connexion *conn = nil;
 
-        NSLog(@"Redirect Status code received");
-    }
+				for (Connexion *aConnexion in _connexions)
+				{
+					if (aConnexion.connexion == connection) conn = aConnexion;
+				}
+
+				[connection cancel];
+				if (conn != nil) [_connexions removeObject:conn];
+
+				// ...and recommence logging
+
+				[self startLogging];
+			}
+		}
+		else
+		{
+			// Allow the connection to pass because we'll handle the error later
+
+			for (Connexion *aConnexion in _connexions)
+			{
+				// Run through the connections in our list and add the incoming error code to the correct one
+
+				if (aConnexion.connexion == connection) aConnexion.errorCode = code;
+			}
+		}
+	}
+	else if (code > 299 && code < 400)
+	{
+
+		// This is a redirect code not an error. This *should* not occur,
+		// but here is a point to trap it just in case
+
+		errorMessage = [NSString stringWithFormat:@"[WARNING] Server redirect status code received: %li", (long)code];
+		[self reportError];
+	}
 }
+
 
 
 - (void)relaunchConnection:(id)userInfo
 {
-    // This method is called in response to the receipt of a status code 429 from the server,
-    // ie. we have been rate-limited. A timer will bring us here in 1.0 seconds
+	// This method is called in response to the receipt of a status code 429 from the server,
+	// ie. we have been rate-limited. A timer will bring us here in 1.0 seconds
 
-    NSDictionary *dict = (NSDictionary *)userInfo;
-    NSURLRequest *request = [dict objectForKey:@"request"];
-    NSInteger actionCode = [[dict objectForKey:@"actioncode"] integerValue];
-    [self launchConnection:request :actionCode];
+	NSDictionary *dict = (NSDictionary *)userInfo;
+	NSMutableURLRequest *request = [dict objectForKey:@"request"];
+	NSInteger actionCode = [[dict objectForKey:@"actioncode"] integerValue];
+	[self launchConnection:request :actionCode];
 }
+
 
 
 - (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
 {
-    // This delegate method is called when the server sends some data back
-    // Add it to the correct connexion object
+	// This delegate method is called when the server sends some data back
+	// Add it to the correct connexion object
 
-    for (Connexion *aConnexion in _connexions)
-    {
-        // Run through the connections in our list and add the incoming data to the correct one
+	for (Connexion *aConnexion in _connexions)
+	{
+		// Run through the connections in our list and add the incoming data to the correct one
 
-        if (aConnexion.connexion == connection) [aConnexion.data appendData:data];
-    }
+		if (aConnexion.connexion == connection) [aConnexion.data appendData:data];
+	}
 }
+
 
 
 - (void)connectionDidFinishLoading:(NSURLConnection *)connection
 {
-    // All the data has been supplied by the server in response to a connection
-    // Parse the data and, according to the connection activity - update device, create model etc –
-    // apply the results
+	// All the data has been supplied by the server in response to a connection
+	// Parse the data and, according to the connection activity - update device, create model etc –
+	// apply the results
 
-    Connexion *theCurrentConnexion;
-    id parsedData = nil;
+	Connexion *theCurrentConnexion;
+	id parsedData = nil;
 
-    for (Connexion *aConnexion in _connexions)
-    {
-        // Run through the connections in the list and find the one that has just finished loading
+	for (Connexion *aConnexion in _connexions)
+	{
+		// Run through the connections in the list and find the one that has just finished loading
 
-        if (aConnexion.connexion == connection)
-        {
-            theCurrentConnexion = aConnexion;
-            parsedData = [self processConnection:aConnexion];
-        }
-    }
+		if (aConnexion.connexion == connection)
+		{
+			theCurrentConnexion = aConnexion;
+			parsedData = [self processConnection:aConnexion];
+		}
+	}
 
-    // End the finished connection and remove it from the list of current connections
+	// End the finished connection and remove it from the list of current connections
 
-    [connection cancel];
+	[connection cancel];
 
-    if (theCurrentConnexion.actionCode != kConnectTypeNone) [self processResult:theCurrentConnexion :parsedData];
+	if (theCurrentConnexion.actionCode != kConnectTypeNone) [self processResult:theCurrentConnexion :parsedData];
 
-    theCurrentConnexion = nil;
+	theCurrentConnexion = nil;
 }
 
 
@@ -891,113 +936,74 @@
 
 
 - (void)URLSession:(NSURLSession *)session
-              task:(NSURLSessionTask *)task
-didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
- completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler
-{
-    NSURLCredential *bonaFides;
-
-    if (challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust)
-    {
-        bonaFides = [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust];
-    }
-    else
-    {
-        bonaFides = [NSURLCredential credentialWithUser:[self encodeBase64String:_harvey]
-                                               password:[self encodeBase64String:_harvey]
-                                            persistence:NSURLCredentialPersistenceNone];
-    }
-
-    completionHandler(NSURLSessionAuthChallengeUseCredential, bonaFides);
-}
-
-
-- (void)URLSession:(NSURLSession *)session
-          dataTask:(NSURLSessionDataTask *)dataTask
+		  dataTask:(NSURLSessionDataTask *)dataTask
 didReceiveResponse:(NSURLResponse *)response
  completionHandler:(void (^)(NSURLSessionResponseDisposition))completionHandler
 {
-    // This delegate method is called when the server responds to the connection request
-    // Use it to trap certain status codes
+	// This delegate method is called when the server responds to the connection request
+	// Use it to trap certain status codes
 
-    NSHTTPURLResponse *rps = (NSHTTPURLResponse *)response;
-    NSInteger code = rps.statusCode;
+	NSHTTPURLResponse *rps = (NSHTTPURLResponse *)response;
+	NSInteger code = rps.statusCode;
 
-    if (code > 399)
-    {
-        // The API has responded with a status code that indicates an error
+	if (code > 399)
+	{
+		// The API has responded with a status code that indicates an error
 
-        if (code == 429)
-        {
-            // Build API rate limit hit
+		if (code == 429)
+		{
+			// Build API rate limit hit
 
-            for (Connexion *aConnexion in _connexions)
-            {
-                // Run through the connections in our list and add the incoming error code to the correct one
+			Connexion *conn = nil;
 
-                if (aConnexion.task == dataTask)
-                {
-                    // This request has been rate-limited, so we need to recall it in 1+ seconds
+			for (Connexion *aConnexion in _connexions)
+			{
+				// Run through the connections in our list and add the incoming error code to the correct one
 
-                    NSArray *values = [NSArray arrayWithObjects:[dataTask.originalRequest copy], [NSNumber numberWithInteger:aConnexion.actionCode], nil];
-                    NSArray *keys = [NSArray arrayWithObjects:@"request", @"actioncode", nil];
-                    NSDictionary *dict =[NSDictionary dictionaryWithObjects:values forKeys:keys];
-                    [NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(relaunchConnection:) userInfo:dict repeats:NO];
-                    [_connexions removeObject:aConnexion];
+				if (aConnexion.task == dataTask)
+				{
+					// This request has been rate-limited, so we need to recall it in 1+ seconds
 
-                    if (_connexions.count < 1)
-                    {
-                        // No active connections left so notify the host app
+					NSArray *values = [NSArray arrayWithObjects:[dataTask.originalRequest copy], [NSNumber numberWithInteger:aConnexion.actionCode], nil];
+					NSArray *keys = [NSArray arrayWithObjects:@"request", @"actioncode", nil];
+					NSDictionary *dict =[NSDictionary dictionaryWithObjects:values forKeys:keys];
+					[NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(relaunchConnection:) userInfo:dict repeats:NO];
+					conn = aConnexion;
+				}
+			}
 
-                        [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-                    }
-                }
-            }
+			if (conn != nil) [_connexions removeObject:conn];
+			completionHandler(NSURLSessionResponseCancel);
+			return;
+		}
 
-            // Tell the session completion handler to cancel the current request
+		if (code == 504)
+		{
+			// Bad Gateway error received - this usually occurs during log streaming
+			// so if we are streaming, make sure we re-initiate the stream
 
-            completionHandler(NSURLSessionResponseCancel);
-            return;
-        }
-        else if (code == 504)
-        {
-            // Bad Gateway error received - this usually occurs during log streaming
+			if (_logDevice != nil)
+			{
+				// We are still streaming to just recommence logging
 
-            if (_logDevice != nil)
-            {
-                // We are still streaming to just recommence logging
+				[self startLogging];
+			}
+		}
 
-                [self startLogging];
+		// Allow the connection to pass because we'll handle the error later
+		// This applies to all errors but 429s
 
-                // Still need to cancel the current connection record
+		for (Connexion *aConnexion in _connexions) {
 
-                Connexion *conn = nil;
+			// Run through the connections in our list and add the incoming error code to the correct one
+			
+			if (aConnexion.task == dataTask) aConnexion.errorCode = code;
+		}
+	}
 
-                for (Connexion *aConnexion in _connexions)
-                {
-                    if (aConnexion.task == dataTask) conn = aConnexion;
-                }
-
-                if (conn != nil) [_connexions removeObject:conn];
-
-                completionHandler(NSURLSessionResponseCancel);
-
-                return;
-            }
-        }
-        else
-        {
-            for (Connexion *aConnexion in _connexions)
-            {
-                // Run through the connections in our list and add the incoming error code to the correct one
-
-                if (aConnexion.task == dataTask) aConnexion.errorCode = code;
-            }
-        }
-    }
-
-    completionHandler(NSURLSessionResponseAllow);
+	completionHandler(NSURLSessionResponseAllow);
 }
+
 
 
 - (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask didReceiveData:(NSData *)data
@@ -1014,67 +1020,65 @@ didReceiveResponse:(NSURLResponse *)response
 }
 
 
-- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error
-{
-    // All the data has been supplied by the server in response to a connection - or an error has been encountered
-    // Parse the data and, according to the connection activity - update device, create model etc –
-    // apply the results
 
-    if (error)
-    {
-        // React to a passed client-side error - most likely a timeout or inability to resolve the URL
+- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
 
-        errorMessage = @"[ERROR] Could not connect to the Electric Imp server.";
-        [self reportError];
+	// All the data has been supplied by the server in response to a connection - or an error has been encountered
+	// Parse the data and, according to the connection activity - update device, create model etc –
+	// apply the results
 
-        // Terminate the failed connection and remove it from the list of current connections
+	if (error)
+	{
+		// React to a passed client-side error - most likely a timeout or inability to resolve the URL
+		// First, notify the host app
 
-        for (Connexion *aConnexion in _connexions)
-        {
-            // Run through the connections in the list and find the one that has just finished loading
+		errorMessage = @"[SERVER ERROR] Could not connect to the Electric Imp server.";
+		[self reportError];
 
-            if (aConnexion.task == task)
-            {
-                [task cancel];
-                [_connexions removeObject:aConnexion];
-            }
-        }
+		// Next, terminate the failed connection and remove it from the list of current connections
 
-        if (_logDevice == nil)
-        {
-            if (_connexions.count < 1)
-            {
-                // If there are no current connections, tell the app to
-                // turn off the connection activity indicator
+		Connexion *conn = nil;
+		for (Connexion *aConnexion in _connexions)
+		{
+			// Run through the connections in the list and find the one that has just finished loading
 
-                [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-            }
-        }
+			if (aConnexion.task == task)
+			{
+				[task cancel];
+				conn = aConnexion;
+			}
+		}
 
-        return;
-    }
+		if (conn != nil) [_connexions removeObject:conn];
 
-    Connexion *theCurrentConnexion;
-    id parsedData = nil;
+		// Check if there are any active connections
 
-    for (Connexion *aConnexion in _connexions)
-    {
-        // Run through the connections in the list and find the one that has just finished loading
+		if (_connexions.count < 1)
+		{
+			// There are no active connections, so inform the host app
 
-        if (aConnexion.task == task)
-        {
-            theCurrentConnexion = aConnexion;
-            parsedData = [self processConnection:aConnexion];
-        }
-    }
+			[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+		}
 
-    // End the finished connection and remove it from the list of current connections
+		return;
+	}
 
-    [task cancel];
+	// The connection has come to a conclusion without error
 
-    if (theCurrentConnexion.actionCode != kConnectTypeNone) [self processResult:theCurrentConnexion :parsedData];
+	Connexion *currentConnexion;
+	for (Connexion *aConnexion in _connexions)
+	{
+		// Run through the connections in the list and find the one that has just finished loading
+		if (aConnexion.task == task) currentConnexion = aConnexion;
+	}
 
-    theCurrentConnexion = nil;
+	// End the finished connection and remove it from the list of current connections
+
+	[task cancel];
+
+	// If we have a valid action code, process the received data
+	
+	if (currentConnexion.actionCode != kConnectTypeNone) [self processResult:currentConnexion :[self processConnection:currentConnexion]];
 }
 
 
@@ -1082,119 +1086,154 @@ didReceiveResponse:(NSURLResponse *)response
 #pragma mark - Joint NSURLSession/NSURLConnection Methods
 
 
-- (NSDictionary *)processConnection:(Connexion *)connexion
-{
-    // Process the data returned by the current connection. This comes independently
-    // of whether the source was an NSURLSession or NSURLConncection.
+- (NSDictionary *)processConnection:(Connexion *)connexion {
 
-    id parsedData = nil;
-    NSError *error;
+	// Process the data returned by the current connection. This comes independently
+	// of whether the source was an NSURLSession or NSURLConncection.
 
-    if (connexion.data && connexion.data.length > 0)
-    {
-        // If we have data, attempt to decode it assuming that it is JSON
+	id parsedData = nil;
+	NSError *error;
 
-        parsedData = [NSJSONSerialization JSONObjectWithData:connexion.data options:kNilOptions error:&error];
-    }
+	if (connexion.data != nil && connexion.data.length > 0)
+	{
+		// If we have data, attempt to decode it assuming that it is JSON (if it's not, 'error' will not equal nil
 
-    if (error != nil)
-    {
-        // If the incoming data could not be decoded to JSON for some reason,
-        // most likely a malformed request which returns a block of HTML
+		parsedData = [NSJSONSerialization JSONObjectWithData:connexion.data options:kNilOptions error:&error];
+	}
 
-        // TODO Better interpret the HTML
+	if (error != nil)
+	{
+		// If the incoming data could not be decoded to JSON for some reason,
+		// most likely a malformed request which returns a block of HTML
 
-        errorMessage = @"[ERROR] Received data could not be decoded. Is is JSON?";
-        errorMessage = [errorMessage stringByAppendingFormat:@" %@", (NSString *)connexion.data];
-        [self reportError];
-        connexion.errorCode = -1;
-        connexion.actionCode = kConnectTypeNone;
-    }
+		// TODO?? Better interpret the HTML
 
-    if (connexion.errorCode != -1)
-    {
-        // Check for an error being reported by the server. This will have been set for the current connection
-        // by either of the didReceiveResponse: methods
+		errorMessage = @"[SERVER ERROR] Received data could not be decoded. Is is JSON?";
+		errorMessage = [errorMessage stringByAppendingFormat:@" %@", (NSString *)connexion.data];
+		[self reportError];
 
-        errorMessage = [NSString stringWithFormat:@"[ERROR] {Code: %lu} ", connexion.errorCode];
+		// Are we streaming? We want this to continue despite the error
+		
+		if (_logDevice != nil) [self startLogging];
 
-        if (parsedData != nil)
-        {
-            // 'parsedData' should contain a description of the error, eg. unknown device, or a code syntax error
+		connexion.errorCode = -1;
+		connexion.actionCode = kConnectTypeNone;
+	}
 
-            NSDictionary *errDict = [parsedData objectForKey:@"error"];
-            NSString *errString = [errDict objectForKey:@"message_short"];
-            errorMessage = [errorMessage stringByAppendingString:errString];
-            errString = [errDict objectForKey:@"code"];
+	if (connexion.errorCode != -1)
+	{
+		// Check for an error being reported by the server. This will have been set for the current connection
+		// by either of the didReceiveResponse: methods
 
-            // Is the problem a code syntax error?
+		errorMessage = [NSString stringWithFormat:@"[SERVER ERROR] [Code: %lu] ", connexion.errorCode];
 
-            if ([errString compare:@"CompileFailed"] == NSOrderedSame)
+		if (parsedData != nil)
+		{
+			// 'parsedData' should contain a description of the error, eg. unknown device, or a code syntax error
+
+			NSDictionary *errDict = [parsedData objectForKey:@"error"];
+			NSString *errString = [errDict objectForKey:@"message_short"];
+			errorMessage = [errorMessage stringByAppendingString:errString];
+			errString = [errDict objectForKey:@"code"];
+
+            if (codeErrors == nil)
             {
-                // The returned error description contains a 'message_short' field, if this key’s
-                // value is 'CompileFailed', we have a syntax error in the (just) uploaded Squirrel
-
-                errDict = [errDict objectForKey:@"details"];
-                NSArray *aArray = nil;
-                NSArray *dArray = nil;
-                aArray = [errDict objectForKey:@"agent_errors"];
-                dArray = [errDict objectForKey:@"device_errors"];
-
-                // We have to check for [NSNull null] because this is how an empty
-                // 'agent_errors' or 'device_errors' fields will be decoded
-
-                if (aArray != nil && (NSNull *)aArray != [NSNull null])
-                {
-                    // We have error(s) in the agent Squirrel - decode and report them
-
-                    errorMessage = [errorMessage stringByAppendingString:@"\n Agent Code errors:"];
-
-                    for (NSUInteger j = 0 ; j < aArray.count ; ++j)
-                    {
-                        errDict = [aArray objectAtIndex:j];
-                        NSNumber *row = [errDict valueForKey:@"row"];
-                        NSNumber *col = [errDict valueForKey:@"column"];
-                        errorMessage = [errorMessage stringByAppendingFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue];
-                    }
-                }
-
-                if (dArray != nil && (NSNull *)dArray != [NSNull null])
-                {
-                    // We have error(s) in the device Squirrel - decode and report them
-
-                    errorMessage = [errorMessage stringByAppendingString:@"\n Device Code errors:"];
-
-                    for (NSUInteger j = 0 ; j < dArray.count ; ++j)
-                    {
-                        errDict = [dArray objectAtIndex:j];
-                        NSNumber *row = [errDict valueForKey:@"row"];
-                        NSNumber *col = [errDict valueForKey:@"column"];
-                        errorMessage = [errorMessage stringByAppendingFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue];
-                    }
-                }
+                codeErrors = [[NSMutableArray alloc] init];
             }
+            else
+            {
+                [codeErrors removeAllObjects];
+            }
+            
+			// Is the problem a code syntax error?
+
+			if ([errString compare:@"CompileFailed"] == NSOrderedSame)
+			{
+				// The returned error description contains a 'message_short' field, if this key’s
+				// value is 'CompileFailed', we have a syntax error in the (just) uploaded Squirrel
+
+				errDict = [errDict objectForKey:@"details"];
+				NSArray *aArray = nil;
+				NSArray *dArray = nil;
+				aArray = [errDict objectForKey:@"agent_errors"];
+				dArray = [errDict objectForKey:@"device_errors"];
+
+				// We have to check for [NSNull null] because this is how an empty
+				// 'agent_errors' or 'device_errors' fields will be decoded
+
+				if (aArray != nil && (NSNull *)aArray != [NSNull null])
+				{
+					// We have error(s) in the agent Squirrel - decode and report them
+
+					errorMessage = [errorMessage stringByAppendingString:@"\n  Agent Code errors:"];
+
+					for (NSUInteger j = 0 ; j < aArray.count ; ++j)
+					{
+						errDict = [aArray objectAtIndex:j];
+						NSNumber *row = [errDict valueForKey:@"row"];
+						NSNumber *col = [errDict valueForKey:@"column"];
+						errorMessage = [errorMessage stringByAppendingFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue];
+
+                        // Preserve the error details, and add extra keys - 'message' and 'type' -
+                        // to the error record dictionary
+
+                        NSMutableDictionary *aDict = [NSMutableDictionary dictionaryWithDictionary:errDict];
+                        [aDict setObject:@"agent" forKey:@"type"];
+                        [aDict setObject:[NSString stringWithFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue] forKey:@"message"];
+
+                        [codeErrors addObject:aDict];
+					}
+				}
+
+				if (dArray != nil && (NSNull *)dArray != [NSNull null])
+				{
+					// We have error(s) in the device Squirrel - decode and report them
+
+					errorMessage = [errorMessage stringByAppendingString:@"\n  Device Code errors:"];
+
+					for (NSUInteger j = 0 ; j < dArray.count ; ++j)
+					{
+						errDict = [dArray objectAtIndex:j];
+						NSNumber *row = [errDict valueForKey:@"row"];
+						NSNumber *col = [errDict valueForKey:@"column"];
+						errorMessage = [errorMessage stringByAppendingFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue];
+
+                        NSMutableDictionary *aDict = [NSMutableDictionary dictionaryWithDictionary:errDict];
+                        [aDict setObject:[NSString stringWithFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue] forKey:@"message"];
+                        [aDict setObject:@"device" forKey:@"type"];
+
+                        [codeErrors addObject:aDict];
+					}
+				}
+			}
+		}
+
+		// Report the error via notifications and clear the connection's action code
+
+		if (!(connexion.errorCode == 504 && _logDevice != nil))
+        {
+            [self reportError];
+
+            // Clear 'parsedData' so that 'processResult:', called immediately after 'processConnection:',
+            // does not double-report the error
+            
+            parsedData = nil;
         }
 
-        // Report the error via notifications and clear the connection's action code
+		connexion.actionCode = kConnectTypeNone;
+	}
 
-        [self reportError];
-        connexion.actionCode = kConnectTypeNone;
-    }
+	// Processing done, remove this connection from the current list of active connections and signal
+	// the host app if there are no more active connections (eg. to disable an activity indicator)
 
-    // Processing done, remove this connection from the current list of active connections and signal
-    // the host app if there are no more active connections (eg. to disable an activity indicator)
+	[_connexions removeObject:connexion];
+	if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
-    [_connexions removeObject:connexion];
+	// Return the decoded data (or nil)
 
-    if (_connexions.count < 1)
-    {
-        [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-    }
-
-    // Return the decoded data (or nil)
-
-    return parsedData;
+	return parsedData;
 }
+
 
 
 - (void)processResult:(Connexion *)connexion :(NSDictionary *)data
@@ -1275,6 +1314,23 @@ didReceiveResponse:(NSURLResponse *)response
                         // have the change values, ie. the name if it is <null>
 
                         NSMutableDictionary *newDevice = [NSMutableDictionary dictionaryWithDictionary:device];
+
+                        // Check for unexpected null values for certain keys
+
+                        NSString *deviceState = [newDevice valueForKey:@"powerstate"];
+						if ((NSNull *)deviceState == [NSNull null])
+						{
+							// 'powerstate' is null for some unexpected reason - assume device is offline
+							[newDevice setObject:@"offline" forKey:@"powerstate"];
+						}
+
+						deviceState = [newDevice valueForKey:@"agent_status"];
+						if ((NSNull *)deviceState == [NSNull null])
+						{
+							// 'agent_status' is null for some unexpected reason - assume agent is offline
+							[newDevice setObject:@"offline" forKey:@"agent_status"];
+						}
+
                         [devices addObject:newDevice];
                     }
 
@@ -1471,6 +1527,7 @@ didReceiveResponse:(NSURLResponse *)response
 }
 
 
+
 - (NSInteger)checkStatus:(NSDictionary *)data
 {
     // Before using data returned from the server, check that the success field is not false
@@ -1512,7 +1569,9 @@ didReceiveResponse:(NSURLResponse *)response
 }
 
 
+
 #pragma mark - Utility Methods
+
 
 - (NSDictionary *)makeDictionary:(NSString *)key :(NSString *)value
 {
@@ -1520,6 +1579,7 @@ didReceiveResponse:(NSURLResponse *)response
     NSArray *values = [NSArray arrayWithObjects:value, nil];
     return [NSDictionary dictionaryWithObjects:values forKeys:keys];
 }
+
 
 
 - (NSMutableURLRequest *)makeRequest:(NSString *)verb :(NSString *)path
@@ -1531,6 +1591,7 @@ didReceiveResponse:(NSURLResponse *)response
 }
 
 
+
 - (void)setRequestAuthorization:(NSMutableURLRequest *)request
 {
     if (_harvey != nil)
@@ -1540,7 +1601,7 @@ didReceiveResponse:(NSURLResponse *)response
     }
     else
     {
-        errorMessage = @"Unauthorized";
+        errorMessage = @"Accessing the Build API requires an API key.";
         [self reportError];
     }
 }

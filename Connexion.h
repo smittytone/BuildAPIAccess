@@ -2,7 +2,7 @@
 //  Copyright (c) 2014-16 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
-// BuildAPIAccess 1.1.1
+//  BuildAPIAccess 1.1.3
 
 
 #import <Foundation/Foundation.h>
@@ -14,6 +14,9 @@
 // Required by BuildAPI access class
 // Connexion simply a packaging object for NSURLConnections / NSURLSessionTasks
 // and associated data ie. it has no methods, just five properties:
+
+
+- (instancetype)init;
 
 
 @property (nonatomic, strong) NSURLConnection *connexion;

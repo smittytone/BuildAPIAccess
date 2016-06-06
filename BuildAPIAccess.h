@@ -2,7 +2,7 @@
 //  Copyright (c) 2015-16 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
-// BuildAPIAccess 1.1.2
+//  BuildAPIAccess 1.1.3
 
 
 #import <Foundation/Foundation.h>
@@ -21,22 +21,24 @@
 
 // Initialization Methods
 
-- (id)initForNSURLSession;
-- (id)initForNSURLConnection;
+- (instancetype)init NS_DESIGNATED_INITIALIZER;
+- (instancetype)initForNSURLSession;
+- (instancetype)initForNSURLConnection;
 - (void)clrk;
 - (void)setk:(NSString *)harvey;
 
 // Data Request Methods
 
 - (void)getModels;
+- (void)getModels:(BOOL)withDevices;
 - (void)getDevices;
-- (void)createNewModel:(NSString *)modelNam;
 - (void)getCode:(NSString *)modelID;
 - (void)getCodeRev:(NSString *)modelID :(NSInteger)build;
 - (void)getLogsForDevice:(NSString *)deviceID :(NSString *)since :(BOOL)isStream;
 
 // Action Methods
 
+- (void)createNewModel:(NSString *)modelName;
 - (void)updateModel:(NSString *)modelID :(NSString *)key :(NSString *)value;
 - (void)uploadCode:(NSString *)modelID :(NSString *)newDeviceCode :(NSString *)newAgentCode;
 - (void)deleteModel:(NSString *)modelID;
@@ -61,7 +63,7 @@
 
 // Connection Methods
 
-- (void)launchConnection:(id)request :(NSInteger)actionCode;
+- (void)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode;
 - (void)relaunchConnection:(id)userInfo;
 
 // NSURLSession/NSURLConnection Joint Methods
@@ -85,10 +87,12 @@
 
 @property (nonatomic, strong) NSMutableArray *devices;
 @property (nonatomic, strong) NSMutableArray *models;
+@property (nonatomic, strong) NSMutableArray *codeErrors;
 @property (nonatomic, strong) NSString *errorMessage;
 @property (nonatomic, strong) NSString *statusMessage;
 @property (nonatomic, strong) NSString *deviceCode;
 @property (nonatomic, strong) NSString *agentCode;
+
 
 
 @end
