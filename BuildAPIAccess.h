@@ -2,7 +2,7 @@
 //  Copyright (c) 2015-16 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
-//  BuildAPIAccess 1.1.3
+//  BuildAPIAccess 2.0.0
 
 
 #import <Foundation/Foundation.h>
@@ -13,7 +13,7 @@
 @interface BuildAPIAccess : NSObject <NSURLConnectionDataDelegate, NSURLSessionDataDelegate, NSURLSessionTaskDelegate>
 
 {
-    NSMutableArray *_connexions;
+    NSMutableArray *_connexions, *_loggingDevices;
     NSString *_logDevice, *_baseURL, *_currentModelID, *_logURL, *_lastStamp, *_harvey;
     BOOL _followOnFlag, _useSessionFlag;
 }
@@ -26,6 +26,7 @@
 - (instancetype)initForNSURLConnection;
 - (void)clrk;
 - (void)setk:(NSString *)harvey;
+- (void)killAllConnections;
 
 // Data Request Methods
 
@@ -48,11 +49,12 @@
 - (void)deleteDevice:(NSString *)deviceID;
 - (void)updateDevice:(NSString *)deviceID :(NSString *)key :(NSString *)value;
 - (void)autoRenameDevice:(NSString *)deviceID;
+- (BOOL)isDeviceLogging:(NSString *)deviceID;
 
 // Logging Methods
 
-- (void)startLogging;
-- (void)stopLogging;
+- (void)startLogging:(NSString *)deviceID;
+- (void)stopLogging:(NSString *)deviceID;
 
 // HTTP Request Construction Methods
 
@@ -63,7 +65,7 @@
 
 // Connection Methods
 
-- (void)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode;
+- (Connexion *)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode;
 - (void)relaunchConnection:(id)userInfo;
 
 // NSURLSession/NSURLConnection Joint Methods

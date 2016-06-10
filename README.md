@@ -1,10 +1,10 @@
-# BuildAPIAccess 1.1.3
+# BuildAPIAccess 2.0.0
 
 An Objective-C (Mac OS X / iOS / tvOS) class wrapper for [Electric Imp’s Build API](https://electricimp.com/docs/buildapi/).
 
 BuildAPIAccess requires the (included) class Connexion, a simple convenience class for bundling either an [NSURLConnection](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSURLConnection_Class/index.html) or [NSURLSession](https://developer.apple.com/library/prerelease/mac/documentation/Foundation/Reference/NSURLSession_class/index.html) instance and associated Build API connection data.
 
-BuildAPIAccess 1.1.3 supports both NSURLSession and NSURLConnection. The former is Apple’s preferred mechanism and the only one of the two supported by tvOS. For more information, see [Initialization Methods](#buildapiaccess-initialization-methods).
+BuildAPIAccess 2.0.0 supports both NSURLSession and NSURLConnection. The former is Apple’s preferred mechanism and the only one of the two supported by tvOS. For more information, see [Initialization Methods](#buildapiaccess-initialization-methods).
 
 ### Build API Authorization
 
@@ -61,6 +61,17 @@ A model’s code revisions are not retained by *BuildAPIAccess* but are retrieve
 If the host application wishes to maintain a full local record of all of a model’s code revisions, it will need it iterate through each build. A call to the method [*getCode:*](#--voidgetcodensstring-modelid) will record the latest build number in the public property *latestBuild*.
 
 ## BuildAPIAccess Version History
+
+### 2.0.0
+
+- Support for simultaneous log streaming from multiple devices.
+- Breaking changes to methods:
+	- launchConnection::
+	- startLogging:
+	- stopLogging:
+- New methods:
+	- isDeviceLogging:
+	- killAllConnections
 
 ### 1.1.3
 
@@ -168,13 +179,15 @@ Pass `YES` into the *isStream* parameter if you want to initiate log streaming.
 
 Currently, log entries can be streamed from only one device. To stream from another device, call [*stopLogging:*](#--voidstoplogging) then call [*getLogsForDevice:::*](#--voidgetlogsfordevicensstring-deviceid-nsstring-since-boolisstream) with the new device’s *deviceIndex* value.
 
-### - (void)startLogging
+### - (void)startLogging:(NSString *)deviceID
 
 Having initiated log streaming using [*getLogsForDevice:::*](#--voidgetlogsfordevicensstring-deviceid-nsstring-since-boolisstream), this method is called automatically. But if your application uses [*stopLogging:*](#--voidstoplogging) to halt logging, this method can be called to recommence logging.
 
-### - (void)stopLogging
+Its parameter is the device ID of the device for which logs can be streamed.
 
-Call this method to stop the current logging stream.
+### - (void)stopLogging:(NSString *)deviceID
+
+Call this method to stop the current logging stream. Its parameter is the device ID of the device for which logs are being streamed, or pass in nil to stop logging for all devices.
 
 ## BuildAPIAccess HTTPS Request Construction Methods
 
