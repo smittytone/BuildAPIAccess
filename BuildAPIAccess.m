@@ -1289,10 +1289,13 @@ didReceiveResponse:(NSURLResponse *)response
 
 			if (aConnexion.task == task)
 			{
-				// Remove the device’s connection then restart logging
+				// Notify the host app
+				NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+				[nc postNotificationName:@"BuildAPILogStreamEnd" object:[logDevice copy]];
 
-				[logDevice removeObjectForKey:@"connection"];
-				[self startLogging:[logDevice objectForKey:@"id"]];
+				// Remove the device from the logging list
+				[self stopLogging:[logDevice objectForKey:@"id"]];
+
 				break;
 			}
 		}
@@ -1377,7 +1380,16 @@ didReceiveResponse:(NSURLResponse *)response
 
 		// Are we streaming? We want this to continue despite the error
 		
-		//if (_logDevice != nil) [self startLogging];
+		for (NSMutableDictionary *aLogDevice in _loggingDevices)
+		{
+			Connexion *devConnexion = [aLogDevice objectForKey:@"connection"];
+
+			if (devConnexion == connexion)
+			{
+				[self startLogging:[aLogDevice objectForKey:@"id"]];
+				break;
+			}
+		}
 
 		connexion.errorCode = -1;
 		connexion.actionCode = kConnectTypeNone;
