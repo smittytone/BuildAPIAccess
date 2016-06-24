@@ -971,20 +971,24 @@
 	errorMessage = @"[ERROR] Could not connect to the Electric Imp server.";
 	[self reportError];
 
-	// Is the connection due to a log stream? If so we should restart it
+	// Is the connection related to a log stream?
+	// If so record the device details as 'loggingDevice'
 
-	for (NSMutableDictionary *logDevice in _loggingDevices)
+	NSMutableDictionary *loggingDevice = nil;
+	for (NSMutableDictionary *aLogDevice in _loggingDevices)
 	{
-		Connexion *aConnexion = [logDevice objectForKey:@"connection"];
+		Connexion *aConnexion = [aLogDevice objectForKey:@"connection"];
+		if (aConnexion.connexion == connection) loggingDevice = aLogDevice;
+	}
 
-		if (aConnexion.connexion == connection)
-		{
-			// Remove the device’s connection then restart logging
+	if (loggingDevice)
+	{
+		// This call is prompted by a failed streaming log connection, so remove
+		// the device from the list of streaming devices and notify the host app
 
-			[logDevice removeObjectForKey:@"connection"];
-			[self startLogging:[logDevice objectForKey:@"id"]];
-			break;
-		}
+		[_loggingDevices removeObject:loggingDevice];
+		NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+		[nc postNotificationName:@"BuildAPILogStreamEnd" object:[loggingDevice objectForKey:@"id"]];
 	}
 
 	// Terminate the failed connection and remove it from the list of current connections
@@ -1281,26 +1285,27 @@ didReceiveResponse:(NSURLResponse *)response
 		errorMessage = @"[SERVER ERROR] Could not connect to the Electric Imp server.";
 		[self reportError];
 
-		// Is the connection due to a log stream? If so we should restart it
+		// Is the connection related to a log stream?
+		// If so record the device details as 'loggingDevice'
 
-		for (NSMutableDictionary *logDevice in _loggingDevices)
+		NSMutableDictionary *loggingDevice = nil;
+		for (NSMutableDictionary *aLogDevice in _loggingDevices)
 		{
-			Connexion *aConnexion = [logDevice objectForKey:@"connection"];
-
-			if (aConnexion.task == task)
-			{
-				// Notify the host app
-				NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
-				[nc postNotificationName:@"BuildAPILogStreamEnd" object:[logDevice copy]];
-
-				// Remove the device from the logging list
-				[self stopLogging:[logDevice objectForKey:@"id"]];
-
-				break;
-			}
+			Connexion *aConnexion = [aLogDevice objectForKey:@"connection"];
+			if (aConnexion.task == task) loggingDevice = aLogDevice;
 		}
 
-		// Next, terminate the failed connection and remove it from the list of current connections
+		if (loggingDevice)
+		{
+			// This call is prompted by a failed streaming log connection, so remove
+			// the device from the list of streaming devices and notify the host app
+
+			[_loggingDevices removeObject:loggingDevice];
+			NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+			[nc postNotificationName:@"BuildAPILogStreamEnd" object:[loggingDevice objectForKey:@"id"]];
+		}
+		
+		// Terminate the failed connection and remove it from the list of current connections
 
 		Connexion *conn = nil;
 		for (Connexion *aConnexion in _connexions)
