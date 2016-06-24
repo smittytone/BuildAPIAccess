@@ -187,7 +187,17 @@ Its parameter is the device ID of the device for which logs can be streamed.
 
 ### - (void)stopLogging:(NSString *)deviceID
 
-Call this method to stop the current logging stream. Its parameter is the device ID of the device for which logs are being streamed, or pass in nil to stop logging for all devices.
+Call this method to stop the current logging stream. Its parameter is the device ID of the device for which logs are being streamed, or pass in `nil` to stop logging for **all** devices.
+
+### - (BOOL)isDeviceLogging:(NSString *)deviceID
+
+Call this method to check whether a device of ID *deviceID* is currently receiving streamed logs.
+
+## BuildAPIAccess Connection Methods
+
+### - (void)killAllConnections
+
+This method quickly cancels **all** current connections and clears the list of devices for which log entries are being streamed. Typically used to tidy up when the host app is closing down. However, it will issue notifications for devices whose log streams are being terminated.
 
 ## BuildAPIAccess HTTPS Request Construction Methods
 
@@ -226,6 +236,7 @@ BuildAPIDeviceDeleted | Device successfully ‘removed’ from your account
 BuildAPIGotCodeRev | Successfully retrieved the requested code revision. Device code added to the *deviceCode* property. Model code added to the *modelCode* property
 BuildAPIGotLogs | Successfully retrieved the requested log entries. The logs are sent with the notification as an [NSArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSArray_Class/) [log entry records](#log-entries)
 BuildAPILogStream | Successfully retrieved a freshly posted log entry. The log entry is sent with the notification as an [NSArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSArray_Class/) [log entry records](#log-entries)
+BuildAPILogStreamEnd | Signals that a connection failure has stopped log streaming. The ID of the device that is no longer streaming logs is sent with the notification as an NSString
 
 ## Error Reporting
 
