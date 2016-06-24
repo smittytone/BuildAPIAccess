@@ -81,31 +81,6 @@
 
 
 
-- (void)killAllConnections
-{
-	if (_connexions.count > 0)
-	{
-		// Kill all remaining connections
-
-		for (Connexion *aConnexion in _connexions)
-		{
-			if (_useSessionFlag)
-			{
-				[aConnexion.task cancel];
-			}
-			else
-			{
-				[aConnexion.connexion cancel];
-			}
-		}
-
-		[_loggingDevices removeAllObjects];
-		[_connexions removeAllObjects];
-	}
-}
-
-
-
 #pragma mark - Data Request Methods
 
 
@@ -866,7 +841,7 @@
 
 
 
-#pragma mark - Connection Method
+#pragma mark - Connection Methods
 
 
 - (Connexion *)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode
@@ -916,6 +891,48 @@
 
     [_connexions addObject:aConnexion];
 	return aConnexion;
+}
+
+
+
+- (void)killAllConnections
+{
+	if (_connexions.count > 0)
+	{
+		// There are connections that we need to terminate
+
+		if (_loggingDevices.count > 0)
+		{
+			// There are devices for which we are streaming logs, so clear the list...
+
+			NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+			NSArray *loggingDevices = [_loggingDevices copy];
+			[_loggingDevices removeAllObjects];
+
+			// ...and notify the host for each device
+
+			for (NSMutableDictionary *loggingDevice in loggingDevices)
+			{
+				[nc postNotificationName:@"BuildAPILogStreamEnd" object:[loggingDevice objectForKey:@"id"]];
+			}
+		}
+
+		// Kill the remaining connections
+
+		for (Connexion *aConnexion in _connexions)
+		{
+			if (_useSessionFlag)
+			{
+				[aConnexion.task cancel];
+			}
+			else
+			{
+				[aConnexion.connexion cancel];
+			}
+		}
+
+		[_connexions removeAllObjects];
+	}
 }
 
 
@@ -1844,48 +1861,6 @@ didReceiveResponse:(NSURLResponse *)response
 
 
 
-- (NSInteger)checkStatus:(NSDictionary *)data
-{
-    // Before using data returned from the server, check that the success field is not false
-    // If it is, set up an error message. 1 = success; 0 = failure
-
-    NSNumber *value = [data objectForKey:@"success"];
-
-    if (value.integerValue == 0)
-    {
-        // There has been an error reported by the API
-
-        NSDictionary *err = [data objectForKey:@"error"];
-        errorMessage = [err objectForKey:@"message_short"];
-        [self reportError];
-    }
-
-    return value.integerValue;
-}
-
-
-
-#pragma mark - Base64 Methods
-
-
-- (NSString *)encodeBase64String:(NSString *)plainString
-{
-    NSData *data = [plainString dataUsingEncoding:NSUTF8StringEncoding];
-    NSString *base64String = [data base64EncodedStringWithOptions:0];
-    return base64String;
-}
-
-
-
-- (NSString *)decodeBase64String:(NSString *)base64String
-{
-    NSData *data = [[NSData alloc] initWithBase64EncodedString:base64String options:0];
-    NSString *decodedString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    return decodedString;
-}
-
-
-
 #pragma mark - Utility Methods
 
 
@@ -1923,12 +1898,56 @@ didReceiveResponse:(NSURLResponse *)response
 }
 
 
+
+- (NSInteger)checkStatus:(NSDictionary *)data
+{
+	// Before using data returned from the server, check that the success field is not false
+	// If it is, set up an error message. 1 = success; 0 = failure
+
+	NSNumber *value = [data objectForKey:@"success"];
+
+	if (value.integerValue == 0)
+	{
+		// There has been an error reported by the API
+
+		NSDictionary *err = [data objectForKey:@"error"];
+		errorMessage = [err objectForKey:@"message_short"];
+		[self reportError];
+	}
+
+	return value.integerValue;
+}
+
+
+
 - (void)reportError
 {
     // Signal the host app that we have an error message for it to display (in 'errorMessage')
 
     [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIError" object:self];
 }
+
+
+
+#pragma mark - Base64 Methods
+
+
+- (NSString *)encodeBase64String:(NSString *)plainString
+{
+	NSData *data = [plainString dataUsingEncoding:NSUTF8StringEncoding];
+	NSString *base64String = [data base64EncodedStringWithOptions:0];
+	return base64String;
+}
+
+
+
+- (NSString *)decodeBase64String:(NSString *)base64String
+{
+	NSData *data = [[NSData alloc] initWithBase64EncodedString:base64String options:0];
+	NSString *decodedString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+	return decodedString;
+}
+
 
 
 @end
