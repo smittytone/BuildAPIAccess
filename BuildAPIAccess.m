@@ -725,7 +725,15 @@
 				{
 					if (aConnexion == [aLogDevice objectForKey:@"connection"])
 					{
-						[aConnexion.connexion cancel];
+						if (_useSessionFlag)
+						{
+							[aConnexion.task cancel];
+						}
+						else
+						{
+							[aConnexion.connexion cancel];
+						}
+
 						[_connexions removeObject:aConnexion];
 					}
 				}
@@ -764,7 +772,15 @@
 					{
 						// ...and remove its connection
 
-						[aConnexion.connexion cancel];
+						if (_useSessionFlag)
+						{
+							[aConnexion.task cancel];
+						}
+						else
+						{
+							[aConnexion.connexion cancel];
+						}
+
 						[_connexions removeObject:aConnexion];
 					}
 				}
