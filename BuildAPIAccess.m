@@ -690,17 +690,18 @@
 
 - (void)stopLogging:(NSString *)deviceID
 {
+	// There's no logging going on, or no connections, so bail
+
 	if (_connexions.count == 0 || _loggingDevices.count == 0) return;
 
-	BOOL match = NO;
-	NSMutableDictionary *deviceToRemove;
+	Connexion *conn = nil;
 
 	if (deviceID.length == 0 || deviceID == nil)
 	{
+		// No device ID passed in, so clear *all* logging devices and the connections
+
 		for (NSMutableDictionary *aLogDevice in _loggingDevices)
 		{
-			Connexion *conn = nil;
-
 			for (Connexion *aConnexion in _connexions)
 			{
 				if (aConnexion.actionCode == kConnectTypeGetLogEntriesStreamed || aConnexion.actionCode == kConnectTypeGetLogEntriesRanged)
@@ -716,18 +717,33 @@
 							[aConnexion.connexion cancel];
 						}
 
+						// Recall the connexion so we don't mutate the array we're enumerating
+
 						conn = aConnexion;
 					}
 				}
 			}
 
-			if (conn) [_connexions removeObject:conn];
+			if (conn)
+			{
+				// We noted a connexion to clear, so remove it
+
+				[_connexions removeObject:conn];
+				conn = nil;
+			}
 		}
+
+		// Clear the list of logging devices
 
 		[_loggingDevices removeAllObjects];
 	}
 	else
 	{
+		// A device ID was passed in so just clear this device from the logging list
+
+		NSMutableDictionary *deviceToRemove = nil;
+		BOOL match = NO;
+
 		for (NSMutableDictionary *aLogDevice in _loggingDevices)
 		{
 			NSString *devID = [aLogDevice objectForKey:@"id"];
@@ -788,23 +804,8 @@
 
 - (BOOL)isDeviceLogging:(NSString *)deviceID
 {
-	BOOL loggingFlag = NO;
-
-	if (_loggingDevices.count > 0)
-	{
-		for (NSMutableDictionary *aLogDevice in _loggingDevices)
-		{
-			NSString *aDevID = [aLogDevice objectForKey:@"id"];
-
-			if ([aDevID compare:deviceID] == NSOrderedSame)
-			{
-				loggingFlag = YES;
-				break;
-			}
-		}
-	}
-
-	return loggingFlag;
+	if ([self indexForID:deviceID] != -1) return YES;
+	return NO;
 }
 
 
@@ -857,8 +858,7 @@
     NSMutableURLRequest *request = [self makeRequest:@"POST" :path];
     [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
 
-    if (bodyDictionary)
-        [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:bodyDictionary options:0 error:&error]];
+    if (bodyDictionary) [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:bodyDictionary options:0 error:&error]];
 
     if (error)
     {
@@ -904,7 +904,8 @@
 
 - (Connexion *)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode
 {
-    // Create a default connexion object to store connection details
+    // Create a default connexion object to store the details of the connection we're about
+	// to initiate
 
     Connexion *aConnexion = [[Connexion alloc] init];
     aConnexion.actionCode = actionCode;
@@ -916,14 +917,16 @@
     {
         // Use NSURLSession for the connection. Compatible with iOS, tvOS and Mac OS X
 
-        NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration] delegate:self delegateQueue:[NSOperationQueue mainQueue]];
+        NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
+															  delegate:self
+														 delegateQueue:[NSOperationQueue mainQueue]];
         aConnexion.task = [session dataTaskWithRequest:request];
         [aConnexion.task resume];
     }
     else
     {
         // Use NSURLConnection for the connection. Compatible with iOS and Mac OS X, but not tvOS
-        // NOTE This approach has been deprecated by Apple
+        // NOTE This approach has been *deprecated* by Apple
 
         aConnexion.connexion = [[NSURLConnection alloc] initWithRequest:request delegate:self];
 
@@ -931,7 +934,7 @@
         {
             // Inform the user that the connection failed.
 
-            errorMessage = @"[ERROR] Could not establish a connection to the Electric Imp Cloud.";
+            errorMessage = @"[ERROR] Could not establish a connection to the Electric Imp impCloud.";
             [self reportError];
             return nil;
         }
@@ -1043,7 +1046,7 @@
 {
 	// Inform the host app that there was a connection failure
 
-	errorMessage = @"[ERROR] Could not connect to the Electric Imp server.";
+	errorMessage = @"[ERROR] Could not connect to the Electric Imp impCloud.";
 	[self reportError];
 
 	// Is the connection related to a log stream?
@@ -1052,7 +1055,7 @@
 	NSMutableDictionary *loggingDevice = nil;
 	for (NSMutableDictionary *aLogDevice in _loggingDevices)
 	{
-		Connexion *aConnexion = [aLogDevice objectForKey:@"connection"];
+		Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
 		if (aConnexion.connexion == connection) loggingDevice = aLogDevice;
 	}
 
@@ -1111,14 +1114,14 @@
 					NSArray *values = [NSArray arrayWithObjects:[connection.originalRequest copy], [NSNumber numberWithInteger:aConnexion.actionCode], nil];
 					NSArray *keys = [NSArray arrayWithObjects:@"request", @"actioncode", nil];
 					NSDictionary *dict =[NSDictionary dictionaryWithObjects:values forKeys:keys];
-					[NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(relaunchConnection:) userInfo:dict repeats:NO];
+					[NSTimer scheduledTimerWithTimeInterval:1.1 target:self selector:@selector(relaunchConnection:) userInfo:dict repeats:NO];
 					conn = aConnexion;
 				}
 			}
 
 			[connection cancel];
 
-			if (conn != nil) [_connexions removeObject:conn];
+			if (conn) [_connexions removeObject:conn];
 
 			if (_connexions.count < 1)
 			{
@@ -1132,7 +1135,7 @@
 
 		if (code == 504)
 		{
-			// Bad Gateway error received - this usually occurs during log streaming
+			// Bad Gateway error received - this usually indicates a log stream 'no message' timeout signal from the server
 
 			Connexion *conn = nil;
 
@@ -1143,13 +1146,12 @@
 
 			for (NSMutableDictionary *aLogDevice in _loggingDevices)
 			{
-				Connexion *aConnexion = [aLogDevice objectForKey:@"connection"];
+				Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
 
 				if (conn == aConnexion)
 				{
 					[connection cancel];
-					if (conn != nil) [_connexions removeObject:conn];
-
+					[_connexions removeObject:conn];
 					[aLogDevice removeObjectForKey:@"connection"];
 					[self startLogging:[aLogDevice objectForKey:@"id"]];
 				}
@@ -1274,7 +1276,7 @@ didReceiveResponse:(NSURLResponse *)response
 					NSArray *values = [NSArray arrayWithObjects:[dataTask.originalRequest copy], [NSNumber numberWithInteger:aConnexion.actionCode], nil];
 					NSArray *keys = [NSArray arrayWithObjects:@"request", @"actioncode", nil];
 					NSDictionary *dict =[NSDictionary dictionaryWithObjects:values forKeys:keys];
-					[NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(relaunchConnection:) userInfo:dict repeats:NO];
+					[NSTimer scheduledTimerWithTimeInterval:1.1 target:self selector:@selector(relaunchConnection:) userInfo:dict repeats:NO];
 					conn = aConnexion;
 					break;
 				}
@@ -1299,7 +1301,7 @@ didReceiveResponse:(NSURLResponse *)response
 
 			for (NSMutableDictionary *aLogDevice in _loggingDevices)
 			{
-				Connexion *aConnexion = [aLogDevice objectForKey:@"connection"];
+				Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
 
 				if (conn == aConnexion)
 				{
@@ -1345,8 +1347,7 @@ didReceiveResponse:(NSURLResponse *)response
 - (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
 
 	// All the data has been supplied by the server in response to a connection - or an error has been encountered
-	// Parse the data and, according to the connection activity - update device, create model etc –
-	// apply the results
+	// Parse the data and, according to the connection activity - update device, create model etc – apply the results
 
 	if (error)
 	{
@@ -1366,7 +1367,7 @@ didReceiveResponse:(NSURLResponse *)response
 		NSMutableDictionary *loggingDevice = nil;
 		for (NSMutableDictionary *aLogDevice in _loggingDevices)
 		{
-			Connexion *aConnexion = [aLogDevice objectForKey:@"connection"];
+			Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
 			if (aConnexion.task == task) loggingDevice = aLogDevice;
 		}
 
@@ -1395,7 +1396,7 @@ didReceiveResponse:(NSURLResponse *)response
 			}
 		}
 
-		if (conn != nil) [_connexions removeObject:conn];
+		if (conn) [_connexions removeObject:conn];
 
 		// Check if there are any active connections
 
