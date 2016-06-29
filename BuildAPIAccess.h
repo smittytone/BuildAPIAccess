@@ -49,12 +49,14 @@
 - (void)deleteDevice:(NSString *)deviceID;
 - (void)updateDevice:(NSString *)deviceID :(NSString *)key :(NSString *)value;
 - (void)autoRenameDevice:(NSString *)deviceID;
-- (BOOL)isDeviceLogging:(NSString *)deviceID;
 
 // Logging Methods
 
 - (void)startLogging:(NSString *)deviceID;
 - (void)stopLogging:(NSString *)deviceID;
+- (BOOL)isDeviceLogging:(NSString *)deviceID;
+- (NSInteger)indexForID:(NSString *)deviceID;
+- (NSUInteger)loggingCount;
 
 // HTTP Request Construction Methods
 

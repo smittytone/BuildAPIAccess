@@ -607,26 +607,6 @@
 
 
 
-- (BOOL)isDeviceLogging:(NSString *)deviceID
-{
-	BOOL loggingFlag = NO;
-
-	for (NSMutableDictionary *aLogDevice in _loggingDevices)
-	{
-		NSString *aDevID = [aLogDevice objectForKey:@"id"];
-
-		if ([aDevID compare:deviceID] == NSOrderedSame)
-		{
-			loggingFlag = YES;
-			break;
-		}
-	}
-
-	return loggingFlag;
-}
-
-
-
 #pragma mark - Logging Methods
 
 
@@ -719,11 +699,13 @@
 	{
 		for (NSMutableDictionary *aLogDevice in _loggingDevices)
 		{
+			Connexion *conn = nil;
+
 			for (Connexion *aConnexion in _connexions)
 			{
 				if (aConnexion.actionCode == kConnectTypeGetLogEntriesStreamed || aConnexion.actionCode == kConnectTypeGetLogEntriesRanged)
 				{
-					if (aConnexion == [aLogDevice objectForKey:@"connection"])
+					if (aConnexion == (Connexion *)[aLogDevice objectForKey:@"connection"])
 					{
 						if (_useSessionFlag)
 						{
@@ -734,10 +716,12 @@
 							[aConnexion.connexion cancel];
 						}
 
-						[_connexions removeObject:aConnexion];
+						conn = aConnexion;
 					}
 				}
 			}
+
+			if (conn) [_connexions removeObject:conn];
 		}
 
 		[_loggingDevices removeAllObjects];
@@ -764,6 +748,8 @@
 			// and of those that are, find the one that's linked to the logging
 			// device we want to remove...
 
+			Connexion *conn = nil;
+
 			for (Connexion *aConnexion in _connexions)
 			{
 				if (aConnexion.actionCode == kConnectTypeGetLogEntriesStreamed || aConnexion.actionCode == kConnectTypeGetLogEntriesRanged)
@@ -781,10 +767,12 @@
 							[aConnexion.connexion cancel];
 						}
 
-						[_connexions removeObject:aConnexion];
+						conn = aConnexion;
 					}
 				}
 			}
+
+			[_connexions removeObject:conn];
 		}
 	}
 
@@ -794,6 +782,60 @@
 
 		[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 	}
+}
+
+
+
+- (BOOL)isDeviceLogging:(NSString *)deviceID
+{
+	BOOL loggingFlag = NO;
+
+	if (_loggingDevices.count > 0)
+	{
+		for (NSMutableDictionary *aLogDevice in _loggingDevices)
+		{
+			NSString *aDevID = [aLogDevice objectForKey:@"id"];
+
+			if ([aDevID compare:deviceID] == NSOrderedSame)
+			{
+				loggingFlag = YES;
+				break;
+			}
+		}
+	}
+
+	return loggingFlag;
+}
+
+
+
+- (NSInteger)indexForID:(NSString *)deviceID
+{
+	NSInteger index = -1;
+
+	if (_loggingDevices.count > 0)
+	{
+		for (NSUInteger i = 0 ; i < _loggingDevices.count ; ++i)
+		{
+			NSMutableDictionary *aLogDevice = [_loggingDevices objectAtIndex:i];
+			NSString *aDevID = [aLogDevice objectForKey:@"id"];
+
+			if ([aDevID compare:deviceID] == NSOrderedSame)
+			{
+				index = i;
+				break;
+			}
+		}
+	}
+
+	return index;
+}
+
+
+
+- (NSUInteger)loggingCount
+{
+	return _loggingDevices.count;
 }
 
 
