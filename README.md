@@ -71,6 +71,8 @@ If the host application wishes to maintain a full local record of all of a model
 	- stopLogging:
 - New methods:
 	- isDeviceLogging:
+	- indexForID:
+	- loggingCount
 	- killAllConnections
 
 ### 1.1.3
@@ -192,6 +194,14 @@ Call this method to stop the current logging stream. Its parameter is the device
 ### - (BOOL)isDeviceLogging:(NSString *)deviceID
 
 Call this method to check whether a device of ID *deviceID* is currently receiving streamed logs.
+
+### - (NSInteger)indexForID:(NSString *)deviceID
+
+Call this method to get the specified device’s location (0 - n) within BuildAPIAcess’ list of logging devices. It will return -1 if the device is not streaming logs.
+
+### - (NSUInteger)loggingCount
+
+This method returns the number of devices from which logs are currently being streamed.
 
 ## BuildAPIAccess Connection Methods
 
