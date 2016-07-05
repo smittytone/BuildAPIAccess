@@ -1490,6 +1490,38 @@ didReceiveResponse:(NSURLResponse *)response
 			NSDictionary *errDict = [parsedData objectForKey:@"error"];
 			NSString *errString = [errDict objectForKey:@"message_short"];
 			errorMessage = [errorMessage stringByAppendingString:errString];
+
+			if (connexion.errorCode == 400)
+			{
+				// Check for lapsed token errors
+
+				NSRange eRange = [errString rangeOfString:@"Token may have expired" options:NSCaseInsensitiveSearch];
+
+				if (eRange.location != NSNotFound)
+				{
+					// This IS a lapsed token. We need to restart logging for this device from scratch
+
+					NSMutableDictionary *loggingDevice = nil;
+
+					for (NSMutableDictionary *aLogDevice in _loggingDevices)
+					{
+						Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
+
+						if (aConnexion == connexion)
+						{
+							loggingDevice = aLogDevice;
+							break;
+						}
+					}
+
+					if (loggingDevice)
+					{
+						[_loggingDevices removeObject:loggingDevice];
+						[self startLogging:[loggingDevice objectForKey:@"id"]];
+					}
+				}
+			}
+
 			errString = [errDict objectForKey:@"code"];
 
             if (codeErrors == nil)
