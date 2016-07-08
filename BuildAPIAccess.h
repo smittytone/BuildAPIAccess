@@ -14,7 +14,7 @@
 
 {
     NSMutableArray *_connexions, *_loggingDevices;
-    NSString *_logDevice, *_baseURL, *_currentModelID, *_logURL, *_lastStamp, *_harvey;
+    NSString *_baseURL, *_currentModelID, *_logURL, *_lastStamp, *_harvey;
     BOOL _followOnFlag, _useSessionFlag;
 }
 

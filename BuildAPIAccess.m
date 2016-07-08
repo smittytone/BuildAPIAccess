@@ -37,7 +37,6 @@
         _connexions = [[NSMutableArray alloc] init];
 		_loggingDevices = [[NSMutableArray alloc] init];
         _lastStamp = nil;
-        _logDevice = nil;
         _logURL = nil;
         _harvey = nil;
         _useSessionFlag = YES;
@@ -1518,6 +1517,7 @@ didReceiveResponse:(NSURLResponse *)response
 					{
 						[_loggingDevices removeObject:loggingDevice];
 						[self startLogging:[loggingDevice objectForKey:@"id"]];
+						errorMessage = [errorMessage stringByAppendingFormat:@". Restarting log stream for device '%@'", [loggingDevice objectForKey:@"name"]];
 					}
 				}
 			}
@@ -1598,7 +1598,7 @@ didReceiveResponse:(NSURLResponse *)response
 
 		// Report the error via notifications and clear the connection's action code
 
-		if (!(connexion.errorCode == 504 && _logDevice != nil))
+		if (!(connexion.errorCode == 504 && _loggingDevices.count > 0))
         {
             [self reportError];
 
