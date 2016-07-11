@@ -791,12 +791,7 @@
 		}
 	}
 
-	if (_connexions.count < 1)
-	{
-		// No more connexions? Tell the app to hide the activity indicator
-
-		[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-	}
+	if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 }
 
 
@@ -1095,6 +1090,7 @@
 	if (code > 399)
 	{
 		// The API has responded with a status code that indicates an error
+		// only 409s and 504s kill the connection there and then - others are retained for later use
 
 		if (code == 429)
 		{
@@ -1122,12 +1118,7 @@
 
 			if (conn) [_connexions removeObject:conn];
 
-			if (_connexions.count < 1)
-			{
-				// No active connections left, so notify the host app
-
-				[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-			}
+			if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
 			return;
 		}
@@ -1267,6 +1258,7 @@ didReceiveResponse:(NSURLResponse *)response
 			for (Connexion *aConnexion in _connexions)
 			{
 				// Run through the connections in our list and add the incoming error code to the correct one
+				// TODO support for logging connections
 
 				if (aConnexion.task == dataTask)
 				{
@@ -1311,8 +1303,7 @@ didReceiveResponse:(NSURLResponse *)response
 		}
 		else
 		{
-			// Allow the connection to pass because we'll handle the error later
-			// This applies to all errors but 429s
+			// All other 400-and-up error codes
 
 			for (Connexion *aConnexion in _connexions) {
 
@@ -1322,6 +1313,8 @@ didReceiveResponse:(NSURLResponse *)response
 			}
 		}
 	}
+
+	// All the failed connection to complete so we can analyze it later
 
 	completionHandler(NSURLSessionResponseAllow);
 }
@@ -1350,12 +1343,14 @@ didReceiveResponse:(NSURLResponse *)response
 
 	if (error)
 	{
+		// React to a passed client-side error - most likely a timeout or inability to resolve the URL
+		// ie. the client is not connected to the Internet
+
 		// 'error.code' will equal NSURLErrorCancelled when we kill all connections
 
 		if (error.code == NSURLErrorCancelled) return;
 
-		// React to a passed client-side error - most likely a timeout or inability to resolve the URL
-		// First, notify the host app
+		// Notify the host app
 
 		errorMessage = @"[SERVER ERROR] Could not connect to the Electric Imp server.";
 		[self reportError];
@@ -1374,6 +1369,7 @@ didReceiveResponse:(NSURLResponse *)response
 		{
 			// This call is prompted by a failed streaming log connection, so remove
 			// the device from the list of streaming devices and notify the host app
+			// NOTE don't call stopLogging: because we're about to cancel the connection like it does
 
 			[_loggingDevices removeObject:loggingDevice];
 			NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
@@ -1399,12 +1395,7 @@ didReceiveResponse:(NSURLResponse *)response
 
 		// Check if there are any active connections
 
-		if (_connexions.count < 1)
-		{
-			// There are no active connections, so inform the host app
-
-			[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-		}
+		if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
 		return;
 	}
@@ -1412,9 +1403,11 @@ didReceiveResponse:(NSURLResponse *)response
 	// The connection has come to a conclusion without error
 
 	Connexion *currentConnexion;
+
 	for (Connexion *aConnexion in _connexions)
 	{
 		// Run through the connections in the list and find the one that has just finished loading
+
 		if (aConnexion.task == task) currentConnexion = aConnexion;
 	}
 
@@ -1438,16 +1431,16 @@ didReceiveResponse:(NSURLResponse *)response
 	// of whether the source was an NSURLSession or NSURLConncection.
 
 	id parsedData = nil;
-	NSError *error = nil;
+	NSError *dataDecodeError = nil;
 
 	if (connexion.data != nil && connexion.data.length > 0)
 	{
 		// If we have data, attempt to decode it assuming that it is JSON (if it's not, 'error' will not equal nil
 
-		parsedData = [NSJSONSerialization JSONObjectWithData:connexion.data options:kNilOptions error:&error];
+		parsedData = [NSJSONSerialization JSONObjectWithData:connexion.data options:kNilOptions error:&dataDecodeError];
 	}
 
-	if (error != nil)
+	if (dataDecodeError != nil)
 	{
 		// If the incoming data could not be decoded to JSON for some reason,
 		// most likely a malformed request which returns a block of HTML
@@ -1458,7 +1451,7 @@ didReceiveResponse:(NSURLResponse *)response
 		errorMessage = [errorMessage stringByAppendingFormat:@" %@", (NSString *)connexion.data];
 		[self reportError];
 
-		// Are we streaming? We want this to continue despite the error
+		// Are we streaming?
 		
 		for (NSMutableDictionary *aLogDevice in _loggingDevices)
 		{
@@ -1466,8 +1459,9 @@ didReceiveResponse:(NSURLResponse *)response
 
 			if (devConnexion == connexion)
 			{
-				[self startLogging:[aLogDevice objectForKey:@"id"]];
-				break;
+				[_loggingDevices removeObject:aLogDevice];
+				NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+				[nc postNotificationName:@"BuildAPILogStreamEnd" object:[aLogDevice objectForKey:@"id"]];break;
 			}
 		}
 
@@ -1594,25 +1588,57 @@ didReceiveResponse:(NSURLResponse *)response
 					}
 				}
 			}
+			else
+			{
+				errorMessage = [errorMessage stringByAppendingString:@"Unknown error"];
+			}
+		}
+		else
+		{
+			errorMessage = [errorMessage stringByAppendingString:@"Unknown error"];
 		}
 
-		// Report the error via notifications and clear the connection's action code
+		if (_loggingDevices.count > 0)
+		{
+			// We have devices logging, so check if the failed connection is one of theirs
 
-		if (!(connexion.errorCode == 504 && _loggingDevices.count > 0))
-        {
-            [self reportError];
+			NSMutableDictionary *removeLogDevice = nil;
 
-            // Clear 'parsedData' so that 'processResult:', called immediately after 'processConnection:',
-            // does not double-report the error
-            
-            parsedData = nil;
-        }
+			for (NSMutableDictionary *aLogDevice in _loggingDevices)
+			{
+				Connexion *aConn = (Connexion *)[aLogDevice objectForKey:@"connection"];
 
+				if (aConn == connexion)
+				{
+					// The failed connection IS a logging connection
+
+					if (connexion.errorCode != 504)
+					{
+						// Error is not a 'known' timeout (504), so record the device for later clearance
+
+						removeLogDevice = aLogDevice;
+						break;
+					}
+				}
+			}
+
+			if (removeLogDevice)
+			{
+				// Deal with the logging device's failed connection that was not a 'known' timeout (504)
+				// Remove the device from the logging list and notify the host app
+
+				[_loggingDevices removeObject:removeLogDevice];
+				NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+				[nc postNotificationName:@"BuildAPILogStreamEnd" object:[removeLogDevice objectForKey:@"id"]];
+			}
+		}
+
+		parsedData = nil;
 		connexion.actionCode = kConnectTypeNone;
+		[self reportError];
 	}
 
-	// Processing done, remove this connection from the current list of active connections and signal
-	// the host app if there are no more active connections (eg. to disable an activity indicator)
+	// Tidy up the connection list
 
 	[_connexions removeObject:connexion];
 	if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
