@@ -2,7 +2,7 @@
 //  Copyright (c) 2015-16 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
-//  BuildAPIAccess 1.1.3
+//  BuildAPIAccess 2.0.0
 
 
 #import "BuildAPIAccess.h"
@@ -35,8 +35,8 @@
         // Private entities
 
         _connexions = [[NSMutableArray alloc] init];
+		_loggingDevices = [[NSMutableArray alloc] init];
         _lastStamp = nil;
-        _logDevice = nil;
         _logURL = nil;
         _harvey = nil;
         _useSessionFlag = YES;
@@ -202,13 +202,56 @@
         return;
     }
 
+	NSMutableDictionary *logDevice;
     NSString *urlString = [_baseURL stringByAppendingFormat:@"devices/%@/logs", deviceID];
     NSInteger action = kConnectTypeNone;
 
     if (isStream)
     {
-        action = kConnectTypeGetLogEntriesRanged;
-        _logDevice = deviceID;
+		BOOL match = NO;
+		action = kConnectTypeGetLogEntriesRanged;
+
+		if (_loggingDevices.count > 0)
+		{
+			for (NSMutableDictionary *aLogDevice in _loggingDevices)
+			{
+				NSString *devID = [aLogDevice objectForKey:@"id"];
+
+				if ([devID compare:deviceID] == NSOrderedSame)
+				{
+					// Device ID is already on the list, so note that
+					match = YES;
+					break;
+				}
+			}
+		}
+
+		if (!match)
+		{
+			// DeviceID is not already on the list of logging devices, so add it
+
+			NSArray *keys = [NSArray arrayWithObjects:@"id", @"url", nil];
+			NSArray *values = [NSArray arrayWithObjects:deviceID, @"*", nil];
+			logDevice = [NSMutableDictionary dictionaryWithObjects:values forKeys:keys];
+		}
+		else
+		{
+			// Requested streaming device is already present so bail
+
+			for (NSMutableDictionary *device in devices)
+			{
+				NSString *devID = [device objectForKey:@"id"];
+
+				if ([devID compare:deviceID] == NSOrderedSame)
+				{
+					errorMessage = [NSString stringWithFormat:@"[ERROR] You are already logging device \"%@\".", [device objectForKey:@"name"]];
+					[self reportError];
+					break;
+				}
+			}
+
+			return;
+		}
     }
     else
     {
@@ -218,15 +261,27 @@
 
     NSMutableURLRequest *request = [self makeGETrequest:urlString];
 
-    if (request)
-    {
-        [self launchConnection:request :action];
-    }
-    else
-    {
-        errorMessage = @"[ERROR] Could not create a request to get logs from the device.";
-        [self reportError];
-    }
+	if (request)
+	{
+		Connexion *aConnexion = [self launchConnection:request :action];
+
+		if (aConnexion)
+		{
+			// Initial request for logs (from which we get the poll URL) sent successfully
+			// so update the logging device's connection record
+
+			if (isStream)
+			{
+				[logDevice setObject:aConnexion forKey:@"connection"];
+				[_loggingDevices addObject:logDevice];
+			}
+		}
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to get logs from the device.";
+		[self reportError];
+	}
 }
 
 
@@ -554,46 +609,228 @@
 #pragma mark - Logging Methods
 
 
-- (void)startLogging
+- (void)startLogging:(NSString *)deviceID
 {
-    // _logURL is set by a prior request to the API for the streaming URL
+	if (deviceID.length == 0 || deviceID == nil) return;
 
-    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:_logURL] cachePolicy:NSURLRequestUseProtocolCachePolicy timeoutInterval:3600.0];
+	NSString *logURL;
+	NSMutableDictionary *logDevice;
+	BOOL match = NO;
 
-    if (request)
-    {
-        [self setRequestAuthorization:request];
-        [self launchConnection:request :kConnectTypeGetLogEntriesStreamed];
-    }
-    else
-    {
-        errorMessage = @"[ERROR] Could not create a request to start or continue logging.";
-        [self reportError];
-    }
+	for (NSMutableDictionary *aLogDevice in _loggingDevices)
+	{
+		NSString *devID = [aLogDevice objectForKey:@"id"];
+
+		if ([deviceID compare:devID] == NSOrderedSame)
+		{
+			// We've found the record for the logging device, so check we
+			// have a valid poll URL
+
+			logURL = [aLogDevice objectForKey:@"url"];
+
+			if ([logURL compare:@"*"] == NSOrderedSame)
+			{
+				// We don't have a poll URL yet, so get one
+
+				[self getLogsForDevice:deviceID :@"" :YES];
+				return;
+			}
+			else
+			{
+				match = YES;
+				logDevice = aLogDevice;
+				break;
+			}
+		}
+	}
+
+	if (!match)
+	{
+		// The device ID is not on the list so assume the user wants it to be, so add it
+
+		[self getLogsForDevice:deviceID :@"" :YES];
+		return;
+	}
+
+	// Assemble and send a request for logs to the now-retrieved poll URL
+
+	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:logURL] cachePolicy:NSURLRequestUseProtocolCachePolicy timeoutInterval:3600.0];
+
+	if (request)
+	{
+		[self setRequestAuthorization:request];
+		Connexion *aConnexion = [self launchConnection:request :kConnectTypeGetLogEntriesStreamed];
+
+		if (aConnexion)
+		{
+			// The request for logs from the specified device has been successfully
+			// sent, so add the connection to the the device’s record (which is
+			// already in the '_loggingDevices' list)
+
+			[logDevice setObject:aConnexion forKey:@"connection"];
+		}
+		else
+		{
+			// Could not launch the connection for some reason,
+			// so remove the specified device from the list of devices
+			// currently being streamed
+
+			[_loggingDevices removeObject:logDevice];
+		}
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to start or continue logging.";
+		[self reportError];
+		[_loggingDevices removeObject:logDevice];
+	}
 }
 
 
-- (void)stopLogging
+- (void)stopLogging:(NSString *)deviceID
 {
-    if (_connexions.count == 0) return;
+	// There's no logging going on, or no connections, so bail
 
-    _logDevice = nil;
+	if (_connexions.count == 0 || _loggingDevices.count == 0) return;
 
-    for (Connexion *aConnexion in _connexions)
-    {
-        if (aConnexion.actionCode == kConnectTypeGetLogEntriesStreamed)
-        {
-            [aConnexion.connexion cancel];
-            [_connexions removeObject:aConnexion];
-        }
-    }
+	Connexion *conn = nil;
 
-    if (_connexions.count < 1)
-    {
-        // No more connexions? Tell the app to hide the activity indicator
+	if (deviceID.length == 0 || deviceID == nil)
+	{
+		// No device ID passed in, so clear *all* logging devices and the connections
 
-        [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-    }
+		for (NSMutableDictionary *aLogDevice in _loggingDevices)
+		{
+			for (Connexion *aConnexion in _connexions)
+			{
+				if (aConnexion.actionCode == kConnectTypeGetLogEntriesStreamed || aConnexion.actionCode == kConnectTypeGetLogEntriesRanged)
+				{
+					if (aConnexion == (Connexion *)[aLogDevice objectForKey:@"connection"])
+					{
+						if (_useSessionFlag)
+						{
+							[aConnexion.task cancel];
+						}
+						else
+						{
+							[aConnexion.connexion cancel];
+						}
+
+						// Recall the connexion so we don't mutate the array we're enumerating
+
+						conn = aConnexion;
+					}
+				}
+			}
+
+			if (conn)
+			{
+				// We noted a connexion to clear, so remove it
+
+				[_connexions removeObject:conn];
+				conn = nil;
+			}
+		}
+
+		// Clear the list of logging devices
+
+		[_loggingDevices removeAllObjects];
+	}
+	else
+	{
+		// A device ID was passed in so just clear this device from the logging list
+
+		NSMutableDictionary *deviceToRemove = nil;
+		BOOL match = NO;
+
+		for (NSMutableDictionary *aLogDevice in _loggingDevices)
+		{
+			NSString *devID = [aLogDevice objectForKey:@"id"];
+
+			if ([deviceID compare:devID] == NSOrderedSame)
+			{
+				match = YES;
+				deviceToRemove = aLogDevice;
+				break;
+			}
+		}
+
+		if (match)
+		{
+			[_loggingDevices removeObject:deviceToRemove];
+
+			// Check through the connection list for log streaming connections,
+			// and of those that are, find the one that's linked to the logging
+			// device we want to remove...
+
+			Connexion *conn = nil;
+
+			for (Connexion *aConnexion in _connexions)
+			{
+				if (aConnexion.actionCode == kConnectTypeGetLogEntriesStreamed || aConnexion.actionCode == kConnectTypeGetLogEntriesRanged)
+				{
+					if (aConnexion == [deviceToRemove objectForKey:@"connection"])
+					{
+						// ...and remove its connection
+
+						if (_useSessionFlag)
+						{
+							[aConnexion.task cancel];
+						}
+						else
+						{
+							[aConnexion.connexion cancel];
+						}
+
+						conn = aConnexion;
+					}
+				}
+			}
+
+			[_connexions removeObject:conn];
+		}
+	}
+
+	if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+}
+
+
+
+- (BOOL)isDeviceLogging:(NSString *)deviceID
+{
+	if ([self indexForID:deviceID] != -1) return YES;
+	return NO;
+}
+
+
+
+- (NSInteger)indexForID:(NSString *)deviceID
+{
+	NSInteger index = -1;
+
+	if (_loggingDevices.count > 0)
+	{
+		for (NSUInteger i = 0 ; i < _loggingDevices.count ; ++i)
+		{
+			NSMutableDictionary *aLogDevice = [_loggingDevices objectAtIndex:i];
+			NSString *aDevID = [aLogDevice objectForKey:@"id"];
+
+			if ([aDevID compare:deviceID] == NSOrderedSame)
+			{
+				index = i;
+				break;
+			}
+		}
+	}
+
+	return index;
+}
+
+
+
+- (NSUInteger)loggingCount
+{
+	return _loggingDevices.count;
 }
 
 
@@ -615,8 +852,7 @@
     NSMutableURLRequest *request = [self makeRequest:@"POST" :path];
     [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
 
-    if (bodyDictionary)
-        [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:bodyDictionary options:0 error:&error]];
+    if (bodyDictionary) [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:bodyDictionary options:0 error:&error]];
 
     if (error)
     {
@@ -657,12 +893,13 @@
 
 
 
-#pragma mark - Connection Method
+#pragma mark - Connection Methods
 
 
-- (void)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode
+- (Connexion *)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode
 {
-    // Create a default connexion object to store connection details
+    // Create a default connexion object to store the details of the connection we're about
+	// to initiate
 
     Connexion *aConnexion = [[Connexion alloc] init];
     aConnexion.actionCode = actionCode;
@@ -674,14 +911,16 @@
     {
         // Use NSURLSession for the connection. Compatible with iOS, tvOS and Mac OS X
 
-        NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration] delegate:self delegateQueue:[NSOperationQueue mainQueue]];
+        NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
+															  delegate:self
+														 delegateQueue:[NSOperationQueue mainQueue]];
         aConnexion.task = [session dataTaskWithRequest:request];
         [aConnexion.task resume];
     }
     else
     {
         // Use NSURLConnection for the connection. Compatible with iOS and Mac OS X, but not tvOS
-        // NOTE This approach has been deprecated by Apple
+        // NOTE This approach has been *deprecated* by Apple
 
         aConnexion.connexion = [[NSURLConnection alloc] initWithRequest:request delegate:self];
 
@@ -689,9 +928,9 @@
         {
             // Inform the user that the connection failed.
 
-            errorMessage = @"[ERROR] Could not establish a connection to the Electric Imp Cloud.";
+            errorMessage = @"[ERROR] Could not establish a connection to the Electric Imp impCloud.";
             [self reportError];
-            return;
+            return nil;
         }
     }
 
@@ -706,6 +945,49 @@
     // Add the new connection to the list
 
     [_connexions addObject:aConnexion];
+	return aConnexion;
+}
+
+
+
+- (void)killAllConnections
+{
+	if (_connexions.count > 0)
+	{
+		// There are connections that we need to terminate
+
+		if (_loggingDevices.count > 0)
+		{
+			// There are devices for which we are streaming logs, so clear the list...
+
+			NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+			NSArray *loggingDevices = [_loggingDevices copy];
+			[_loggingDevices removeAllObjects];
+
+			// ...and notify the host for each device
+
+			for (NSMutableDictionary *loggingDevice in loggingDevices)
+			{
+				[nc postNotificationName:@"BuildAPILogStreamEnd" object:[loggingDevice objectForKey:@"id"]];
+			}
+		}
+
+		// Kill the remaining connections
+
+		for (Connexion *aConnexion in _connexions)
+		{
+			if (_useSessionFlag)
+			{
+				[aConnexion.task cancel];
+			}
+			else
+			{
+				[aConnexion.connexion cancel];
+			}
+		}
+
+		[_connexions removeAllObjects];
+	}
 }
 
 
@@ -758,8 +1040,28 @@
 {
 	// Inform the host app that there was a connection failure
 
-	errorMessage = @"[ERROR] Could not connect to the Electric Imp server.";
+	errorMessage = @"[ERROR] Could not connect to the Electric Imp impCloud.";
 	[self reportError];
+
+	// Is the connection related to a log stream?
+	// If so record the device details as 'loggingDevice'
+
+	NSMutableDictionary *loggingDevice = nil;
+	for (NSMutableDictionary *aLogDevice in _loggingDevices)
+	{
+		Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
+		if (aConnexion.connexion == connection) loggingDevice = aLogDevice;
+	}
+
+	if (loggingDevice)
+	{
+		// This call is prompted by a failed streaming log connection, so remove
+		// the device from the list of streaming devices and notify the host app
+
+		[_loggingDevices removeObject:loggingDevice];
+		NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+		[nc postNotificationName:@"BuildAPILogStreamEnd" object:[loggingDevice objectForKey:@"id"]];
+	}
 
 	// Terminate the failed connection and remove it from the list of current connections
 
@@ -788,6 +1090,7 @@
 	if (code > 399)
 	{
 		// The API has responded with a status code that indicates an error
+		// only 409s and 504s kill the connection there and then - others are retained for later use
 
 		if (code == 429)
 		{
@@ -806,46 +1109,42 @@
 					NSArray *values = [NSArray arrayWithObjects:[connection.originalRequest copy], [NSNumber numberWithInteger:aConnexion.actionCode], nil];
 					NSArray *keys = [NSArray arrayWithObjects:@"request", @"actioncode", nil];
 					NSDictionary *dict =[NSDictionary dictionaryWithObjects:values forKeys:keys];
-					[NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(relaunchConnection:) userInfo:dict repeats:NO];
+					[NSTimer scheduledTimerWithTimeInterval:1.1 target:self selector:@selector(relaunchConnection:) userInfo:dict repeats:NO];
 					conn = aConnexion;
 				}
 			}
 
 			[connection cancel];
 
-			if (conn != nil) [_connexions removeObject:conn];
+			if (conn) [_connexions removeObject:conn];
 
-			if (_connexions.count < 1)
-			{
-				// No active connections left, so notify the host app
-
-				[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-			}
+			if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
 			return;
 		}
 
 		if (code == 504)
 		{
-			// Bad Gateway error received - this usually occurs during log streaming
+			// Bad Gateway error received - this usually indicates a log stream 'no message' timeout signal from the server
 
-			if (_logDevice != nil)
+			Connexion *conn = nil;
+
+			for (Connexion *aConnexion in _connexions)
 			{
-				// We are still streaming so just cancel the current connection...
+				if (aConnexion.connexion == connection) conn = aConnexion;
+			}
 
-				Connexion *conn = nil;
+			for (NSMutableDictionary *aLogDevice in _loggingDevices)
+			{
+				Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
 
-				for (Connexion *aConnexion in _connexions)
+				if (conn == aConnexion)
 				{
-					if (aConnexion.connexion == connection) conn = aConnexion;
+					[connection cancel];
+					[_connexions removeObject:conn];
+					[aLogDevice removeObjectForKey:@"connection"];
+					[self startLogging:[aLogDevice objectForKey:@"id"]];
 				}
-
-				[connection cancel];
-				if (conn != nil) [_connexions removeObject:conn];
-
-				// ...and recommence logging
-
-				[self startLogging];
 			}
 		}
 		else
@@ -959,6 +1258,7 @@ didReceiveResponse:(NSURLResponse *)response
 			for (Connexion *aConnexion in _connexions)
 			{
 				// Run through the connections in our list and add the incoming error code to the correct one
+				// TODO support for logging connections
 
 				if (aConnexion.task == dataTask)
 				{
@@ -967,8 +1267,9 @@ didReceiveResponse:(NSURLResponse *)response
 					NSArray *values = [NSArray arrayWithObjects:[dataTask.originalRequest copy], [NSNumber numberWithInteger:aConnexion.actionCode], nil];
 					NSArray *keys = [NSArray arrayWithObjects:@"request", @"actioncode", nil];
 					NSDictionary *dict =[NSDictionary dictionaryWithObjects:values forKeys:keys];
-					[NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(relaunchConnection:) userInfo:dict repeats:NO];
+					[NSTimer scheduledTimerWithTimeInterval:1.1 target:self selector:@selector(relaunchConnection:) userInfo:dict repeats:NO];
 					conn = aConnexion;
+					break;
 				}
 			}
 
@@ -982,24 +1283,38 @@ didReceiveResponse:(NSURLResponse *)response
 			// Bad Gateway error received - this usually occurs during log streaming
 			// so if we are streaming, make sure we re-initiate the stream
 
-			if (_logDevice != nil)
-			{
-				// We are still streaming to just recommence logging
+			Connexion *conn = nil;
 
-				[self startLogging];
+			for (Connexion *aConnexion in _connexions)
+			{
+				if (aConnexion.task == dataTask) conn = aConnexion;
+			}
+
+			for (NSMutableDictionary *aLogDevice in _loggingDevices)
+			{
+				Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
+
+				if (conn == aConnexion)
+				{
+					[aLogDevice removeObjectForKey:@"connection"];
+					[self startLogging:[aLogDevice objectForKey:@"id"]];
+				}
 			}
 		}
+		else
+		{
+			// All other 400-and-up error codes
 
-		// Allow the connection to pass because we'll handle the error later
-		// This applies to all errors but 429s
+			for (Connexion *aConnexion in _connexions) {
 
-		for (Connexion *aConnexion in _connexions) {
-
-			// Run through the connections in our list and add the incoming error code to the correct one
-			
-			if (aConnexion.task == dataTask) aConnexion.errorCode = code;
+				// Run through the connections in our list and add the incoming error code to the correct one
+				
+				if (aConnexion.task == dataTask) aConnexion.errorCode = code;
+			}
 		}
 	}
+
+	// All the failed connection to complete so we can analyze it later
 
 	completionHandler(NSURLSessionResponseAllow);
 }
@@ -1024,18 +1339,44 @@ didReceiveResponse:(NSURLResponse *)response
 - (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
 
 	// All the data has been supplied by the server in response to a connection - or an error has been encountered
-	// Parse the data and, according to the connection activity - update device, create model etc –
-	// apply the results
+	// Parse the data and, according to the connection activity - update device, create model etc – apply the results
 
 	if (error)
 	{
 		// React to a passed client-side error - most likely a timeout or inability to resolve the URL
-		// First, notify the host app
+		// ie. the client is not connected to the Internet
+
+		// 'error.code' will equal NSURLErrorCancelled when we kill all connections
+
+		if (error.code == NSURLErrorCancelled) return;
+
+		// Notify the host app
 
 		errorMessage = @"[SERVER ERROR] Could not connect to the Electric Imp server.";
 		[self reportError];
 
-		// Next, terminate the failed connection and remove it from the list of current connections
+		// Is the connection related to a log stream?
+		// If so record the device details as 'loggingDevice'
+
+		NSMutableDictionary *loggingDevice = nil;
+		for (NSMutableDictionary *aLogDevice in _loggingDevices)
+		{
+			Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
+			if (aConnexion.task == task) loggingDevice = aLogDevice;
+		}
+
+		if (loggingDevice)
+		{
+			// This call is prompted by a failed streaming log connection, so remove
+			// the device from the list of streaming devices and notify the host app
+			// NOTE don't call stopLogging: because we're about to cancel the connection like it does
+
+			[_loggingDevices removeObject:loggingDevice];
+			NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+			[nc postNotificationName:@"BuildAPILogStreamEnd" object:[loggingDevice objectForKey:@"id"]];
+		}
+		
+		// Terminate the failed connection and remove it from the list of current connections
 
 		Connexion *conn = nil;
 		for (Connexion *aConnexion in _connexions)
@@ -1046,19 +1387,15 @@ didReceiveResponse:(NSURLResponse *)response
 			{
 				[task cancel];
 				conn = aConnexion;
+				break;
 			}
 		}
 
-		if (conn != nil) [_connexions removeObject:conn];
+		if (conn) [_connexions removeObject:conn];
 
 		// Check if there are any active connections
 
-		if (_connexions.count < 1)
-		{
-			// There are no active connections, so inform the host app
-
-			[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-		}
+		if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
 		return;
 	}
@@ -1066,9 +1403,11 @@ didReceiveResponse:(NSURLResponse *)response
 	// The connection has come to a conclusion without error
 
 	Connexion *currentConnexion;
+
 	for (Connexion *aConnexion in _connexions)
 	{
 		// Run through the connections in the list and find the one that has just finished loading
+
 		if (aConnexion.task == task) currentConnexion = aConnexion;
 	}
 
@@ -1092,16 +1431,16 @@ didReceiveResponse:(NSURLResponse *)response
 	// of whether the source was an NSURLSession or NSURLConncection.
 
 	id parsedData = nil;
-	NSError *error;
+	NSError *dataDecodeError = nil;
 
 	if (connexion.data != nil && connexion.data.length > 0)
 	{
 		// If we have data, attempt to decode it assuming that it is JSON (if it's not, 'error' will not equal nil
 
-		parsedData = [NSJSONSerialization JSONObjectWithData:connexion.data options:kNilOptions error:&error];
+		parsedData = [NSJSONSerialization JSONObjectWithData:connexion.data options:kNilOptions error:&dataDecodeError];
 	}
 
-	if (error != nil)
+	if (dataDecodeError != nil)
 	{
 		// If the incoming data could not be decoded to JSON for some reason,
 		// most likely a malformed request which returns a block of HTML
@@ -1112,9 +1451,19 @@ didReceiveResponse:(NSURLResponse *)response
 		errorMessage = [errorMessage stringByAppendingFormat:@" %@", (NSString *)connexion.data];
 		[self reportError];
 
-		// Are we streaming? We want this to continue despite the error
+		// Are we streaming?
 		
-		if (_logDevice != nil) [self startLogging];
+		for (NSMutableDictionary *aLogDevice in _loggingDevices)
+		{
+			Connexion *devConnexion = [aLogDevice objectForKey:@"connection"];
+
+			if (devConnexion == connexion)
+			{
+				[_loggingDevices removeObject:aLogDevice];
+				NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+				[nc postNotificationName:@"BuildAPILogStreamEnd" object:[aLogDevice objectForKey:@"id"]];break;
+			}
+		}
 
 		connexion.errorCode = -1;
 		connexion.actionCode = kConnectTypeNone;
@@ -1134,6 +1483,39 @@ didReceiveResponse:(NSURLResponse *)response
 			NSDictionary *errDict = [parsedData objectForKey:@"error"];
 			NSString *errString = [errDict objectForKey:@"message_short"];
 			errorMessage = [errorMessage stringByAppendingString:errString];
+
+			if (connexion.errorCode == 400)
+			{
+				// Check for lapsed token errors
+
+				NSRange eRange = [errString rangeOfString:@"Token may have expired" options:NSCaseInsensitiveSearch];
+
+				if (eRange.location != NSNotFound)
+				{
+					// This IS a lapsed token. We need to restart logging for this device from scratch
+
+					NSMutableDictionary *loggingDevice = nil;
+
+					for (NSMutableDictionary *aLogDevice in _loggingDevices)
+					{
+						Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
+
+						if (aConnexion == connexion)
+						{
+							loggingDevice = aLogDevice;
+							break;
+						}
+					}
+
+					if (loggingDevice)
+					{
+						[_loggingDevices removeObject:loggingDevice];
+						[self startLogging:[loggingDevice objectForKey:@"id"]];
+						errorMessage = [errorMessage stringByAppendingFormat:@". Restarting log stream for device '%@'", [loggingDevice objectForKey:@"name"]];
+					}
+				}
+			}
+
 			errString = [errDict objectForKey:@"code"];
 
             if (codeErrors == nil)
@@ -1206,25 +1588,57 @@ didReceiveResponse:(NSURLResponse *)response
 					}
 				}
 			}
+			else
+			{
+				errorMessage = [errorMessage stringByAppendingString:@"Unknown error"];
+			}
+		}
+		else
+		{
+			errorMessage = [errorMessage stringByAppendingString:@"Unknown error"];
 		}
 
-		// Report the error via notifications and clear the connection's action code
+		if (_loggingDevices.count > 0)
+		{
+			// We have devices logging, so check if the failed connection is one of theirs
 
-		if (!(connexion.errorCode == 504 && _logDevice != nil))
-        {
-            [self reportError];
+			NSMutableDictionary *removeLogDevice = nil;
 
-            // Clear 'parsedData' so that 'processResult:', called immediately after 'processConnection:',
-            // does not double-report the error
-            
-            parsedData = nil;
-        }
+			for (NSMutableDictionary *aLogDevice in _loggingDevices)
+			{
+				Connexion *aConn = (Connexion *)[aLogDevice objectForKey:@"connection"];
 
+				if (aConn == connexion)
+				{
+					// The failed connection IS a logging connection
+
+					if (connexion.errorCode != 504)
+					{
+						// Error is not a 'known' timeout (504), so record the device for later clearance
+
+						removeLogDevice = aLogDevice;
+						break;
+					}
+				}
+			}
+
+			if (removeLogDevice)
+			{
+				// Deal with the logging device's failed connection that was not a 'known' timeout (504)
+				// Remove the device from the logging list and notify the host app
+
+				[_loggingDevices removeObject:removeLogDevice];
+				NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+				[nc postNotificationName:@"BuildAPILogStreamEnd" object:[removeLogDevice objectForKey:@"id"]];
+			}
+		}
+
+		parsedData = nil;
 		connexion.actionCode = kConnectTypeNone;
+		[self reportError];
 	}
 
-	// Processing done, remove this connection from the current list of active connections and signal
-	// the host app if there are no more active connections (eg. to disable an activity indicator)
+	// Tidy up the connection list
 
 	[_connexions removeObject:connexion];
 	if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
@@ -1502,10 +1916,25 @@ didReceiveResponse:(NSURLResponse *)response
 
                     // Save the URL of the log stream and begin logging
 
-                    _logURL = [kBaseAPIURL stringByAppendingString:[data objectForKey:@"poll_url"]];
-                    [self startLogging];
+					for (NSMutableDictionary *aLogDevice in _loggingDevices)
+					{
+						Connexion *aConnexion = [aLogDevice objectForKey:@"connection"];
 
-                    break;
+						if (aConnexion == connexion)
+						{
+							// Got a match, so save the poll URL
+
+							[aLogDevice setObject:[kBaseAPIURL stringByAppendingString:[data objectForKey:@"poll_url"]] forKey:@"url"];
+
+							// Start logging with the device ID
+
+							[self startLogging:[aLogDevice objectForKey:@"id"]];
+
+							break;
+						}
+					}
+
+					break;
                 }
 
                 case kConnectTypeGetLogEntriesStreamed:
@@ -1513,10 +1942,31 @@ didReceiveResponse:(NSURLResponse *)response
                     // We asked for a log stream and the first streamed entry has arrived. Send it to the main
                     // app to be displayed, and then re-commence logging
 
-                    [nc postNotificationName:@"BuildAPILogStream" object:[data objectForKey:@"logs"]];
-                    [self startLogging];
+					for (NSMutableDictionary *aLogDevice in _loggingDevices)
+					{
+						// For each logging device, find the one whose connecion matches the one completed
 
-                    break;
+						Connexion *aConnexion = [aLogDevice objectForKey:@"connection"];
+
+						if (aConnexion == connexion)
+						{
+							// Bundle up the device ID and its logs and notify the main app
+
+							NSArray *keys = [NSArray arrayWithObjects:@"id", @"logs", nil];
+							NSArray *values = [NSArray arrayWithObjects:[aLogDevice objectForKey:@"id"], [data objectForKey:@"logs"], nil];
+							NSDictionary *postData = [NSDictionary dictionaryWithObjects:values forKeys:keys];
+
+							[nc postNotificationName:@"BuildAPILogStream" object:postData];
+
+							// Resume logging with the device ID
+
+							[self startLogging:[aLogDevice objectForKey:@"id"]];
+
+							break;
+						}
+					}
+
+					break;
                 }
 
                 default:
@@ -1524,48 +1974,6 @@ didReceiveResponse:(NSURLResponse *)response
             }
         }
     }
-}
-
-
-
-- (NSInteger)checkStatus:(NSDictionary *)data
-{
-    // Before using data returned from the server, check that the success field is not false
-    // If it is, set up an error message. 1 = success; 0 = failure
-
-    NSNumber *value = [data objectForKey:@"success"];
-
-    if (value.integerValue == 0)
-    {
-        // There has been an error reported by the API
-
-        NSDictionary *err = [data objectForKey:@"error"];
-        errorMessage = [err objectForKey:@"message_short"];
-        [self reportError];
-    }
-
-    return value.integerValue;
-}
-
-
-
-#pragma mark - Base64 Methods
-
-
-- (NSString *)encodeBase64String:(NSString *)plainString
-{
-    NSData *data = [plainString dataUsingEncoding:NSUTF8StringEncoding];
-    NSString *base64String = [data base64EncodedStringWithOptions:0];
-    return base64String;
-}
-
-
-
-- (NSString *)decodeBase64String:(NSString *)base64String
-{
-    NSData *data = [[NSData alloc] initWithBase64EncodedString:base64String options:0];
-    NSString *decodedString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    return decodedString;
 }
 
 
@@ -1607,12 +2015,56 @@ didReceiveResponse:(NSURLResponse *)response
 }
 
 
+
+- (NSInteger)checkStatus:(NSDictionary *)data
+{
+	// Before using data returned from the server, check that the success field is not false
+	// If it is, set up an error message. 1 = success; 0 = failure
+
+	NSNumber *value = [data objectForKey:@"success"];
+
+	if (value.integerValue == 0)
+	{
+		// There has been an error reported by the API
+
+		NSDictionary *err = [data objectForKey:@"error"];
+		errorMessage = [err objectForKey:@"message_short"];
+		[self reportError];
+	}
+
+	return value.integerValue;
+}
+
+
+
 - (void)reportError
 {
     // Signal the host app that we have an error message for it to display (in 'errorMessage')
 
     [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIError" object:self];
 }
+
+
+
+#pragma mark - Base64 Methods
+
+
+- (NSString *)encodeBase64String:(NSString *)plainString
+{
+	NSData *data = [plainString dataUsingEncoding:NSUTF8StringEncoding];
+	NSString *base64String = [data base64EncodedStringWithOptions:0];
+	return base64String;
+}
+
+
+
+- (NSString *)decodeBase64String:(NSString *)base64String
+{
+	NSData *data = [[NSData alloc] initWithBase64EncodedString:base64String options:0];
+	NSString *decodedString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+	return decodedString;
+}
+
 
 
 @end

@@ -1,10 +1,10 @@
-# BuildAPIAccess 1.1.3
+# BuildAPIAccess 2.0.0
 
 An Objective-C (Mac OS X / iOS / tvOS) class wrapper for [Electric Imp’s Build API](https://electricimp.com/docs/buildapi/).
 
 BuildAPIAccess requires the (included) class Connexion, a simple convenience class for bundling either an [NSURLConnection](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSURLConnection_Class/index.html) or [NSURLSession](https://developer.apple.com/library/prerelease/mac/documentation/Foundation/Reference/NSURLSession_class/index.html) instance and associated Build API connection data.
 
-BuildAPIAccess 1.1.3 supports both NSURLSession and NSURLConnection. The former is Apple’s preferred mechanism and the only one of the two supported by tvOS. For more information, see [Initialization Methods](#buildapiaccess-initialization-methods).
+BuildAPIAccess 2.0.0 supports both NSURLSession and NSURLConnection. The former is Apple’s preferred mechanism and the only one of the two supported by tvOS. For more information, see [Initialization Methods](#buildapiaccess-initialization-methods).
 
 ### Build API Authorization
 
@@ -61,6 +61,19 @@ A model’s code revisions are not retained by *BuildAPIAccess* but are retrieve
 If the host application wishes to maintain a full local record of all of a model’s code revisions, it will need it iterate through each build. A call to the method [*getCode:*](#--voidgetcodensstring-modelid) will record the latest build number in the public property *latestBuild*.
 
 ## BuildAPIAccess Version History
+
+### 2.0.0
+
+- Support for simultaneous log streaming from multiple devices.
+- Breaking changes to methods:
+	- launchConnection::
+	- startLogging:
+	- stopLogging:
+- New methods:
+	- isDeviceLogging:
+	- indexForID:
+	- loggingCount
+	- killAllConnections
 
 ### 1.1.3
 
@@ -168,13 +181,33 @@ Pass `YES` into the *isStream* parameter if you want to initiate log streaming.
 
 Currently, log entries can be streamed from only one device. To stream from another device, call [*stopLogging:*](#--voidstoplogging) then call [*getLogsForDevice:::*](#--voidgetlogsfordevicensstring-deviceid-nsstring-since-boolisstream) with the new device’s *deviceIndex* value.
 
-### - (void)startLogging
+### - (void)startLogging:(NSString *)deviceID
 
 Having initiated log streaming using [*getLogsForDevice:::*](#--voidgetlogsfordevicensstring-deviceid-nsstring-since-boolisstream), this method is called automatically. But if your application uses [*stopLogging:*](#--voidstoplogging) to halt logging, this method can be called to recommence logging.
 
-### - (void)stopLogging
+Its parameter is the device ID of the device for which logs can be streamed.
 
-Call this method to stop the current logging stream.
+### - (void)stopLogging:(NSString *)deviceID
+
+Call this method to stop the current logging stream. Its parameter is the device ID of the device for which logs are being streamed, or pass in `nil` to stop logging for **all** devices.
+
+### - (BOOL)isDeviceLogging:(NSString *)deviceID
+
+Call this method to check whether a device of ID *deviceID* is currently receiving streamed logs.
+
+### - (NSInteger)indexForID:(NSString *)deviceID
+
+Call this method to get the specified device’s location (0 - n) within BuildAPIAcess’ list of logging devices. It will return -1 if the device is not streaming logs.
+
+### - (NSUInteger)loggingCount
+
+This method returns the number of devices from which logs are currently being streamed.
+
+## BuildAPIAccess Connection Methods
+
+### - (void)killAllConnections
+
+This method quickly cancels **all** current connections and clears the list of devices for which log entries are being streamed. Typically used to tidy up when the host app is closing down. However, it will issue notifications for devices whose log streams are being terminated.
 
 ## BuildAPIAccess HTTPS Request Construction Methods
 
@@ -213,6 +246,7 @@ BuildAPIDeviceDeleted | Device successfully ‘removed’ from your account
 BuildAPIGotCodeRev | Successfully retrieved the requested code revision. Device code added to the *deviceCode* property. Model code added to the *modelCode* property
 BuildAPIGotLogs | Successfully retrieved the requested log entries. The logs are sent with the notification as an [NSArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSArray_Class/) [log entry records](#log-entries)
 BuildAPILogStream | Successfully retrieved a freshly posted log entry. The log entry is sent with the notification as an [NSArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSArray_Class/) [log entry records](#log-entries)
+BuildAPILogStreamEnd | Signals that a connection failure has stopped log streaming. The ID of the device that is no longer streaming logs is sent with the notification as an NSString
 
 ## Error Reporting
 

@@ -2,7 +2,7 @@
 //  Copyright (c) 2015-16 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
-//  BuildAPIAccess 1.1.3
+//  BuildAPIAccess 2.0.0
 
 
 #ifndef BuildAPIContants_h
