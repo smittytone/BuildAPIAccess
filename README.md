@@ -1,4 +1,4 @@
-# BuildAPIAccess 2.0.0
+# BuildAPIAccess 2.0.1
 
 An Objective-C (Mac OS X / iOS / tvOS) class wrapper for [Electric Imp’s Build API](https://electricimp.com/docs/buildapi/).
 
@@ -61,6 +61,8 @@ A model’s code revisions are not retained by *BuildAPIAccess* but are retrieve
 If the host application wishes to maintain a full local record of all of a model’s code revisions, it will need it iterate through each build. A call to the method [*getCode:*](#--voidgetcodensstring-modelid) will record the latest build number in the public property *latestBuild*.
 
 ## BuildAPIAccess Version History
+
+### 2.0.1
 
 ### 2.0.0
 
