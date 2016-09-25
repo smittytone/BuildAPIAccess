@@ -64,6 +64,9 @@ If the host application wishes to maintain a full local record of all of a model
 
 ### 2.0.1
 
+- Add getConnectionCount: method
+- Code
+
 ### 2.0.0
 
 - Support for simultaneous log streaming from multiple devices.
@@ -210,6 +213,10 @@ This method returns the number of devices from which logs are currently being st
 ### - (void)killAllConnections
 
 This method quickly cancels **all** current connections and clears the list of devices for which log entries are being streamed. Typically used to tidy up when the host app is closing down. However, it will issue notifications for devices whose log streams are being terminated.
+
+### - (NSUInteger)getConnectionCount
+
+This method returns the number of connections the class instance currently has in flight.
 
 ## BuildAPIAccess HTTPS Request Construction Methods
 
