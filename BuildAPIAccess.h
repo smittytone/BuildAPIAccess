@@ -2,7 +2,7 @@
 //  Copyright (c) 2015-16 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
-//  BuildAPIAccess 2.0.0
+//  BuildAPIAccess 2.0.1
 
 
 #import <Foundation/Foundation.h>
@@ -87,6 +87,7 @@
 - (NSMutableURLRequest *)makeRequest:(NSString *)verb :(NSString *)path;
 - (void)setRequestAuthorization:(NSMutableURLRequest *)request;
 - (void)reportError;
+- (NSUInteger)getConnectionCount;
 
 
 @property (nonatomic, strong) NSMutableArray *devices;

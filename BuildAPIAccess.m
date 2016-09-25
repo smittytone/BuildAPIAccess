@@ -2,7 +2,7 @@
 //  Copyright (c) 2015-16 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
-//  BuildAPIAccess 2.0.0
+//  BuildAPIAccess 2.0.1
 
 
 #import "BuildAPIAccess.h"
@@ -2042,6 +2042,13 @@ didReceiveResponse:(NSURLResponse *)response
     // Signal the host app that we have an error message for it to display (in 'errorMessage')
 
     [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIError" object:self];
+}
+
+
+
+- (NSUInteger)getConnectionCount
+{
+	return _connexions.count;
 }
 
 
