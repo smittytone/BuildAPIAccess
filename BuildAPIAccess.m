@@ -15,7 +15,6 @@
 @synthesize codeErrors;
 
 
-
 #pragma mark - Initialization Methods
 
 
@@ -62,6 +61,12 @@
 }
 
 
+- (void)clearAPIKey
+{
+    [self clrk];
+}
+
+
 - (void)clrk
 {
     // Clear the saved API k
@@ -69,6 +74,12 @@
     _harvey = nil;
 }
 
+
+
+- (void)setAPIKey:(NSString *)key
+{
+    [self setk:key];
+}
 
 
 - (void)setk:(NSString *)harvey
