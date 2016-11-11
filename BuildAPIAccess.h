@@ -87,7 +87,6 @@
 - (NSMutableURLRequest *)makeRequest:(NSString *)verb :(NSString *)path;
 - (void)setRequestAuthorization:(NSMutableURLRequest *)request;
 - (void)reportError;
-- (NSUInteger)getConnectionCount;
 
 
 @property (nonatomic, strong) NSMutableArray *devices;
@@ -97,7 +96,7 @@
 @property (nonatomic, strong) NSString *statusMessage;
 @property (nonatomic, strong) NSString *deviceCode;
 @property (nonatomic, strong) NSString *agentCode;
-
+@property (nonatomic, readonly) NSUInteger numberOfConnections;
 
 
 @end

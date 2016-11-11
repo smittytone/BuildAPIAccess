@@ -64,8 +64,8 @@ If the host application wishes to maintain a full local record of all of a model
 
 ### 2.0.1
 
-- Add getConnectionCount: method
-- Code
+- Add read-only *numberOfConnections* property (NSUInteger)
+- Add custom user agent string to HTTP requests
 
 ### 2.0.0
 
@@ -101,6 +101,7 @@ Drag the files `BuildAPIAccess.h`, `BuildAPIAccess.m`, `BuildAPIAccessConstants.
 | *agentCode* | [NSString](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSString_Class/) | Empty string | The most recently retrieved code revision’s agent code |
 | *latestBuild* | [NSInteger](https://developer.apple.com/library/ios/documentation/Cocoa/Reference/Foundation/Miscellaneous/Foundation_DataTypes/#//apple_ref/c/tdef/NSInteger) | -1 | The latest build number of the most recently request model. This is not set until [*getCode:*](#--voidgetcodensstring-modelid) is called |
 | *errorMesage* | [NSString](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSString_Class/) | Empty string | The most recently reported BuildAPIAccess error message |
+| *numberOfConnections* | NSUInteger | 0 | The number of connections currently in flight |
 
 ## BuildAPIAccess Initialization Methods
 
@@ -213,10 +214,6 @@ This method returns the number of devices from which logs are currently being st
 ### - (void)killAllConnections
 
 This method quickly cancels **all** current connections and clears the list of devices for which log entries are being streamed. Typically used to tidy up when the host app is closing down. However, it will issue notifications for devices whose log streams are being terminated.
-
-### - (NSUInteger)getConnectionCount
-
-This method returns the number of connections the class instance currently has in flight.
 
 ## BuildAPIAccess HTTPS Request Construction Methods
 

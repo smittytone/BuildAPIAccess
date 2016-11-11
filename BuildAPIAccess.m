@@ -12,7 +12,7 @@
 
 
 @synthesize devices, models, errorMessage, statusMessage, deviceCode, agentCode;
-@synthesize codeErrors;
+@synthesize codeErrors, numberOfConnections;
 
 
 #pragma mark - Initialization Methods
@@ -743,6 +743,7 @@
 				// We noted a connexion to clear, so remove it
 
 				[_connexions removeObject:conn];
+				numberOfConnections = _connexions.count;
 				conn = nil;
 			}
 		}
@@ -803,6 +804,7 @@
 			}
 
 			[_connexions removeObject:conn];
+			numberOfConnections = _connexions.count;
 		}
 	}
 
@@ -960,6 +962,7 @@
     // Add the new connection to the list
 
     [_connexions addObject:aConnexion];
+	numberOfConnections = _connexions.count;
 	return aConnexion;
 }
 
@@ -1002,6 +1005,7 @@
 		}
 
 		[_connexions removeAllObjects];
+		numberOfConnections = _connexions.count;
 	}
 }
 
@@ -1082,6 +1086,7 @@
 
 	[connection cancel];
 	[_connexions removeObject:connection];
+	numberOfConnections = _connexions.count;
 
 	if (_connexions.count < 1)
 	{
@@ -1131,7 +1136,11 @@
 
 			[connection cancel];
 
-			if (conn) [_connexions removeObject:conn];
+			if (conn)
+			{
+				[_connexions removeObject:conn];
+				numberOfConnections = _connexions.count;
+			}
 
 			if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
@@ -1157,6 +1166,7 @@
 				{
 					[connection cancel];
 					[_connexions removeObject:conn];
+					numberOfConnections = _connexions.count;
 					[aLogDevice removeObjectForKey:@"connection"];
 					[self startLogging:[aLogDevice objectForKey:@"id"]];
 				}
@@ -1288,7 +1298,12 @@ didReceiveResponse:(NSURLResponse *)response
 				}
 			}
 
-			if (conn != nil) [_connexions removeObject:conn];
+			if (conn != nil)
+			{
+				[_connexions removeObject:conn];
+				numberOfConnections = _connexions.count;
+			}
+
 			completionHandler(NSURLSessionResponseCancel);
 			return;
 		}
@@ -1406,7 +1421,11 @@ didReceiveResponse:(NSURLResponse *)response
 			}
 		}
 
-		if (conn) [_connexions removeObject:conn];
+		if (conn)
+		{
+			[_connexions removeObject:conn];
+			numberOfConnections = _connexions.count;
+		}
 
 		// Check if there are any active connections
 
@@ -1656,6 +1675,7 @@ didReceiveResponse:(NSURLResponse *)response
 	// Tidy up the connection list
 
 	[_connexions removeObject:connexion];
+	numberOfConnections = _connexions.count;
 	if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
 	// Return the decoded data (or nil)
@@ -2063,13 +2083,6 @@ didReceiveResponse:(NSURLResponse *)response
     // Signal the host app that we have an error message for it to display (in 'errorMessage')
 
     [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIError" object:self];
-}
-
-
-
-- (NSUInteger)getConnectionCount
-{
-	return _connexions.count;
 }
 
 
