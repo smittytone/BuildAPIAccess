@@ -8,6 +8,7 @@
 #ifndef BuildAPIContants_h
 #define BuildAPIContants_h
 
+#define kBuildAPIAccessVersion @"2.0.1"
 
 
 #define kConnectTypeNone					0

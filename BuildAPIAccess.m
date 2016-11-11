@@ -43,7 +43,7 @@
 		_baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
 
 		NSOperatingSystemVersion sysVer = [[NSProcessInfo processInfo] operatingSystemVersion];
-		_userAgent = [NSString stringWithFormat:@"BuildAPIAccess/2.0.1 %@/%@.%@ (macOS %li.%li.%li)", [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleExecutable"], [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"],
+		_userAgent = [NSString stringWithFormat:@"BuildAPIAccess/%@ %@/%@.%@ (macOS %li.%li.%li)", kBuildAPIAccessVersion, [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleExecutable"], [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"],
 					  [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"], (long)sysVer.majorVersion, (long)sysVer.minorVersion, (long)sysVer.patchVersion];
     }
 
