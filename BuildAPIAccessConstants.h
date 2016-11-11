@@ -2,12 +2,13 @@
 //  Copyright (c) 2015-16 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
-//  BuildAPIAccess 2.0.0
+//  BuildAPIAccess 2.0.1
 
 
 #ifndef BuildAPIContants_h
 #define BuildAPIContants_h
 
+#define kBuildAPIAccessVersion @"2.0.1"
 
 
 #define kConnectTypeNone					0

@@ -2,7 +2,7 @@
 //  Copyright (c) 2015-16 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
-//  BuildAPIAccess 2.0.0
+//  BuildAPIAccess 2.0.1
 
 
 #import <Foundation/Foundation.h>
@@ -14,7 +14,7 @@
 
 {
     NSMutableArray *_connexions, *_loggingDevices;
-    NSString *_baseURL, *_currentModelID, *_logURL, *_lastStamp, *_harvey;
+    NSString *_baseURL, *_currentModelID, *_logURL, *_lastStamp, *_harvey, *_userAgent;
     BOOL _followOnFlag, _useSessionFlag;
 }
 
@@ -96,7 +96,7 @@
 @property (nonatomic, strong) NSString *statusMessage;
 @property (nonatomic, strong) NSString *deviceCode;
 @property (nonatomic, strong) NSString *agentCode;
-
+@property (nonatomic, readonly) NSUInteger numberOfConnections;
 
 
 @end

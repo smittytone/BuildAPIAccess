@@ -2,7 +2,7 @@
 //  Copyright (c) 2015-16 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
-//  BuildAPIAccess 2.0.0
+//  BuildAPIAccess 2.0.1
 
 
 #import "BuildAPIAccess.h"
@@ -12,8 +12,7 @@
 
 
 @synthesize devices, models, errorMessage, statusMessage, deviceCode, agentCode;
-@synthesize codeErrors;
-
+@synthesize codeErrors, numberOfConnections;
 
 
 #pragma mark - Initialization Methods
@@ -42,6 +41,10 @@
         _useSessionFlag = YES;
 
 		_baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
+
+		NSOperatingSystemVersion sysVer = [[NSProcessInfo processInfo] operatingSystemVersion];
+		_userAgent = [NSString stringWithFormat:@"BuildAPIAccess/%@ %@/%@.%@ (macOS %li.%li.%li)", kBuildAPIAccessVersion, [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleExecutable"], [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"],
+					  [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"], (long)sysVer.majorVersion, (long)sysVer.minorVersion, (long)sysVer.patchVersion];
     }
 
     return self;
@@ -62,6 +65,12 @@
 }
 
 
+- (void)clearAPIKey
+{
+    [self clrk];
+}
+
+
 - (void)clrk
 {
     // Clear the saved API k
@@ -69,6 +78,12 @@
     _harvey = nil;
 }
 
+
+
+- (void)setAPIKey:(NSString *)key
+{
+    [self setk:key];
+}
 
 
 - (void)setk:(NSString *)harvey
@@ -728,6 +743,7 @@
 				// We noted a connexion to clear, so remove it
 
 				[_connexions removeObject:conn];
+				numberOfConnections = _connexions.count;
 				conn = nil;
 			}
 		}
@@ -788,6 +804,7 @@
 			}
 
 			[_connexions removeObject:conn];
+			numberOfConnections = _connexions.count;
 		}
 	}
 
@@ -945,6 +962,7 @@
     // Add the new connection to the list
 
     [_connexions addObject:aConnexion];
+	numberOfConnections = _connexions.count;
 	return aConnexion;
 }
 
@@ -987,6 +1005,7 @@
 		}
 
 		[_connexions removeAllObjects];
+		numberOfConnections = _connexions.count;
 	}
 }
 
@@ -1067,6 +1086,7 @@
 
 	[connection cancel];
 	[_connexions removeObject:connection];
+	numberOfConnections = _connexions.count;
 
 	if (_connexions.count < 1)
 	{
@@ -1116,7 +1136,11 @@
 
 			[connection cancel];
 
-			if (conn) [_connexions removeObject:conn];
+			if (conn)
+			{
+				[_connexions removeObject:conn];
+				numberOfConnections = _connexions.count;
+			}
 
 			if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
@@ -1142,6 +1166,7 @@
 				{
 					[connection cancel];
 					[_connexions removeObject:conn];
+					numberOfConnections = _connexions.count;
 					[aLogDevice removeObjectForKey:@"connection"];
 					[self startLogging:[aLogDevice objectForKey:@"id"]];
 				}
@@ -1273,7 +1298,12 @@ didReceiveResponse:(NSURLResponse *)response
 				}
 			}
 
-			if (conn != nil) [_connexions removeObject:conn];
+			if (conn != nil)
+			{
+				[_connexions removeObject:conn];
+				numberOfConnections = _connexions.count;
+			}
+
 			completionHandler(NSURLSessionResponseCancel);
 			return;
 		}
@@ -1391,7 +1421,11 @@ didReceiveResponse:(NSURLResponse *)response
 			}
 		}
 
-		if (conn) [_connexions removeObject:conn];
+		if (conn)
+		{
+			[_connexions removeObject:conn];
+			numberOfConnections = _connexions.count;
+		}
 
 		// Check if there are any active connections
 
@@ -1641,6 +1675,7 @@ didReceiveResponse:(NSURLResponse *)response
 	// Tidy up the connection list
 
 	[_connexions removeObject:connexion];
+	numberOfConnections = _connexions.count;
 	if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
 	// Return the decoded data (or nil)
@@ -1995,6 +2030,12 @@ didReceiveResponse:(NSURLResponse *)response
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
     [self setRequestAuthorization:request];
     [request setHTTPMethod:verb];
+	[request setValue:_userAgent forHTTPHeaderField:@"User-Agent"];
+
+#ifdef DEBUG
+	NSLog(_userAgent);
+#endif
+
     return request;
 }
 

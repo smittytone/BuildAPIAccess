@@ -1,4 +1,4 @@
-# BuildAPIAccess 2.0.0
+# BuildAPIAccess 2.0.1
 
 An Objective-C (Mac OS X / iOS / tvOS) class wrapper for [Electric Imp’s Build API](https://electricimp.com/docs/buildapi/).
 
@@ -62,6 +62,11 @@ If the host application wishes to maintain a full local record of all of a model
 
 ## BuildAPIAccess Version History
 
+### 2.0.1
+
+- Add read-only *numberOfConnections* property (NSUInteger)
+- Add custom user agent string to HTTP requests
+
 ### 2.0.0
 
 - Support for simultaneous log streaming from multiple devices.
@@ -96,6 +101,7 @@ Drag the files `BuildAPIAccess.h`, `BuildAPIAccess.m`, `BuildAPIAccessConstants.
 | *agentCode* | [NSString](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSString_Class/) | Empty string | The most recently retrieved code revision’s agent code |
 | *latestBuild* | [NSInteger](https://developer.apple.com/library/ios/documentation/Cocoa/Reference/Foundation/Miscellaneous/Foundation_DataTypes/#//apple_ref/c/tdef/NSInteger) | -1 | The latest build number of the most recently request model. This is not set until [*getCode:*](#--voidgetcodensstring-modelid) is called |
 | *errorMesage* | [NSString](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSString_Class/) | Empty string | The most recently reported BuildAPIAccess error message |
+| *numberOfConnections* | NSUInteger | 0 | The number of connections currently in flight |
 
 ## BuildAPIAccess Initialization Methods
 
@@ -266,3 +272,11 @@ Key | Type | Notes
 *col* | NSNumber | The column at which the error was detected |
 
 Note that *codeErrors* is cleared every time code is uploaded &mdash; it only contains the results of the most recent syntax check.
+
+## HTTP User Agent
+
+From version 2.0.1, BuildAPIAccess issues HTTPS requests with a custom user agent string of the following form:
+
+```
+BuildAPIAcces/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
+```
