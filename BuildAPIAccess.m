@@ -41,6 +41,10 @@
         _useSessionFlag = YES;
 
 		_baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
+
+		NSOperatingSystemVersion sysVer = [[NSProcessInfo processInfo] operatingSystemVersion];
+		_userAgent = [NSString stringWithFormat:@"BuildAPIAccess/2.0.1 %@/%@.%@ (macOS %li.%li.%li)", [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleExecutable"], [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"],
+					  [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"], (long)sysVer.majorVersion, (long)sysVer.minorVersion, (long)sysVer.patchVersion];
     }
 
     return self;
@@ -2006,6 +2010,12 @@ didReceiveResponse:(NSURLResponse *)response
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
     [self setRequestAuthorization:request];
     [request setHTTPMethod:verb];
+	[request setValue:_userAgent forHTTPHeaderField:@"User-Agent"];
+
+#ifdef DEBUG
+	NSLog(_userAgent);
+#endif
+
     return request;
 }
 
