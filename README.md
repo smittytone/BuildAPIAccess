@@ -275,3 +275,11 @@ Key | Type | Notes
 *col* | NSNumber | The column at which the error was detected |
 
 Note that *codeErrors* is cleared every time code is uploaded &mdash; it only contains the results of the most recent syntax check.
+
+## HTTP User Agent
+
+From version 2.0.1, BuildAPIAccess issues HTTPS requests with a custom user agent string of the following form:
+
+```
+BuildAPIAcces/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
+```
