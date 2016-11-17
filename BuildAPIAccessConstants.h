@@ -1,14 +1,14 @@
 
-//  Copyright (c) 2015-16 Tony Smith. All rights reserved.
+//  Copyright (c) 2015-17 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
-//  BuildAPIAccess 2.0.1
+//  BuildAPIAccess 3.0.0
 
 
 #ifndef BuildAPIContants_h
 #define BuildAPIContants_h
 
-#define kBuildAPIAccessVersion @"2.0.1"
+#define kBuildAPIAccessVersion @"3.0.0"
 
 
 #define kConnectTypeNone					0
@@ -34,7 +34,7 @@
 
 
 #define kBaseAPIURL @"https://build.electricimp.com"
-#define kAPIVersion @"/v4/"
+#define kAPIVersion @"/v5/"
 
 
 #define kAllLogs 0

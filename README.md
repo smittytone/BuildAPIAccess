@@ -1,10 +1,10 @@
-# BuildAPIAccess 2.0.1
+# BuildAPIAccess 3.0.0
 
 An Objective-C (Mac OS X / iOS / tvOS) class wrapper for [Electric Imp’s Build API](https://electricimp.com/docs/buildapi/).
 
 BuildAPIAccess requires the (included) class Connexion, a simple convenience class for bundling either an [NSURLConnection](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSURLConnection_Class/index.html) or [NSURLSession](https://developer.apple.com/library/prerelease/mac/documentation/Foundation/Reference/NSURLSession_class/index.html) instance and associated Build API connection data.
 
-BuildAPIAccess 2.0.0 supports both NSURLSession and NSURLConnection. The former is Apple’s preferred mechanism and the only one of the two supported by tvOS. For more information, see [Initialization Methods](#buildapiaccess-initialization-methods).
+BuildAPIAccess 3.0.0 supports both NSURLSession and NSURLConnection. The former is Apple’s preferred mechanism and the only one of the two supported by tvOS. For more information, see [Initialization Methods](#buildapiaccess-initialization-methods).
 
 ### Build API Authorization
 
@@ -14,9 +14,9 @@ Each *BuildAPIAccess* instance does not maintain a permanent record of the selec
 
 ## Licence and Copyright
 
-BuildAPIAccess is &copy; Tony Smith, 2015-2016 and is offered under the terms of the MIT licence.
+BuildAPIAccess is &copy; Tony Smith, 2015-2017 and is offered under the terms of the MIT licence.
 
-The BuildAPI is &copy; Electric Imp, 2014-2016.
+The BuildAPI is &copy; Electric Imp, 2014-2017.
 
 ## Build API Entities
 
@@ -61,6 +61,10 @@ A model’s code revisions are not retained by *BuildAPIAccess* but are retrieve
 If the host application wishes to maintain a full local record of all of a model’s code revisions, it will need it iterate through each build. A call to the method [*getCode:*](#--voidgetcodensstring-modelid) will record the latest build number in the public property *latestBuild*.
 
 ## BuildAPIAccess Version History
+
+### 3.0.0
+
+- Support for API v5
 
 ### 2.0.1
 

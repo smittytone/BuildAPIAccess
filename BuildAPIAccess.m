@@ -1,8 +1,8 @@
 
-//  Copyright (c) 2015-16 Tony Smith. All rights reserved.
+//  Copyright (c) 2015-17 Tony Smith. All rights reserved.
 //  Issued under the MIT licence
 
-//  BuildAPIAccess 2.0.1
+//  BuildAPIAccess 3.0.0
 
 
 #import "BuildAPIAccess.h"
@@ -1338,7 +1338,7 @@ didReceiveResponse:(NSURLResponse *)response
 			for (Connexion *aConnexion in _connexions) {
 
 				// Run through the connections in our list and add the incoming error code to the correct one
-				
+
 				if (aConnexion.task == dataTask) aConnexion.errorCode = code;
 			}
 		}
@@ -1405,7 +1405,7 @@ didReceiveResponse:(NSURLResponse *)response
 			NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
 			[nc postNotificationName:@"BuildAPILogStreamEnd" object:[loggingDevice objectForKey:@"id"]];
 		}
-		
+
 		// Terminate the failed connection and remove it from the list of current connections
 
 		Connexion *conn = nil;
@@ -1450,7 +1450,7 @@ didReceiveResponse:(NSURLResponse *)response
 	[task cancel];
 
 	// If we have a valid action code, process the received data
-	
+
 	if (currentConnexion.actionCode != kConnectTypeNone) [self processResult:currentConnexion :[self processConnection:currentConnexion]];
 }
 
@@ -1486,7 +1486,7 @@ didReceiveResponse:(NSURLResponse *)response
 		[self reportError];
 
 		// Are we streaming?
-		
+
 		for (NSMutableDictionary *aLogDevice in _loggingDevices)
 		{
 			Connexion *devConnexion = [aLogDevice objectForKey:@"connection"];
@@ -1560,7 +1560,7 @@ didReceiveResponse:(NSURLResponse *)response
             {
                 [codeErrors removeAllObjects];
             }
-            
+
 			// Is the problem a code syntax error?
 
 			if ([errString compare:@"CompileFailed"] == NSOrderedSame)
