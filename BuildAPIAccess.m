@@ -14,6 +14,8 @@
 @synthesize devices, models, errorMessage, statusMessage, deviceCode, agentCode;
 @synthesize codeErrors, numberOfConnections;
 
+@synthesize products, deviceGroups, deployments, currentDeployment;
+
 
 #pragma mark - Initialization Methods
 
@@ -29,7 +31,13 @@
         devices = [[NSMutableArray alloc] init];
         models = [[NSMutableArray alloc] init];
 
+		products = [[NSMutableArray alloc] init];
+		deviceGroups = [[NSMutableArray alloc] init];
+		deployments = [[NSMutableArray alloc] init];
+
         errorMessage = @"";
+
+		currentDeployment = nil;
 
         // Private entities
 
@@ -295,6 +303,92 @@
 	else
 	{
 		errorMessage = @"[ERROR] Could not create a request to get logs from the device.";
+		[self reportError];
+	}
+}
+
+
+
+#pragma mark Data Request Methods (v5 API)
+
+- (void)getProducts
+{
+	// Set up a GET request to /products
+
+	NSMutableURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"products"]];
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeGetProducts];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to list your products.";
+		[self reportError];
+	}
+}
+
+
+
+- (void)getProducts:(BOOL)withDeviceGroups
+{
+	_followOnFlag = withDeviceGroups;
+	[self getProducts];
+}
+
+
+
+- (void)getProductDeviceGroups
+{
+	// Set up a GET request to /device_groups
+
+	NSMutableURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"device_groups"]];
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeGetDeviceGroups];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to list your device groups.";
+		[self reportError];
+	}
+}
+
+
+
+- (void)getDeployments
+{
+	// Set up a GET request to /deployments
+
+	NSMutableURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"deployments"]];
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeGetDeployments];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to get current deployments.";
+		[self reportError];
+	}
+}
+
+
+
+- (void)getDeployment:(NSString *)deploymentID
+{
+	// Set up a GET request to /deployments/[id]
+
+	NSMutableURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingFormat:@"deployments/%@", deploymentID]];
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeGetDeployment];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to get the required deployment.";
 		[self reportError];
 	}
 }
@@ -621,6 +715,73 @@
 
 
 
+#pragma mark Action Methods 9(v5 API)
+
+- (void)newProduct:(NSString *)name :(NSString *)description
+{
+	// Set up a POST request to /products
+
+	if (name == nil || name.length == 0)
+	{
+		errorMessage = @"[ERROR] Could not create a request to create the new product: invalid product name.";
+		[self reportError];
+		return;
+	}
+
+	if (description == nil) description = @"";
+
+	NSArray *keys = [NSArray arrayWithObjects:@"name", @"descripton", nil];
+	NSArray *vals = [NSArray arrayWithObjects:name, description, nil];
+	NSDictionary *pDictionary = [NSDictionary dictionaryWithObjects:vals forKeys:keys];
+	NSMutableURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:@"products"] :pDictionary];
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeNewProduct];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to create the new product.";
+		[self reportError];
+	}
+}
+
+
+
+- (void)updateProduct:(NSString *)productID :(NSString *)key :(NSString *)value
+{
+	// Set up a PATCH request to /products
+
+	if (productID == nil || productID.length == 0)
+	{
+		errorMessage = @"[ERROR] Could not create a request to create the new product: invalid product ID.";
+		[self reportError];
+		return;
+	}
+
+	if (key == nil || value.length == 0)
+	{
+		errorMessage = @"[ERROR] Could not create a request to create the new product: data field name.";
+		[self reportError];
+		return;
+	}
+
+	NSDictionary *pDictionary = [self makeDictionary:key :value];
+	NSMutableURLRequest *request = [self makePATCHrequest:[_baseURL stringByAppendingFormat:@"products/%@", productID] :pDictionary];
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeUpdateProduct];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to create the new product.";
+		[self reportError];
+	}
+}
+
+
+
 #pragma mark - Logging Methods
 
 
@@ -906,6 +1067,27 @@
 - (NSMutableURLRequest *)makeDELETErequest:(NSString *)path
 {
     return [self makeRequest:@"DELETE" :path];
+}
+
+
+
+- (NSMutableURLRequest *)makePATCHrequest:(NSString *)path :(NSDictionary *)bodyDictionary
+{
+	NSError *error = nil;
+
+	NSMutableURLRequest *request = [self makeRequest:@"PATCH" :path];
+	[request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+
+	if (bodyDictionary) [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:bodyDictionary options:0 error:&error]];
+
+	if (error)
+	{
+		return nil;
+	}
+	else
+	{
+		return request;
+	}
 }
 
 
@@ -2004,7 +2186,160 @@ didReceiveResponse:(NSURLResponse *)response
 					break;
                 }
 
-                default:
+#pragma mark v5 API outcomes
+
+				case kConnectTypeGetProducts:
+				{
+					// We asked for a list of all the products, so replace the current list with
+					// the newly returned data. This may have been called for an initial list at
+					// start-up, or later if a model has changed name
+
+					[products removeAllObjects];
+
+					NSArray *prods = [data objectForKey:@"data"];
+
+					for (NSDictionary *product in prods)
+					{
+						// Add each product to the list
+						// Each model has the following keys:
+						// attributes - dictionary
+						//   description - string
+						//   name - string
+						// id - string
+						// type - string
+
+						[products addObject:product];
+					}
+
+					// Signal the host app that the list of models is ready to read
+
+					[nc postNotificationName:@"BuildAPIGotProductsList" object:self];
+
+					// Have we been asked to automatically get the list of devices too?
+
+					if (_followOnFlag)
+					{
+						_followOnFlag = NO;
+						[self getProductDeviceGroups];
+					}
+
+					break;
+				}
+
+				case kConnectTypeGetDeviceGroups:
+				{
+					// We asked for a list of all the device groups, so replace the current list with
+					// the newly returned data. This may have been called for an initial list at
+					// start-up, or later if a device has changed name or model allocation
+
+					[deviceGroups removeAllObjects];
+
+					NSArray *dgs = [data objectForKey:@"data"];
+
+					for (NSDictionary *deviceGroup in dgs)
+					{
+						// Add each device group to the list
+						// Each device group has the following keys:
+						// id - string
+						// type - string
+						// attributes - dictionary
+						//   name - string
+						//   kind - string
+						// relationships - dictionary
+						//   target_group - dictionary
+						//     data - device group object
+
+						[deviceGroups addObject:deviceGroup];
+					}
+
+					// Signal the host app that the list of devices is ready to read
+
+					[nc postNotificationName:@"BuildAPIGotDeviceGroupsList" object:self];
+					break;
+				}
+
+				case kConnectTypeGetDeployments:
+				{
+					// We asked for a list of all the deployments, so replace the current list with
+					// the newly returned data. This may have been called for an initial list at
+					// start-up, or later if a device has changed name or model allocation
+
+					[deployments removeAllObjects];
+
+					NSArray *deps = [data objectForKey:@"data"];
+
+					for (NSDictionary *deployment in deps)
+					{
+						// Add each device group to the list
+						// Each device group has the following keys:
+						// id - string
+						// type - string
+						// attributes - dictionary
+						//   agent_code - string
+						//   device_code - string
+						//   agent_sha256 - string
+						//   device_sha256 - string
+						//   combined_sha256 - string
+						//   created_on - string
+						//   flagged - Boolean
+
+						[deployments addObject:deployment];
+					}
+
+					// Signal the host app that the list of devices is ready to read
+
+					[nc postNotificationName:@"BuildAPIGotDeploymentsList" object:self];
+					break;
+				}
+
+				case kConnectTypeGetDeployment:
+				{
+					// We asked for a code revision, which we make available to the main app
+
+					NSArray *dep = [data objectForKey:@"data"];
+
+					currentDeployment = [dep objectAtIndex:0]; // CHECK
+
+					// Tell the main app we have the code in the deployment dictionary
+
+					[nc postNotificationName:@"BuildAPIGotDeployment" object:currentDeployment];
+
+					break;
+				}
+
+				case kConnectTypeNewProduct:
+				{
+					// We created a new product, so we need to update the products list so that the
+					// change is reflected in our local data. First, notify the host app that
+					// the model creation was a success
+
+					[nc postNotificationName:@"BuildAPIProductCreated" object:nil];
+
+					// Now get a new list of products and then a new list of deviceGroups
+
+					_followOnFlag = YES; // Necessary now?
+					[self getProducts];
+					break;
+				}
+
+				case kConnectTypeUpdateProduct:
+				{
+					// We asked that the product be updated, which may include a name-change or
+					// device assignment so we update the model and device lists so that the change
+					// is reflected in our local data.
+
+					// Tell the main app we have successfully updated the model
+
+					[nc postNotificationName:@"BuildAPIProductUpdated" object:nil];
+
+					// Now get a new list of models, and then a new list of devices
+
+					_followOnFlag = YES;
+					[self getProducts];
+					break;
+				}
+
+				default:
                     break;
             }
         }
@@ -2031,12 +2366,7 @@ didReceiveResponse:(NSURLResponse *)response
     [self setRequestAuthorization:request];
     [request setHTTPMethod:verb];
 	[request setValue:_userAgent forHTTPHeaderField:@"User-Agent"];
-
-#ifdef DEBUG
-	NSLog(_userAgent);
-#endif
-
-    return request;
+	return request;
 }
 
 

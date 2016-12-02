@@ -25,8 +25,15 @@
 - (instancetype)initForNSURLSession;
 - (instancetype)initForNSURLConnection;
 - (void)clrk;
+- (void)clearAPIKey;
 - (void)setk:(NSString *)harvey;
+- (void)setAPIKey:(NSString *)harvey;
 - (void)killAllConnections;
+
+// v5 Data Request Methods
+
+- (void)getProducts;
+- (void)getProducts:(BOOL)withDeviceGroups;
 
 // Data Request Methods
 
@@ -89,14 +96,20 @@
 - (void)reportError;
 
 
-@property (nonatomic, strong) NSMutableArray *devices;
-@property (nonatomic, strong) NSMutableArray *models;
+@property (nonatomic, strong) NSMutableArray *devices; // v4 MAY remove
+@property (nonatomic, strong) NSMutableArray *models; // v4 MAY remove
 @property (nonatomic, strong) NSMutableArray *codeErrors;
 @property (nonatomic, strong) NSString *errorMessage;
 @property (nonatomic, strong) NSString *statusMessage;
-@property (nonatomic, strong) NSString *deviceCode;
-@property (nonatomic, strong) NSString *agentCode;
+@property (nonatomic, strong) NSString *deviceCode; // v4 MAY remove
+@property (nonatomic, strong) NSString *agentCode; // v4 MAY remove
 @property (nonatomic, readonly) NSUInteger numberOfConnections;
 
+// v5 API entities
+
+@property (nonatomic, strong) NSMutableArray *products;
+@property (nonatomic, strong) NSMutableArray *deviceGroups;
+@property (nonatomic, strong) NSMutableArray *deployments;
+@property (nonatomic, strong) NSMutableDictionary *currentDeployment;
 
 @end

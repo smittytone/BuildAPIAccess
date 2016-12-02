@@ -28,12 +28,20 @@
 #define kConnectTypeGetLogEntriesRanged		14
 #define kConnectTypeGetLogEntriesStreamed   15
 
+#define kConnectTypeGetProducts				20
+#define kConnectTypeGetDeviceGroups			21
+#define kConnectTypeGetDeployments			22
+#define kConnectTypeGetDeployment			23
+
+#define kConnectTypeNewProduct				30
+#define kConnectTypeUpdateProduct			31
+
 #define kConnectTypeGetRevisions			99
 #define kConnectTypeGetRevision				99
 #define kConnectTypeLogin					100
 
 
-#define kBaseAPIURL @"https://build.electricimp.com"
+#define kBaseAPIURL @"https://api.electricimp.com"
 #define kAPIVersion @"/v5/"
 
 
