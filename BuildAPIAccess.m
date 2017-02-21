@@ -37,9 +37,7 @@
         errorMessage = @"";
 		loggedInFlag = NO;
 
-		dataLoadedFlag = NO;
-
-        // Private entities
+		// Private entities
 
         _connexions = [[NSMutableArray alloc] init];
 		_loggingDevices = [[NSMutableArray alloc] init];
@@ -2158,7 +2156,7 @@ didReceiveResponse:(NSURLResponse *)response
 		// User has changed the page size, so we need to pass this in now to set it
 
 		_pagesizeChangeFlag = NO;
-		path = [path stringByAppendingFormat:@"?pagesize=%li", _pagesize];
+		path = [path stringByAppendingFormat:@"?page size=%li", _pagesize];
 	}
 
 	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
