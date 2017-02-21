@@ -36,12 +36,14 @@
 #define kConnectTypeNewProduct				30
 #define kConnectTypeUpdateProduct			31
 
+#define kConnectTypeGetToken				50
+
 #define kConnectTypeGetRevisions			99
 #define kConnectTypeGetRevision				99
 #define kConnectTypeLogin					100
 
 
-#define kBaseAPIURL @"https://api.electricimp.com"
+#define kBaseAPIURL @"https://api.ei.run" //@"https://api.electricimp.com"
 #define kAPIVersion @"/v5/"
 
 

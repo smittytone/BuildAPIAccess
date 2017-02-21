@@ -14,7 +14,8 @@
 
 {
     NSMutableArray *_connexions, *_loggingDevices;
-    NSString *_baseURL, *_currentModelID, *_logURL, *_lastStamp, *_harvey, *_userAgent;
+	NSDictionary *_token;
+    NSString *_baseURL, *_currentModelID, *_logURL, *_lastStamp, *_userAgent, *_username, *_password;
     BOOL _followOnFlag, _useSessionFlag;
 }
 
@@ -22,12 +23,8 @@
 // Initialization Methods
 
 - (instancetype)init NS_DESIGNATED_INITIALIZER;
-- (instancetype)initForNSURLSession;
-- (instancetype)initForNSURLConnection;
-- (void)clrk;
-- (void)clearAPIKey;
-- (void)setk:(NSString *)harvey;
-- (void)setAPIKey:(NSString *)harvey;
+- (void)setCredentials:(NSString *)username :(NSString *)password;
+- (void)getToken;
 - (void)killAllConnections;
 
 // v5 Data Request Methods
@@ -81,7 +78,6 @@
 
 - (NSDictionary *)processConnection:(Connexion *)connexion;
 - (void)processResult:(Connexion *)connexion :(NSDictionary *)data;
-- (NSInteger)checkStatus:(NSDictionary *)data;
 
 // Base64 Methods
 
@@ -96,8 +92,8 @@
 - (void)reportError;
 
 
-@property (nonatomic, strong) NSMutableArray *devices; // v4 MAY remove
-@property (nonatomic, strong) NSMutableArray *models; // v4 MAY remove
+@property (nonatomic, strong) NSMutableArray *devices;
+@property (nonatomic, strong) NSMutableArray *models;  // REMOVE
 @property (nonatomic, strong) NSMutableArray *codeErrors;
 @property (nonatomic, strong) NSString *errorMessage;
 @property (nonatomic, strong) NSString *statusMessage;
@@ -111,5 +107,6 @@
 @property (nonatomic, strong) NSMutableArray *deviceGroups;
 @property (nonatomic, strong) NSMutableArray *deployments;
 @property (nonatomic, strong) NSMutableDictionary *currentDeployment;
+@property (nonatomic, readonly) BOOL loggedInFlag;
 
 @end

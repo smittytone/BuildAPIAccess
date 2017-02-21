@@ -11,8 +11,8 @@
 @implementation BuildAPIAccess
 
 
-@synthesize devices, models, errorMessage, statusMessage, deviceCode, agentCode;
-@synthesize codeErrors, numberOfConnections;
+@synthesize models, devices, errorMessage, statusMessage, deviceCode, agentCode;
+@synthesize codeErrors, numberOfConnections, loggedInFlag;
 
 @synthesize products, deviceGroups, deployments, currentDeployment;
 
@@ -29,13 +29,12 @@
         // Public entities
 
         devices = [[NSMutableArray alloc] init];
-        models = [[NSMutableArray alloc] init];
-
-		products = [[NSMutableArray alloc] init];
+        products = [[NSMutableArray alloc] init];
 		deviceGroups = [[NSMutableArray alloc] init];
 		deployments = [[NSMutableArray alloc] init];
 
         errorMessage = @"";
+		loggedInFlag = NO;
 
 		currentDeployment = nil;
 
@@ -45,7 +44,8 @@
 		_loggingDevices = [[NSMutableArray alloc] init];
         _lastStamp = nil;
         _logURL = nil;
-        _harvey = nil;
+        _username = nil;
+		_password = nil;
         _useSessionFlag = YES;
 
 		_baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
@@ -59,51 +59,72 @@
 }
 
 
-- (instancetype)initForNSURLSession
+- (void)setCredentials:(NSString *)username :(NSString *)password
 {
-    return [self init];
+	if (username.length == 0)
+	{
+		errorMessage = @"[ERROR] Malformed username.";
+		[self reportError];
+		return;
+	}
+
+	if (password.length == 0)
+	{
+		errorMessage = @"[ERROR] Malformed password.";
+		[self reportError];
+		return;
+	}
+
+	_username = username;
+	_password = password;
 }
-
-
-- (instancetype)initForNSURLConnection
-{
-    self = [self init];
-    _useSessionFlag = NO;
-    return self;
-}
-
-
-- (void)clearAPIKey
-{
-    [self clrk];
-}
-
-
-- (void)clrk
-{
-    // Clear the saved API k
-
-    _harvey = nil;
-}
-
-
-
-- (void)setAPIKey:(NSString *)key
-{
-    [self setk:key];
-}
-
-
-- (void)setk:(NSString *)harvey
-{
-    // Set the API k used by the BuildAPIAccess instance
-
-    if (harvey.length > 0) _harvey = harvey;
-}
-
 
 
 #pragma mark - Data Request Methods
+
+
+- (void)getToken
+{
+	if (!_username || !_password)
+	{
+		errorMessage = @"[ERROR] Missing credentials — cannot log in without username and password";
+		[self reportError];
+		return;
+	}
+
+	// Set up a POST request to the /accounts/login URL to get session token
+	// Need unique code here as we do not use the authentication method used by the API
+
+	NSError *error;
+	NSDictionary *bodyDict = @{ @"email" : _username,
+								@"password" : _password};
+
+	NSString *post = [NSString stringWithFormat:@"email=%@&password=%@", _username, _password];
+	NSData *postData = [post dataUsingEncoding:NSASCIIStringEncoding allowLossyConversion:NO];
+	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[kBaseAPIURL stringByAppendingString:@"/account/login"]]];
+	[request setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
+	[request setHTTPMethod:@"POST"];
+	[request setValue:_userAgent forHTTPHeaderField:@"User-Agent"];
+	//[request setHTTPBody:[NSJSONSerialization dataWithJSONObject:bodyDict options:0 error:&error]];
+	[request setHTTPBody:postData];
+
+	if (error)
+	{
+		errorMessage = @"[ERROR] Could not create a request to retrieve a session token.";
+		[self reportError];
+		return;
+	}
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeGetToken];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to retrieve a session token.";
+		[self reportError];
+	}
+}
 
 
 - (void)getModels
@@ -883,14 +904,7 @@
 				{
 					if (aConnexion == (Connexion *)[aLogDevice objectForKey:@"connection"])
 					{
-						if (_useSessionFlag)
-						{
-							[aConnexion.task cancel];
-						}
-						else
-						{
-							[aConnexion.connexion cancel];
-						}
+						[aConnexion.task cancel];
 
 						// Recall the connexion so we don't mutate the array we're enumerating
 
@@ -950,15 +964,7 @@
 					{
 						// ...and remove its connection
 
-						if (_useSessionFlag)
-						{
-							[aConnexion.task cancel];
-						}
-						else
-						{
-							[aConnexion.connexion cancel];
-						}
-
+						[aConnexion.task cancel];
 						conn = aConnexion;
 					}
 				}
@@ -1106,32 +1112,13 @@
 
     if (actionCode == kConnectTypeGetLogEntriesStreamed) [request setTimeoutInterval:3600.0];
 
-    if (_useSessionFlag)
-    {
-        // Use NSURLSession for the connection. Compatible with iOS, tvOS and Mac OS X
+	// Use NSURLSession for the connection. Compatible with iOS, tvOS and Mac OS X
 
-        NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
-															  delegate:self
-														 delegateQueue:[NSOperationQueue mainQueue]];
-        aConnexion.task = [session dataTaskWithRequest:request];
-        [aConnexion.task resume];
-    }
-    else
-    {
-        // Use NSURLConnection for the connection. Compatible with iOS and Mac OS X, but not tvOS
-        // NOTE This approach has been *deprecated* by Apple
-
-        aConnexion.connexion = [[NSURLConnection alloc] initWithRequest:request delegate:self];
-
-        if (!aConnexion.connexion)
-        {
-            // Inform the user that the connection failed.
-
-            errorMessage = @"[ERROR] Could not establish a connection to the Electric Imp impCloud.";
-            [self reportError];
-            return nil;
-        }
-    }
+	NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
+														  delegate:self
+													 delegateQueue:[NSOperationQueue mainQueue]];
+	aConnexion.task = [session dataTaskWithRequest:request];
+	[aConnexion.task resume];
 
     if (_connexions.count == 0)
     {
@@ -1176,264 +1163,12 @@
 
 		for (Connexion *aConnexion in _connexions)
 		{
-			if (_useSessionFlag)
-			{
-				[aConnexion.task cancel];
-			}
-			else
-			{
-				[aConnexion.connexion cancel];
-			}
+			[aConnexion.task cancel];
 		}
 
 		[_connexions removeAllObjects];
 		numberOfConnections = _connexions.count;
 	}
-}
-
-
-
-#pragma mark - NSURLConnection Delegate Methods
-
-
-- (BOOL)connection:(NSURLConnection *)connection canAuthenticateAgainstProtectionSpace:(NSURLProtectionSpace *)protectionSpace
-{
-	// Because the Build API uses Basic authentication, this is probably unnecessary,
-	// but retain for future use as required
-
-	if (protectionSpace.authenticationMethod == NSURLAuthenticationMethodHTTPBasic ||
-		protectionSpace.authenticationMethod == NSURLAuthenticationMethodDefault)
-	{
-		return YES;
-	}
-	else
-	{
-		return NO;
-	}
-}
-
-
-
-- (void)connection:(NSURLConnection *)connection didReceiveAuthenticationChallenge:(NSURLAuthenticationChallenge *)challenge
-{
-	// Because the Build API uses Basic authentication, this is probably unnecessary,
-	// but retain for future use as required
-
-	NSURLCredential *bonaFides;
-
-	if (challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust)
-	{
-		bonaFides = [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust];
-	}
-	else
-	{
-		bonaFides = [NSURLCredential credentialWithUser:[self encodeBase64String:_harvey]
-											   password:[self encodeBase64String:_harvey]
-											persistence:NSURLCredentialPersistenceNone];
-	}
-
-	[[challenge sender] useCredential:bonaFides forAuthenticationChallenge:challenge];
-}
-
-
-
-- (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error
-{
-	// Inform the host app that there was a connection failure
-
-	errorMessage = @"[ERROR] Could not connect to the Electric Imp impCloud.";
-	[self reportError];
-
-	// Is the connection related to a log stream?
-	// If so record the device details as 'loggingDevice'
-
-	NSMutableDictionary *loggingDevice = nil;
-	for (NSMutableDictionary *aLogDevice in _loggingDevices)
-	{
-		Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
-		if (aConnexion.connexion == connection) loggingDevice = aLogDevice;
-	}
-
-	if (loggingDevice)
-	{
-		// This call is prompted by a failed streaming log connection, so remove
-		// the device from the list of streaming devices and notify the host app
-
-		[_loggingDevices removeObject:loggingDevice];
-		NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
-		[nc postNotificationName:@"BuildAPILogStreamEnd" object:[loggingDevice objectForKey:@"id"]];
-	}
-
-	// Terminate the failed connection and remove it from the list of current connections
-
-	[connection cancel];
-	[_connexions removeObject:connection];
-	numberOfConnections = _connexions.count;
-
-	if (_connexions.count < 1)
-	{
-		// If there are no current connections, tell the app to
-		// turn off the connection activity indicator
-
-		[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-	}
-}
-
-
-
-- (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
-{
-	// This delegate method is called when the server responds to the connection request
-	// Use it to trap certain status codes
-
-	NSHTTPURLResponse *rps = (NSHTTPURLResponse *)response;
-	NSInteger code = rps.statusCode;
-
-	if (code > 399)
-	{
-		// The API has responded with a status code that indicates an error
-		// only 409s and 504s kill the connection there and then - others are retained for later use
-
-		if (code == 429)
-		{
-			// Build API rate limit hit
-
-			Connexion *conn = nil;
-
-			for (Connexion *aConnexion in _connexions)
-			{
-				// Run through the connections in our list and add the incoming error code to the correct one
-
-				if (aConnexion.connexion == connection)
-				{
-					// This request has been rate-limited, so we need to recall it in 1+ seconds
-
-					NSArray *values = [NSArray arrayWithObjects:[connection.originalRequest copy], [NSNumber numberWithInteger:aConnexion.actionCode], nil];
-					NSArray *keys = [NSArray arrayWithObjects:@"request", @"actioncode", nil];
-					NSDictionary *dict =[NSDictionary dictionaryWithObjects:values forKeys:keys];
-					[NSTimer scheduledTimerWithTimeInterval:1.1 target:self selector:@selector(relaunchConnection:) userInfo:dict repeats:NO];
-					conn = aConnexion;
-				}
-			}
-
-			[connection cancel];
-
-			if (conn)
-			{
-				[_connexions removeObject:conn];
-				numberOfConnections = _connexions.count;
-			}
-
-			if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-
-			return;
-		}
-
-		if (code == 504)
-		{
-			// Bad Gateway error received - this usually indicates a log stream 'no message' timeout signal from the server
-
-			Connexion *conn = nil;
-
-			for (Connexion *aConnexion in _connexions)
-			{
-				if (aConnexion.connexion == connection) conn = aConnexion;
-			}
-
-			for (NSMutableDictionary *aLogDevice in _loggingDevices)
-			{
-				Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
-
-				if (conn == aConnexion)
-				{
-					[connection cancel];
-					[_connexions removeObject:conn];
-					numberOfConnections = _connexions.count;
-					[aLogDevice removeObjectForKey:@"connection"];
-					[self startLogging:[aLogDevice objectForKey:@"id"]];
-				}
-			}
-		}
-		else
-		{
-			// Allow the connection to pass because we'll handle the error later
-
-			for (Connexion *aConnexion in _connexions)
-			{
-				// Run through the connections in our list and add the incoming error code to the correct one
-
-				if (aConnexion.connexion == connection) aConnexion.errorCode = code;
-			}
-		}
-	}
-	else if (code > 299 && code < 400)
-	{
-
-		// This is a redirect code not an error. This *should* not occur,
-		// but here is a point to trap it just in case
-
-		errorMessage = [NSString stringWithFormat:@"[WARNING] Server redirect status code received: %li", (long)code];
-		[self reportError];
-	}
-}
-
-
-
-- (void)relaunchConnection:(id)userInfo
-{
-	// This method is called in response to the receipt of a status code 429 from the server,
-	// ie. we have been rate-limited. A timer will bring us here in 1.0 seconds
-
-	NSDictionary *dict = (NSDictionary *)userInfo;
-	NSMutableURLRequest *request = [dict objectForKey:@"request"];
-	NSInteger actionCode = [[dict objectForKey:@"actioncode"] integerValue];
-	[self launchConnection:request :actionCode];
-}
-
-
-
-- (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
-{
-	// This delegate method is called when the server sends some data back
-	// Add it to the correct connexion object
-
-	for (Connexion *aConnexion in _connexions)
-	{
-		// Run through the connections in our list and add the incoming data to the correct one
-
-		if (aConnexion.connexion == connection) [aConnexion.data appendData:data];
-	}
-}
-
-
-
-- (void)connectionDidFinishLoading:(NSURLConnection *)connection
-{
-	// All the data has been supplied by the server in response to a connection
-	// Parse the data and, according to the connection activity - update device, create model etc –
-	// apply the results
-
-	Connexion *theCurrentConnexion;
-	id parsedData = nil;
-
-	for (Connexion *aConnexion in _connexions)
-	{
-		// Run through the connections in the list and find the one that has just finished loading
-
-		if (aConnexion.connexion == connection)
-		{
-			theCurrentConnexion = aConnexion;
-			parsedData = [self processConnection:aConnexion];
-		}
-	}
-
-	// End the finished connection and remove it from the list of current connections
-
-	[connection cancel];
-
-	if (theCurrentConnexion.actionCode != kConnectTypeNone) [self processResult:theCurrentConnexion :parsedData];
-
-	theCurrentConnexion = nil;
 }
 
 
@@ -1877,472 +1612,477 @@ didReceiveResponse:(NSURLResponse *)response
         // We have data returned by the server, but does it signal success or failure?
         // Call checkStatus: to find out and only proceed on success
 
-        if ([self checkStatus:data] == kServerSendsSuccess)
-        {
-            NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
-
-            switch (connexion.actionCode)
-            {
-                case kConnectTypeGetModels:
-                {
-                    // We asked for a list of all the models, so replace the current list with
-                    // the newly returned data. This may have been called for an initial list at
-                    // start-up, or later if a model has changed name
-
-                    [models removeAllObjects];
-
-                    NSDictionary *mods = [data objectForKey:@"models"];
-
-                    for (NSDictionary *model in mods)
-                    {
-                        // Add each model to the list
-                        // Each model has the following keys:
-                        // id - string
-                        // name - string
-                        // device - array of devices
-
-                        [models addObject:model];
-                    }
-
-                    // Signal the host app that the list of models is ready to read
-
-                    [nc postNotificationName:@"BuildAPIGotModelsList" object:self];
-
-                    // Have we been asked to automatically get the list of devices too?
-
-                    if (_followOnFlag)
-                    {
-                        _followOnFlag = NO;
-                        [self getDevices];
-                    }
-
-                    break;
-                }
-
-                case kConnectTypeGetDevices:
-                {
-                    // We asked for a list of all the devices, so replace the current list with
-                    // the newly returned data. This may have been called for an initial list at
-                    // start-up, or later if a device has changed name or model allocation
+        NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
 
-                    [devices removeAllObjects];
+		switch (connexion.actionCode)
+		{
+			case kConnectTypeGetModels:
+			{
+				// We asked for a list of all the models, so replace the current list with
+				// the newly returned data. This may have been called for an initial list at
+				// start-up, or later if a model has changed name
 
-                    NSDictionary *devs = [data objectForKey:@"devices"];
+				[models removeAllObjects];
 
-                    for (NSDictionary *device in devs)
-                    {
-                        // Add each model to the list
-                        // Each model has the following keys:
-                        // id - string
-                        // name - string
-                        // powerstate - string
-                        // rssi - integer
-                        // agent_id - string
-                        // agent_status - string
-                        // model_id - string
+				NSDictionary *mods = [data objectForKey:@"models"];
 
-                        // Convert the loaded device dictionary into a mutable dictionary as we may
-                        // have the change values, ie. the name if it is <null>
+				for (NSDictionary *model in mods)
+				{
+					// Add each model to the list
+					// Each model has the following keys:
+					// id - string
+					// name - string
+					// device - array of devices
 
-                        NSMutableDictionary *newDevice = [NSMutableDictionary dictionaryWithDictionary:device];
+					[models addObject:model];
+				}
 
-                        // Check for unexpected null values for certain keys
+				// Signal the host app that the list of models is ready to read
 
-                        NSString *deviceState = [newDevice valueForKey:@"powerstate"];
-						if ((NSNull *)deviceState == [NSNull null])
-						{
-							// 'powerstate' is null for some unexpected reason - assume device is offline
-							[newDevice setObject:@"offline" forKey:@"powerstate"];
-						}
+				[nc postNotificationName:@"BuildAPIGotModelsList" object:self];
 
-						deviceState = [newDevice valueForKey:@"agent_status"];
-						if ((NSNull *)deviceState == [NSNull null])
-						{
-							// 'agent_status' is null for some unexpected reason - assume agent is offline
-							[newDevice setObject:@"offline" forKey:@"agent_status"];
-						}
+				// Have we been asked to automatically get the list of devices too?
 
-                        [devices addObject:newDevice];
-                    }
+				if (_followOnFlag)
+				{
+					_followOnFlag = NO;
+					[self getDevices];
+				}
 
-                    // Signal the host app that the list of devices is ready to read
+				break;
+			}
 
-                    [nc postNotificationName:@"BuildAPIGotDevicesList" object:self];
-                    break;
-                }
+			case kConnectTypeGetDevices:
+			{
+				// We asked for a list of all the devices, so replace the current list with
+				// the newly returned data. This may have been called for an initial list at
+				// start-up, or later if a device has changed name or model allocation
 
-                case kConnectTypePostCode:
-                {
-                    // We posted a new code revision to a model, so just notify the host app that this succeeded
+				[devices removeAllObjects];
 
-                    [nc postNotificationName:@"BuildAPIPostedCode" object:nil];
-                    break;
-                }
+				NSDictionary *devs = [data objectForKey:@"devices"];
 
-                case kConnectTypeRestartDevice:
-                {
-                    // We asked that the current device or all the current model's device be restarted,
-                    // so just notify the host app that this succeeded
+				for (NSDictionary *device in devs)
+				{
+					// Add each model to the list
+					// Each model has the following keys:
+					// id - string
+					// name - string
+					// powerstate - string
+					// rssi - integer
+					// agent_id - string
+					// agent_status - string
+					// model_id - string
 
-                    [nc postNotificationName:@"BuildAPIDeviceRestarted" object:nil];
-                    break;
-                }
+					// Convert the loaded device dictionary into a mutable dictionary as we may
+					// have the change values, ie. the name if it is <null>
 
-                case kConnectTypeAssignDeviceToModel:
-                {
-                    // We asked that the current device be assigned to another model,
-                    // so just notify the host app that this succeeded
+					NSMutableDictionary *newDevice = [NSMutableDictionary dictionaryWithDictionary:device];
 
-                    [nc postNotificationName:@"BuildAPIDeviceAssigned" object:nil];
+					// Check for unexpected null values for certain keys
 
-                    // Now refresh the list of models and then a new list of devices
-
-                    _followOnFlag = YES;
-                    [self getModels];
-                    break;
-                }
-
-                case kConnectTypeNewModel:
-                {
-                    // We created a new model, so we need to update the models list so that the
-                    // change is reflected in our local data. First, notify the host app that
-                    // the model creation was a success
-
-                    [nc postNotificationName:@"BuildAPIModelCreated" object:nil];
-
-                    // Now get a new list of models and then a new list of devices
-
-                    _followOnFlag = YES;
-                    [self getModels];
-                    break;
-                }
-
-                case kConnectTypeDeleteModel:
-                {
-                    // We deleted a new model, so we need to update the models list so that the
-                    // change is reflected locally
-
-                    // Tell the main app we have successfully deleted the model
-
-                    [nc postNotificationName:@"BuildAPIModelDeleted" object:nil];
-
-                    // Now get a new list of models and then a new list of devices
-
-                    _followOnFlag = YES;
-                    [self getModels];
-                    break;
-                }
-
-                case kConnectTypeUpdateDevice:
-                {
-                    // We asked that the device information be updated, which may include a name-change or
-                    // model assignment so we update the model and device lists so that the change
-                    // is reflected in our local data.
-
-                    // Tell the main app we have successfully updated the device
-
-                    [nc postNotificationName:@"BuildAPIDeviceUpdated" object:nil];
-
-                    // Now get a new list of models and then a new list of devices
-
-                    _followOnFlag = YES;
-                    [self getModels];
-                    break;
-                }
-
-                case kConnectTypeDeleteDevice:
-                {
-                    // We asked that the device be deleted, so we update the model and device lists
-                    // so that the change is reflected in our local data.
-
-                    // Tell the main app we have successfully deleted the device
-
-                    [nc postNotificationName:@"BuildAPIDeviceDeleted" object:nil];
-
-                    // Now get a new list of models and then a new list of devices
-
-                    _followOnFlag = YES;
-                    [self getModels];
-
-                    break;
-                }
-
-                case kConnectTypeUpdateModel:
-                {
-                    // We asked that the model be updated, which may include a name-change or
-                    // device assignment so we update the model and device lists so that the change
-                    // is reflected in our local data.
-
-                    // Tell the main app we have successfully updated the model
-
-                    [nc postNotificationName:@"BuildAPIModelUpdated" object:nil];
-
-                    // Now get a new list of models, and then a new list of devices
-
-                    _followOnFlag = YES;
-                    [self getModels];
-                    break;
-                }
-
-                case kConnectTypeGetCodeLatestBuild:
-                {
-                    // We asked for the most recent code revision. Here we have received all the builds –
-                    // we extract the version of the most recent entry, then request this particular build
-
-                    NSArray *revs = [data objectForKey:@"revisions"];
-                    NSDictionary *latestBuild = [revs objectAtIndex:0];
-                    NSNumber *num = [latestBuild valueForKey:@"version"];
-                    [self getCodeRev:_currentModelID :num.integerValue];
-                    break;
-                }
-
-                case kConnectTypeGetCodeRev:
-                {
-                    // We asked for a code revision, which we make available to the main app
-
-                    NSDictionary *code = [data objectForKey:@"revision"];
-                    deviceCode = [code objectForKey:@"device_code"];
-                    agentCode = [code objectForKey:@"agent_code"];
-
-                    // Tell the main app we have the code in the deviceCode and agentCode properties
-
-                    [nc postNotificationName:@"BuildAPIGotCodeRev" object:nil];
-
-                    break;
-                }
-
-                case kConnectTypeGetLogEntries:
-                {
-                    // We asked for all of a devices log entries, which we return to the main app
-
-                    NSArray *logs = [data objectForKey:@"logs"];
-
-                    // Pass the ball back to the AppDelegate
-
-                    // Tell the main app we have the code in the deviceCode and agentCode properties
-
-                    [nc postNotificationName:@"BuildAPIGotLogs" object:logs];
-
-                    break;
-                }
-
-                case kConnectTypeGetLogEntriesRanged:
-                {
-                    // We asked for a log stream. The first time through the process, we only access the poll_url
-                    // property, which we use to generate a second request, for the 'streamed' data
-
-                    // Save the URL of the log stream and begin logging
-
-					for (NSMutableDictionary *aLogDevice in _loggingDevices)
+					NSString *deviceState = [newDevice valueForKey:@"powerstate"];
+					if ((NSNull *)deviceState == [NSNull null])
 					{
-						Connexion *aConnexion = [aLogDevice objectForKey:@"connection"];
-
-						if (aConnexion == connexion)
-						{
-							// Got a match, so save the poll URL
-
-							[aLogDevice setObject:[kBaseAPIURL stringByAppendingString:[data objectForKey:@"poll_url"]] forKey:@"url"];
-
-							// Start logging with the device ID
-
-							[self startLogging:[aLogDevice objectForKey:@"id"]];
-
-							break;
-						}
+						// 'powerstate' is null for some unexpected reason - assume device is offline
+						[newDevice setObject:@"offline" forKey:@"powerstate"];
 					}
 
-					break;
-                }
-
-                case kConnectTypeGetLogEntriesStreamed:
-                {
-                    // We asked for a log stream and the first streamed entry has arrived. Send it to the main
-                    // app to be displayed, and then re-commence logging
-
-					for (NSMutableDictionary *aLogDevice in _loggingDevices)
+					deviceState = [newDevice valueForKey:@"agent_status"];
+					if ((NSNull *)deviceState == [NSNull null])
 					{
-						// For each logging device, find the one whose connecion matches the one completed
-
-						Connexion *aConnexion = [aLogDevice objectForKey:@"connection"];
-
-						if (aConnexion == connexion)
-						{
-							// Bundle up the device ID and its logs and notify the main app
-
-							NSArray *keys = [NSArray arrayWithObjects:@"id", @"logs", nil];
-							NSArray *values = [NSArray arrayWithObjects:[aLogDevice objectForKey:@"id"], [data objectForKey:@"logs"], nil];
-							NSDictionary *postData = [NSDictionary dictionaryWithObjects:values forKeys:keys];
-
-							[nc postNotificationName:@"BuildAPILogStream" object:postData];
-
-							// Resume logging with the device ID
-
-							[self startLogging:[aLogDevice objectForKey:@"id"]];
-
-							break;
-						}
+						// 'agent_status' is null for some unexpected reason - assume agent is offline
+						[newDevice setObject:@"offline" forKey:@"agent_status"];
 					}
 
-					break;
-                }
+					[devices addObject:newDevice];
+				}
+
+				// Signal the host app that the list of devices is ready to read
+
+				[nc postNotificationName:@"BuildAPIGotDevicesList" object:self];
+				break;
+			}
+
+			case kConnectTypePostCode:
+			{
+				// We posted a new code revision to a model, so just notify the host app that this succeeded
+
+				[nc postNotificationName:@"BuildAPIPostedCode" object:nil];
+				break;
+			}
+
+			case kConnectTypeRestartDevice:
+			{
+				// We asked that the current device or all the current model's device be restarted,
+				// so just notify the host app that this succeeded
+
+				[nc postNotificationName:@"BuildAPIDeviceRestarted" object:nil];
+				break;
+			}
+
+			case kConnectTypeAssignDeviceToModel:
+			{
+				// We asked that the current device be assigned to another model,
+				// so just notify the host app that this succeeded
+
+				[nc postNotificationName:@"BuildAPIDeviceAssigned" object:nil];
+
+				// Now refresh the list of models and then a new list of devices
+
+				_followOnFlag = YES;
+				[self getModels];
+				break;
+			}
+
+			case kConnectTypeNewModel:
+			{
+				// We created a new model, so we need to update the models list so that the
+				// change is reflected in our local data. First, notify the host app that
+				// the model creation was a success
+
+				[nc postNotificationName:@"BuildAPIModelCreated" object:nil];
+
+				// Now get a new list of models and then a new list of devices
+
+				_followOnFlag = YES;
+				[self getModels];
+				break;
+			}
+
+			case kConnectTypeDeleteModel:
+			{
+				// We deleted a new model, so we need to update the models list so that the
+				// change is reflected locally
+
+				// Tell the main app we have successfully deleted the model
+
+				[nc postNotificationName:@"BuildAPIModelDeleted" object:nil];
+
+				// Now get a new list of models and then a new list of devices
+
+				_followOnFlag = YES;
+				[self getModels];
+				break;
+			}
+
+			case kConnectTypeUpdateDevice:
+			{
+				// We asked that the device information be updated, which may include a name-change or
+				// model assignment so we update the model and device lists so that the change
+				// is reflected in our local data.
+
+				// Tell the main app we have successfully updated the device
+
+				[nc postNotificationName:@"BuildAPIDeviceUpdated" object:nil];
+
+				// Now get a new list of models and then a new list of devices
+
+				_followOnFlag = YES;
+				[self getModels];
+				break;
+			}
+
+			case kConnectTypeDeleteDevice:
+			{
+				// We asked that the device be deleted, so we update the model and device lists
+				// so that the change is reflected in our local data.
+
+				// Tell the main app we have successfully deleted the device
+
+				[nc postNotificationName:@"BuildAPIDeviceDeleted" object:nil];
+
+				// Now get a new list of models and then a new list of devices
+
+				_followOnFlag = YES;
+				[self getModels];
+
+				break;
+			}
+
+			case kConnectTypeUpdateModel:
+			{
+				// We asked that the model be updated, which may include a name-change or
+				// device assignment so we update the model and device lists so that the change
+				// is reflected in our local data.
+
+				// Tell the main app we have successfully updated the model
+
+				[nc postNotificationName:@"BuildAPIModelUpdated" object:nil];
+
+				// Now get a new list of models, and then a new list of devices
+
+				_followOnFlag = YES;
+				[self getModels];
+				break;
+			}
+
+			case kConnectTypeGetCodeLatestBuild:
+			{
+				// We asked for the most recent code revision. Here we have received all the builds –
+				// we extract the version of the most recent entry, then request this particular build
+
+				NSArray *revs = [data objectForKey:@"revisions"];
+				NSDictionary *latestBuild = [revs objectAtIndex:0];
+				NSNumber *num = [latestBuild valueForKey:@"version"];
+				[self getCodeRev:_currentModelID :num.integerValue];
+				break;
+			}
+
+			case kConnectTypeGetCodeRev:
+			{
+				// We asked for a code revision, which we make available to the main app
+
+				NSDictionary *code = [data objectForKey:@"revision"];
+				deviceCode = [code objectForKey:@"device_code"];
+				agentCode = [code objectForKey:@"agent_code"];
+
+				// Tell the main app we have the code in the deviceCode and agentCode properties
+
+				[nc postNotificationName:@"BuildAPIGotCodeRev" object:nil];
+
+				break;
+			}
+
+			case kConnectTypeGetLogEntries:
+			{
+				// We asked for all of a devices log entries, which we return to the main app
+
+				NSArray *logs = [data objectForKey:@"logs"];
+
+				// Pass the ball back to the AppDelegate
+
+				// Tell the main app we have the code in the deviceCode and agentCode properties
+
+				[nc postNotificationName:@"BuildAPIGotLogs" object:logs];
+
+				break;
+			}
+
+			case kConnectTypeGetLogEntriesRanged:
+			{
+				// We asked for a log stream. The first time through the process, we only access the poll_url
+				// property, which we use to generate a second request, for the 'streamed' data
+
+				// Save the URL of the log stream and begin logging
+
+				for (NSMutableDictionary *aLogDevice in _loggingDevices)
+				{
+					Connexion *aConnexion = [aLogDevice objectForKey:@"connection"];
+
+					if (aConnexion == connexion)
+					{
+						// Got a match, so save the poll URL
+
+						[aLogDevice setObject:[kBaseAPIURL stringByAppendingString:[data objectForKey:@"poll_url"]] forKey:@"url"];
+
+						// Start logging with the device ID
+
+						[self startLogging:[aLogDevice objectForKey:@"id"]];
+
+						break;
+					}
+				}
+
+				break;
+			}
+
+			case kConnectTypeGetLogEntriesStreamed:
+			{
+				// We asked for a log stream and the first streamed entry has arrived. Send it to the main
+				// app to be displayed, and then re-commence logging
+
+				for (NSMutableDictionary *aLogDevice in _loggingDevices)
+				{
+					// For each logging device, find the one whose connecion matches the one completed
+
+					Connexion *aConnexion = [aLogDevice objectForKey:@"connection"];
+
+					if (aConnexion == connexion)
+					{
+						// Bundle up the device ID and its logs and notify the main app
+
+						NSArray *keys = [NSArray arrayWithObjects:@"id", @"logs", nil];
+						NSArray *values = [NSArray arrayWithObjects:[aLogDevice objectForKey:@"id"], [data objectForKey:@"logs"], nil];
+						NSDictionary *postData = [NSDictionary dictionaryWithObjects:values forKeys:keys];
+
+						[nc postNotificationName:@"BuildAPILogStream" object:postData];
+
+						// Resume logging with the device ID
+
+						[self startLogging:[aLogDevice objectForKey:@"id"]];
+
+						break;
+					}
+				}
+
+				break;
+			}
 
 #pragma mark v5 API outcomes
 
-				case kConnectTypeGetProducts:
+			case kConnectTypeGetProducts:
+			{
+				// We asked for a list of all the products, so replace the current list with
+				// the newly returned data. This may have been called for an initial list at
+				// start-up, or later if a model has changed name
+
+				[products removeAllObjects];
+
+				NSArray *prods = [data objectForKey:@"data"];
+
+				for (NSDictionary *product in prods)
 				{
-					// We asked for a list of all the products, so replace the current list with
-					// the newly returned data. This may have been called for an initial list at
-					// start-up, or later if a model has changed name
+					// Add each product to the list
+					// Each model has the following keys:
+					// attributes - dictionary
+					//   description - string
+					//   name - string
+					// id - string
+					// type - string
 
-					[products removeAllObjects];
-
-					NSArray *prods = [data objectForKey:@"data"];
-
-					for (NSDictionary *product in prods)
-					{
-						// Add each product to the list
-						// Each model has the following keys:
-						// attributes - dictionary
-						//   description - string
-						//   name - string
-						// id - string
-						// type - string
-
-						[products addObject:product];
-					}
-
-					// Signal the host app that the list of models is ready to read
-
-					[nc postNotificationName:@"BuildAPIGotProductsList" object:self];
-
-					// Have we been asked to automatically get the list of devices too?
-
-					if (_followOnFlag)
-					{
-						_followOnFlag = NO;
-						[self getProductDeviceGroups];
-					}
-
-					break;
+					[products addObject:product];
 				}
 
-				case kConnectTypeGetDeviceGroups:
+				// Signal the host app that the list of models is ready to read
+
+				[nc postNotificationName:@"BuildAPIGotProductsList" object:self];
+
+				// Have we been asked to automatically get the list of devices too?
+
+				if (_followOnFlag)
 				{
-					// We asked for a list of all the device groups, so replace the current list with
-					// the newly returned data. This may have been called for an initial list at
-					// start-up, or later if a device has changed name or model allocation
-
-					[deviceGroups removeAllObjects];
-
-					NSArray *dgs = [data objectForKey:@"data"];
-
-					for (NSDictionary *deviceGroup in dgs)
-					{
-						// Add each device group to the list
-						// Each device group has the following keys:
-						// id - string
-						// type - string
-						// attributes - dictionary
-						//   name - string
-						//   kind - string
-						// relationships - dictionary
-						//   target_group - dictionary
-						//     data - device group object
-
-						[deviceGroups addObject:deviceGroup];
-					}
-
-					// Signal the host app that the list of devices is ready to read
-
-					[nc postNotificationName:@"BuildAPIGotDeviceGroupsList" object:self];
-					break;
+					_followOnFlag = NO;
+					[self getProductDeviceGroups];
 				}
 
-				case kConnectTypeGetDeployments:
+				break;
+			}
+
+			case kConnectTypeGetDeviceGroups:
+			{
+				// We asked for a list of all the device groups, so replace the current list with
+				// the newly returned data. This may have been called for an initial list at
+				// start-up, or later if a device has changed name or model allocation
+
+				[deviceGroups removeAllObjects];
+
+				NSArray *dgs = [data objectForKey:@"data"];
+
+				for (NSDictionary *deviceGroup in dgs)
 				{
-					// We asked for a list of all the deployments, so replace the current list with
-					// the newly returned data. This may have been called for an initial list at
-					// start-up, or later if a device has changed name or model allocation
+					// Add each device group to the list
+					// Each device group has the following keys:
+					// id - string
+					// type - string
+					// attributes - dictionary
+					//   name - string
+					//   kind - string
+					// relationships - dictionary
+					//   target_group - dictionary
+					//     data - device group object
 
-					[deployments removeAllObjects];
-
-					NSArray *deps = [data objectForKey:@"data"];
-
-					for (NSDictionary *deployment in deps)
-					{
-						// Add each device group to the list
-						// Each device group has the following keys:
-						// id - string
-						// type - string
-						// attributes - dictionary
-						//   agent_code - string
-						//   device_code - string
-						//   agent_sha256 - string
-						//   device_sha256 - string
-						//   combined_sha256 - string
-						//   created_on - string
-						//   flagged - Boolean
-
-						[deployments addObject:deployment];
-					}
-
-					// Signal the host app that the list of devices is ready to read
-
-					[nc postNotificationName:@"BuildAPIGotDeploymentsList" object:self];
-					break;
+					[deviceGroups addObject:deviceGroup];
 				}
 
-				case kConnectTypeGetDeployment:
+				// Signal the host app that the list of devices is ready to read
+
+				[nc postNotificationName:@"BuildAPIGotDeviceGroupsList" object:self];
+				break;
+			}
+
+			case kConnectTypeGetDeployments:
+			{
+				// We asked for a list of all the deployments, so replace the current list with
+				// the newly returned data. This may have been called for an initial list at
+				// start-up, or later if a device has changed name or model allocation
+
+				[deployments removeAllObjects];
+
+				NSArray *deps = [data objectForKey:@"data"];
+
+				for (NSDictionary *deployment in deps)
 				{
-					// We asked for a code revision, which we make available to the main app
+					// Add each device group to the list
+					// Each device group has the following keys:
+					// id - string
+					// type - string
+					// attributes - dictionary
+					//   agent_code - string
+					//   device_code - string
+					//   agent_sha256 - string
+					//   device_sha256 - string
+					//   combined_sha256 - string
+					//   created_on - string
+					//   flagged - Boolean
 
-					NSArray *dep = [data objectForKey:@"data"];
-
-					currentDeployment = [dep objectAtIndex:0]; // CHECK
-
-					// Tell the main app we have the code in the deployment dictionary
-
-					[nc postNotificationName:@"BuildAPIGotDeployment" object:currentDeployment];
-
-					break;
+					[deployments addObject:deployment];
 				}
 
-				case kConnectTypeNewProduct:
-				{
-					// We created a new product, so we need to update the products list so that the
-					// change is reflected in our local data. First, notify the host app that
-					// the model creation was a success
+				// Signal the host app that the list of devices is ready to read
 
-					[nc postNotificationName:@"BuildAPIProductCreated" object:nil];
+				[nc postNotificationName:@"BuildAPIGotDeploymentsList" object:self];
+				break;
+			}
 
-					// Now get a new list of products and then a new list of deviceGroups
+			case kConnectTypeGetDeployment:
+			{
+				// We asked for a code revision, which we make available to the main app
 
-					_followOnFlag = YES; // Necessary now?
-					[self getProducts];
-					break;
-				}
+				NSArray *dep = [data objectForKey:@"data"];
 
-				case kConnectTypeUpdateProduct:
-				{
-					// We asked that the product be updated, which may include a name-change or
-					// device assignment so we update the model and device lists so that the change
-					// is reflected in our local data.
+				currentDeployment = [dep objectAtIndex:0]; // CHECK
 
-					// Tell the main app we have successfully updated the model
+				// Tell the main app we have the code in the deployment dictionary
 
-					[nc postNotificationName:@"BuildAPIProductUpdated" object:nil];
+				[nc postNotificationName:@"BuildAPIGotDeployment" object:currentDeployment];
 
-					// Now get a new list of models, and then a new list of devices
+				break;
+			}
 
-					_followOnFlag = YES;
-					[self getProducts];
-					break;
-				}
+			case kConnectTypeNewProduct:
+			{
+				// We created a new product, so we need to update the products list so that the
+				// change is reflected in our local data. First, notify the host app that
+				// the model creation was a success
 
-				default:
-                    break;
-            }
-        }
+				[nc postNotificationName:@"BuildAPIProductCreated" object:nil];
+
+				// Now get a new list of products and then a new list of deviceGroups
+
+				_followOnFlag = YES; // Necessary now?
+				[self getProducts];
+				break;
+			}
+
+			case kConnectTypeUpdateProduct:
+			{
+				// We asked that the product be updated, which may include a name-change or
+				// device assignment so we update the model and device lists so that the change
+				// is reflected in our local data.
+
+				// Tell the main app we have successfully updated the model
+
+				[nc postNotificationName:@"BuildAPIProductUpdated" object:nil];
+
+				// Now get a new list of models, and then a new list of devices
+
+				_followOnFlag = YES;
+				[self getProducts];
+				break;
+			}
+
+			case kConnectTypeGetToken:
+			{
+				_token = data;
+				loggedInFlag = YES;
+				NSLog([_token objectForKey:@"token"]);
+				NSLog([_token objectForKey:@"expires"]);
+			}
+
+			default:
+				break;
+		}
     }
 }
 
@@ -2362,7 +2102,16 @@ didReceiveResponse:(NSURLResponse *)response
 
 - (NSMutableURLRequest *)makeRequest:(NSString *)verb :(NSString *)path
 {
-    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
+	if (_token == nil)
+	{
+		// We have no session token, so we can't get any data
+
+		errorMessage = @"[ERROR] You must be logged in to access the Electric Imp impCloud™";
+		[self reportError];
+		return nil;
+	}
+
+	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
     [self setRequestAuthorization:request];
     [request setHTTPMethod:verb];
 	[request setValue:_userAgent forHTTPHeaderField:@"User-Agent"];
@@ -2373,37 +2122,10 @@ didReceiveResponse:(NSURLResponse *)response
 
 - (void)setRequestAuthorization:(NSMutableURLRequest *)request
 {
-    if (_harvey != nil)
-    {
-        [request setValue:[@"Basic " stringByAppendingString:[self encodeBase64String:_harvey]] forHTTPHeaderField:@"Authorization"];
-        [request setTimeoutInterval:30.0];
-    }
-    else
-    {
-        errorMessage = @"Accessing the Build API requires an API key.";
-        [self reportError];
-    }
-}
-
-
-
-- (NSInteger)checkStatus:(NSDictionary *)data
-{
-	// Before using data returned from the server, check that the success field is not false
-	// If it is, set up an error message. 1 = success; 0 = failure
-
-	NSNumber *value = [data objectForKey:@"success"];
-
-	if (value.integerValue == 0)
-	{
-		// There has been an error reported by the API
-
-		NSDictionary *err = [data objectForKey:@"error"];
-		errorMessage = [err objectForKey:@"message_short"];
-		[self reportError];
-	}
-
-	return value.integerValue;
+	NSString *tk = [_token objectForKey:@"token"];
+	tk = [tk stringByAppendingString:@":"];
+	[request setValue:[@"Basic " stringByAppendingString:[self encodeBase64String:tk]] forHTTPHeaderField:@"Authorization"];
+	[request setTimeoutInterval:30.0];
 }
 
 
