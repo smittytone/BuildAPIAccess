@@ -23,7 +23,7 @@
 // Initialization Methods
 
 - (instancetype)init NS_DESIGNATED_INITIALIZER;
-- (void)login:(NSString *)username :(NSString *)password
+- (void)login:(NSString *)username :(NSString *)password;
 - (void)getNewToken;
 - (BOOL)checkToken;
 
@@ -33,6 +33,7 @@
 
 - (void)getProducts;
 - (void)getProducts:(BOOL)withDeviceGroups;
+- (void)getDeviceGroups;
 
 // Data Request Methods
 

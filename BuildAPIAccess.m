@@ -346,11 +346,11 @@
 
 
 
-- (void)getProductDeviceGroups
+- (void)getDeviceGroups
 {
 	// Set up a GET request to /device_groups
 
-	NSMutableURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"device_groups"]];
+	NSMutableURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"devicegroups"]];
 
 	if (request)
 	{
@@ -1105,8 +1105,10 @@
 	aConnexion.task = [session dataTaskWithRequest:request];
 
 	// Check that we have a valid session token - we can't proceed without one
+	// If we are not logged in, we won't have a token so we need to let the check
+	// pass so that a token is retrieved in the first place
 
-	if ([self checkToken])
+	if ([self checkToken] || !loggedInFlag)
 	{
 		// We have a valid token so proceed with the connection
 
@@ -1137,7 +1139,7 @@
 			[self getNewToken];
 		}
 
-		[_pendingConnections appendObject:aConnexion];
+		[_pendingConnections addObject:aConnexion];
 	}
 
 	return aConnexion;
@@ -1739,7 +1741,7 @@ didReceiveResponse:(NSURLResponse *)response
 				// Now refresh the list of models and then a new list of devices
 
 				_followOnFlag = YES;
-				[self getModels];
+				//[self getModels];
 				break;
 			}
 
@@ -1754,7 +1756,7 @@ didReceiveResponse:(NSURLResponse *)response
 				// Now get a new list of models and then a new list of devices
 
 				_followOnFlag = YES;
-				[self getModels];
+				//[self getModels];
 				break;
 			}
 
@@ -1770,7 +1772,7 @@ didReceiveResponse:(NSURLResponse *)response
 				// Now get a new list of models and then a new list of devices
 
 				_followOnFlag = YES;
-				[self getModels];
+				//[self getModels];
 				break;
 			}
 
@@ -1787,7 +1789,7 @@ didReceiveResponse:(NSURLResponse *)response
 				// Now get a new list of models and then a new list of devices
 
 				_followOnFlag = YES;
-				[self getModels];
+				//[self getModels];
 				break;
 			}
 
@@ -1803,7 +1805,7 @@ didReceiveResponse:(NSURLResponse *)response
 				// Now get a new list of models and then a new list of devices
 
 				_followOnFlag = YES;
-				[self getModels];
+				//[self getModels];
 
 				break;
 			}
@@ -1821,7 +1823,7 @@ didReceiveResponse:(NSURLResponse *)response
 				// Now get a new list of models, and then a new list of devices
 
 				_followOnFlag = YES;
-				[self getModels];
+				//[self getModels];
 				break;
 			}
 
@@ -1961,7 +1963,7 @@ didReceiveResponse:(NSURLResponse *)response
 				if (_followOnFlag)
 				{
 					_followOnFlag = NO;
-					[self getProductDeviceGroups];
+					[self getDeviceGroups];
 				}
 
 				break;
