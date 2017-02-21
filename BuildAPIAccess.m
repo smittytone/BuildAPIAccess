@@ -17,6 +17,7 @@
 @synthesize products, deviceGroups, deployments, currentDeployment, devices, errorMessage, statusMessage;
 @synthesize loggedInFlag;
 
+
 #pragma mark - Initialization Methods
 
 
@@ -36,7 +37,7 @@
         errorMessage = @"";
 		loggedInFlag = NO;
 
-		currentDeployment = nil;
+		dataLoadedFlag = NO;
 
         // Private entities
 
