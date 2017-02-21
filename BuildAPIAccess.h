@@ -13,7 +13,7 @@
 @interface BuildAPIAccess : NSObject <NSURLConnectionDataDelegate, NSURLSessionDataDelegate, NSURLSessionTaskDelegate>
 
 {
-    NSMutableArray *_connexions, *_loggingDevices;
+    NSMutableArray *_connexions, *_loggingDevices, *_pendingConnections;
 	NSDictionary *_token;
     NSString *_baseURL, *_currentModelID, *_logURL, *_lastStamp, *_userAgent, *_username, *_password;
     BOOL _followOnFlag, _useSessionFlag;
@@ -23,8 +23,10 @@
 // Initialization Methods
 
 - (instancetype)init NS_DESIGNATED_INITIALIZER;
-- (void)setCredentials:(NSString *)username :(NSString *)password;
-- (void)getToken;
+- (void)login:(NSString *)username :(NSString *)password
+- (void)getNewToken;
+- (BOOL)checkToken;
+
 - (void)killAllConnections;
 
 // v5 Data Request Methods
@@ -34,8 +36,6 @@
 
 // Data Request Methods
 
-- (void)getModels;
-- (void)getModels:(BOOL)withDevices;
 - (void)getDevices;
 - (void)getCode:(NSString *)modelID;
 - (void)getCodeRev:(NSString *)modelID :(NSInteger)build;

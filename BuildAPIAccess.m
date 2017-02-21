@@ -11,11 +11,11 @@
 @implementation BuildAPIAccess
 
 
-@synthesize models, devices, errorMessage, statusMessage, deviceCode, agentCode;
-@synthesize codeErrors, numberOfConnections, loggedInFlag;
+@synthesize models, deviceCode, agentCode;
+@synthesize codeErrors, numberOfConnections;
 
-@synthesize products, deviceGroups, deployments, currentDeployment;
-
+@synthesize products, deviceGroups, deployments, currentDeployment, devices, errorMessage, statusMessage;
+@synthesize loggedInFlag;
 
 #pragma mark - Initialization Methods
 
@@ -59,45 +59,42 @@
 }
 
 
-- (void)setCredentials:(NSString *)username :(NSString *)password
+#pragma mark - Login Methods
+
+- (void)login:(NSString *)username :(NSString *)password
 {
 	if (username.length == 0)
 	{
-		errorMessage = @"[ERROR] Malformed username.";
+		errorMessage = @"[ERROR] You must supply an Electric Imp account username or email address.";
 		[self reportError];
 		return;
 	}
 
 	if (password.length == 0)
 	{
-		errorMessage = @"[ERROR] Malformed password.";
+		errorMessage = @"[ERROR] You must supply an Electric Imp account password.";
 		[self reportError];
 		return;
 	}
 
 	_username = username;
 	_password = password;
+
+	[self getNewToken];
 }
 
 
-#pragma mark - Data Request Methods
-
-
-- (void)getToken
+- (void)getNewToken
 {
 	if (!_username || !_password)
 	{
-		errorMessage = @"[ERROR] Missing credentials — cannot log in without username and password";
+		errorMessage = @"[ERROR] Missing Electric Imp credentials — cannot log in without username or email address, and password.";
 		[self reportError];
 		return;
 	}
 
-	// Set up a POST request to the /accounts/login URL to get session token
+	// Set up a POST request to the /account/login URL to get session token
 	// Need unique code here as we do not use the authentication method used by the API
-
-	NSError *error;
-	NSDictionary *bodyDict = @{ @"email" : _username,
-								@"password" : _password};
 
 	NSString *post = [NSString stringWithFormat:@"email=%@&password=%@", _username, _password];
 	NSData *postData = [post dataUsingEncoding:NSASCIIStringEncoding allowLossyConversion:NO];
@@ -105,15 +102,7 @@
 	[request setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
 	[request setHTTPMethod:@"POST"];
 	[request setValue:_userAgent forHTTPHeaderField:@"User-Agent"];
-	//[request setHTTPBody:[NSJSONSerialization dataWithJSONObject:bodyDict options:0 error:&error]];
 	[request setHTTPBody:postData];
-
-	if (error)
-	{
-		errorMessage = @"[ERROR] Could not create a request to retrieve a session token.";
-		[self reportError];
-		return;
-	}
 
 	if (request)
 	{
@@ -121,35 +110,33 @@
 	}
 	else
 	{
-		errorMessage = @"[ERROR] Could not create a request to retrieve a session token.";
+		errorMessage = @"[ERROR] Could not create a request to retrieve a new session token.";
 		[self reportError];
 	}
 }
 
 
-- (void)getModels
+- (BOOL)checkToken
 {
-    // Set up a GET request to the /models URL - gets all models
+	if (!_token)
+	{
+		// We do not have a token, return error
 
-    NSMutableURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"models"]];
+		return NO;
+	}
 
-    if (request)
-    {
-        [self launchConnection:request :kConnectTypeGetModels];
-    }
-    else
-    {
-        errorMessage = @"[ERROR] Could not create a request to list your models.";
-        [self reportError];
-    }
-}
+	NSString *ds = [_token objectForKey:@"expires"];
+	NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
+	NSDate *expiry = [dateFormatter dateFromString:ds];
+	NSDate *now = [NSDate date];
 
+	if ([now compare:expiry] == NSOrderedDescending)
+	{
+		// The token has expired, so return error
+		return NO;
+	}
 
-
-- (void)getModels:(BOOL)withDevices
-{
-	_followOnFlag = withDevices;
-	[self getModels];
+	return YES;
 }
 
 
@@ -1103,35 +1090,56 @@
 
 - (Connexion *)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode
 {
-    // Create a default connexion object to store the details of the connection we're about
-	// to initiate
+    // Create a default connexion object to store the details of the connection
+	// we're about to initiate
 
     Connexion *aConnexion = [[Connexion alloc] init];
     aConnexion.actionCode = actionCode;
     aConnexion.data = [NSMutableData dataWithCapacity:0];
 
-    if (actionCode == kConnectTypeGetLogEntriesStreamed) [request setTimeoutInterval:3600.0];
-
-	// Use NSURLSession for the connection. Compatible with iOS, tvOS and Mac OS X
+    // Use NSURLSession for the connection. Compatible with iOS, tvOS and Mac OS X
 
 	NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
 														  delegate:self
 													 delegateQueue:[NSOperationQueue mainQueue]];
 	aConnexion.task = [session dataTaskWithRequest:request];
-	[aConnexion.task resume];
 
-    if (_connexions.count == 0)
-    {
-        // Connection established successfully, so notify the main app to trigger the progress indicator
-        // and then add the new connexion to the list of current connections
+	// Check that we have a valid session token - we can't proceed without one
 
-        [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStart" object:nil];
-    }
+	if ([self checkToken])
+	{
+		// We have a valid token so proceed with the connection
 
-    // Add the new connection to the list
+		[aConnexion.task resume];
 
-    [_connexions addObject:aConnexion];
-	numberOfConnections = _connexions.count;
+		if (_connexions.count == 0)
+		{
+			// Notify the main app to trigger the progress indicator
+
+			[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStart" object:nil];
+		}
+
+		// Add the new connection to the list
+
+		[_connexions addObject:aConnexion];
+		numberOfConnections = _connexions.count;
+	}
+	else
+	{
+		// We do not have a valid token
+
+		if (_pendingConnections == nil) _pendingConnections = [[NSMutableArray alloc] init];
+
+		if (_pendingConnections.count == 0)
+		{
+			// We have no queued connections, so get a new token
+
+			[self getNewToken];
+		}
+
+		[_pendingConnections appendObject:aConnexion];
+	}
+
 	return aConnexion;
 }
 
@@ -2076,8 +2084,25 @@ didReceiveResponse:(NSURLResponse *)response
 			{
 				_token = data;
 				loggedInFlag = YES;
+
 				NSLog([_token objectForKey:@"token"]);
 				NSLog([_token objectForKey:@"expires"]);
+
+				// Do we have any pending connections we need to process?
+
+				if (_pendingConnections.count > 0)
+				{
+					for (Connexion *conn in _pendingConnections)
+					{
+						[conn.task resume];
+
+						if (_connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStart" object:nil];
+
+						[_connexions addObject:conn];
+						[_pendingConnections removeObject:conn];
+						numberOfConnections = _connexions.count;
+					}
+				}
 			}
 
 			default:
