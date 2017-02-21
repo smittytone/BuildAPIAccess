@@ -12,14 +12,13 @@
 
 
 // Required by BuildAPI access class
-// Connexion simply a packaging object for NSURLConnections / NSURLSessionTasks
-// and associated data ie. it has no methods, just five properties:
+// Connexion simply a packaging object for NSURLSessionTasks
+// and associated data ie. it has no methods, just four properties:
 
 
 - (instancetype)init;
 
 
-@property (nonatomic, strong) NSURLConnection *connexion;
 @property (nonatomic, strong) NSURLSessionTask *task;
 @property (nonatomic, strong) NSMutableData *data;
 @property (nonatomic, readwrite) NSInteger actionCode;

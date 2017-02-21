@@ -11,7 +11,7 @@
 @implementation Connexion
 
 
-@synthesize actionCode, connexion, data, errorCode, task;
+@synthesize actionCode, data, errorCode, task;
 
 
 
@@ -19,7 +19,6 @@
 {
 	if (self = [super init])
 	{
-		connexion = nil;
 		task = nil;
 		data = nil;
 		actionCode = -1;
