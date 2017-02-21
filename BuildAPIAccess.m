@@ -47,6 +47,8 @@
         _username = nil;
 		_password = nil;
         _useSessionFlag = YES;
+		_pagesize = 50;
+		_pagesizeChangeFlag = YES;
 
 		_baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
 
@@ -137,6 +139,18 @@
 	}
 
 	return YES;
+}
+
+
+#pragma mark - Pagination Methods
+
+- (void)setPageSize:(NSInteger)size
+{
+	if (size == _pagesize) return;
+	if (size < 1) size = 1;
+	if (size > 100) size = 100;
+	_pagesize = size;
+	_pagesizeChangeFlag = YES;
 }
 
 
@@ -2136,6 +2150,14 @@ didReceiveResponse:(NSURLResponse *)response
 		errorMessage = @"[ERROR] You must be logged in to access the Electric Imp impCloud™";
 		[self reportError];
 		return nil;
+	}
+
+	if (_pagesizeChangeFlag)
+	{
+		// User has changed the page size, so we need to pass this in now to set it
+
+		_pagesizeChangeFlag = NO;
+		path = [path stringByAppendingFormat:@"?pagesize=%li", _pagesize];
 	}
 
 	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];

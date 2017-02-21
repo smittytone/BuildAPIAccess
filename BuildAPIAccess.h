@@ -16,7 +16,8 @@
     NSMutableArray *_connexions, *_loggingDevices, *_pendingConnections;
 	NSDictionary *_token;
     NSString *_baseURL, *_currentModelID, *_logURL, *_lastStamp, *_userAgent, *_username, *_password;
-    BOOL _followOnFlag, _useSessionFlag;
+	NSInteger _pagesize;
+    BOOL _followOnFlag, _useSessionFlag, _pagesizeChangeFlag;
 }
 
 
