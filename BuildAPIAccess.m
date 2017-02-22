@@ -141,6 +141,7 @@
 }
 
 
+
 #pragma mark - Pagination Methods
 
 - (void)setPageSize:(NSInteger)size
@@ -2156,7 +2157,7 @@ didReceiveResponse:(NSURLResponse *)response
 		// User has changed the page size, so we need to pass this in now to set it
 
 		_pagesizeChangeFlag = NO;
-		path = [path stringByAppendingFormat:@"?page size=%li", _pagesize];
+		path = [path stringByAppendingFormat:@"?page/[size/]=%li", _pagesize];
 	}
 
 	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
