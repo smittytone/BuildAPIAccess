@@ -33,10 +33,13 @@
 #define kConnectTypeGetDeployments			22
 #define kConnectTypeGetDeployment			23
 
-#define kConnectTypeNewProduct				30
+#define kConnectTypeCreateProduct			30
 #define kConnectTypeUpdateProduct			31
+#define kConnectTypeCreateDeviceGroup		32
+#define kConnectTypeUpdateDeviceGroup		33
 
 #define kConnectTypeGetToken				50
+#define kConnectTypeGetMyAccount			51
 
 #define kConnectTypeGetRevisions			99
 #define kConnectTypeGetRevision				99
@@ -55,6 +58,10 @@
 #define kServerSendsSuccess 1
 #define kServerSendsFailure 0
 
+#define kPaginationDefault	20
 
+#define kDeviceGroupTypeDevelopment		1
+#define kDeviceGroupTypeFactory			2
+#define kDeviceGroupTypeProduction		3
 
 #endif

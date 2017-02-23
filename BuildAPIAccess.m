@@ -45,8 +45,7 @@
         _logURL = nil;
         _username = nil;
 		_password = nil;
-        _useSessionFlag = YES;
-		_pagesize = 50;
+        _pagesize = kPaginationDefault;
 		_pagesizeChangeFlag = YES;
 
 		_baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
@@ -60,10 +59,17 @@
 }
 
 
+
 #pragma mark - Login Methods
+
 
 - (void)login:(NSString *)username :(NSString *)password
 {
+	// Login is the process of sending the user's username/email address and password to the API
+ 	// in return for a new seven-day session token. We retain the credentials in case the token
+	// expires during the host application's runtime, but we don't save them - this is the job
+	// of the host application.
+
 	if (username.length == 0)
 	{
 		errorMessage = @"[ERROR] You must supply an Electric Imp account username or email address.";
@@ -81,12 +87,18 @@
 	_username = username;
 	_password = password;
 
+	// Get a new token using the credentials provided
+
 	[self getNewToken];
 }
 
 
+
 - (void)getNewToken
 {
+	// Request a new session token using the stored credentials,
+	// failing if neither has been provided (by login:)
+
 	if (!_username || !_password)
 	{
 		errorMessage = @"[ERROR] Missing Electric Imp credentials — cannot log in without username or email address, and password.";
@@ -117,6 +129,7 @@
 }
 
 
+
 - (BOOL)checkToken
 {
 	if (!_token)
@@ -144,6 +157,7 @@
 
 #pragma mark - Pagination Methods
 
+
 - (void)setPageSize:(NSInteger)size
 {
 	if (size == _pagesize) return;
@@ -155,22 +169,7 @@
 
 
 
-- (void)getDevices
-{
-    // Set up a GET request to the /devices URL - gets all devices
-
-    NSMutableURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"devices"]];
-
-    if (request)
-    {
-        [self launchConnection:request :kConnectTypeGetDevices];
-    }
-    else
-    {
-        errorMessage = @"[ERROR] Could not create a request to list your devices.";
-        [self reportError];
-    }
-}
+/*
 
 
 
@@ -329,9 +328,29 @@
 	}
 }
 
+*/
+
+#pragma mark - Data Request Methods (v5 API)
 
 
-#pragma mark Data Request Methods (v5 API)
+- (void)getMyAccount
+{
+	// Set up a GET request to /accounts/me
+
+	NSMutableURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"accounts/me"]];
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeGetMyAccount];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to list your products.";
+		[self reportError];
+	}
+}
+
+
 
 - (void)getProducts
 {
@@ -417,9 +436,203 @@
 
 
 
+- (void)getDevices
+{
+	// Set up a GET request to the /devices URL - gets all devices
+
+	NSMutableURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"devices"]];
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeGetDevices];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to list your devices.";
+		[self reportError];
+	}
+}
+
+
+
+#pragma mark - Action Methods (v5 API)
+
+
+- (void)createProduct:(NSString *)name :(NSString *)description
+{
+	// Set up a POST request to /products
+
+	if (name == nil || name.length == 0)
+	{
+		errorMessage = @"[ERROR] Could not create a request to create the new product: invalid product name.";
+		[self reportError];
+		return;
+	}
+
+	if (description == nil) description = @"";
+	if (description.length > 255) description = [description substringToIndex:254];
+
+	NSArray *keys = [NSArray arrayWithObjects:@"name", @"description", nil];
+	NSArray *values = [NSArray arrayWithObjects:name, description, nil];
+	NSDictionary *attributes = [NSDictionary dictionaryWithObjects:values forKeys:keys];
+	NSDictionary *relationships = [NSDictionary dictionaryWithObject:_me forKey:@"owner"];
+
+	keys = [NSArray arrayWithObjects:@"type", @"attributes", @"relationships", nil];
+	values = [NSArray arrayWithObjects:@"product", attributes, relationships, nil];
+	NSDictionary *data = [NSDictionary dictionaryWithObjects:values forKeys:keys];
+	NSDictionary *newProduct = [NSDictionary dictionaryWithObject:data forKey:@"data"];
+
+	NSMutableURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:@"products"] :newProduct];
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeCreateProduct];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to create the new product.";
+		[self reportError];
+	}
+}
+
+
+
+- (void)updateProduct:(NSString *)productID :(NSString *)key :(NSString *)value
+{
+	// Set up a PATCH request to /products
+	// We can ONLY update a product's name or description
+
+	if (productID == nil || productID.length == 0)
+	{
+		errorMessage = @"[ERROR] Could not create a request to create the new product: invalid product ID.";
+		[self reportError];
+		return;
+	}
+
+	if (key == nil)
+	{
+		errorMessage = @"[ERROR] Could not create a request to create the new product: data field name.";
+		[self reportError];
+		return;
+	}
+
+	NSDictionary *attributes = [self makeDictionary:key :value];
+	NSArray *keys = [NSArray arrayWithObjects:@"type", @"id", @"attributes", nil];
+	NSArray *values = [NSArray arrayWithObjects:@"product", productID, attributes, nil];
+
+	NSDictionary *data = [NSDictionary dictionaryWithObjects:values forKeys:keys];
+	NSDictionary *product = [NSDictionary dictionaryWithObject:data forKey:@"data"];
+
+	NSMutableURLRequest *request = [self makePATCHrequest:[_baseURL stringByAppendingFormat:@"products/%@", productID] :product];
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeUpdateProduct];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to create the new product.";
+		[self reportError];
+	}
+}
+
+
+
+- (void)createDeviceGroup:(NSString *)name :(NSString *)description :(NSString *)productID :(NSInteger)type
+{
+	// Set up a POST request to /devicegroups
+
+	if (name == nil || name.length == 0)
+	{
+		errorMessage = @"[ERROR] Could not create a request to create the new device group: invalid device group name.";
+		[self reportError];
+		return;
+	}
+
+	if (description == nil) description = @"";
+	if (description.length > 255) description = [description substringToIndex:254];
+
+	if (type < kDeviceGroupTypeDevelopment || type > kDeviceGroupTypeProduction)
+	{
+		errorMessage = @"[ERROR] Could not create a request to create the new device group: invalid device group type.";
+		[self reportError];
+		return;
+	}
+
+	NSArray *keys = [NSArray arrayWithObjects:@"name", @"description", nil];
+	NSArray *values = [NSArray arrayWithObjects:name, description, nil];
+	NSDictionary *attributes = [NSDictionary dictionaryWithObjects:values forKeys:keys];
+
+	keys = [NSArray arrayWithObjects:@"type", @"id", nil];
+	values = [NSArray arrayWithObjects:@"product", productID, nil];
+	NSDictionary *product = [NSDictionary dictionaryWithObjects:values forKeys:keys];
+	NSDictionary *relationships = [NSDictionary dictionaryWithObject:product forKey:@"product"];
+
+	keys = [NSArray arrayWithObjects:@"type", @"attributes", @"relationships", nil];
+	values = [NSArray arrayWithObjects:[self getDeviceGroupType:type], attributes, relationships, nil];
+	NSDictionary *data = [NSDictionary dictionaryWithObjects:values forKeys:keys];
+	NSDictionary *newDeviceGroup = [NSDictionary dictionaryWithObject:data forKey:@"data"];
+
+	NSMutableURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:@"devicegroups"] :newDeviceGroup];
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeCreateDeviceGroup];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to create the new product.";
+		[self reportError];
+	}
+}
+
+
+
+- (void)updateDeviceGroup:(NSDictionary *)devicegroup :(NSString *)key :(NSString *)value
+{
+	// Set up a PATCH request to /devicegroups
+	// We can ONLY update a device group's name or description
+
+	if (!devicegroup)
+	{
+		errorMessage = @"[ERROR] Could not create a request to update a device group: invalid device group.";
+		[self reportError];
+		return;
+	}
+
+	if (key == nil)
+	{
+		errorMessage = @"[ERROR] Could not create a request to create the new product: data field name.";
+		[self reportError];
+		return;
+	}
+
+	NSDictionary *attributes = [self makeDictionary:key :value];
+	NSArray *keys = [NSArray arrayWithObjects:@"type", @"id", @"attributes", nil];
+	NSString *type = [devicegroup objectForKey:@"type"];
+	NSString *dgID = [devicegroup objectForKey:@"id"];
+	NSArray *values = [NSArray arrayWithObjects:type, dgID, attributes, nil];
+	NSDictionary *data = [NSDictionary dictionaryWithObjects:values forKeys:keys];
+	NSDictionary *dg = [NSDictionary dictionaryWithObject:data forKey:@"data"];
+
+	NSMutableURLRequest *request = [self makePATCHrequest:[_baseURL stringByAppendingFormat:@"devicegroups/%@", dgID] :dg];
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeUpdateDeviceGroup];
+	}
+	else
+	{
+		errorMessage = @"[ERROR] Could not create a request to create the new device group.";
+		[self reportError];
+	}
+}
+
+
+
 #pragma mark - Action Methods
 
-
+/*
 - (void)createNewModel:(NSString *)modelName
 {
     // Set up a POST request to the /models URL - we'll post the new model there
@@ -735,78 +948,13 @@
     }
 }
 
-
-
-#pragma mark Action Methods 9(v5 API)
-
-- (void)newProduct:(NSString *)name :(NSString *)description
-{
-	// Set up a POST request to /products
-
-	if (name == nil || name.length == 0)
-	{
-		errorMessage = @"[ERROR] Could not create a request to create the new product: invalid product name.";
-		[self reportError];
-		return;
-	}
-
-	if (description == nil) description = @"";
-
-	NSArray *keys = [NSArray arrayWithObjects:@"name", @"descripton", nil];
-	NSArray *vals = [NSArray arrayWithObjects:name, description, nil];
-	NSDictionary *pDictionary = [NSDictionary dictionaryWithObjects:vals forKeys:keys];
-	NSMutableURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:@"products"] :pDictionary];
-
-	if (request)
-	{
-		[self launchConnection:request :kConnectTypeNewProduct];
-	}
-	else
-	{
-		errorMessage = @"[ERROR] Could not create a request to create the new product.";
-		[self reportError];
-	}
-}
-
-
-
-- (void)updateProduct:(NSString *)productID :(NSString *)key :(NSString *)value
-{
-	// Set up a PATCH request to /products
-
-	if (productID == nil || productID.length == 0)
-	{
-		errorMessage = @"[ERROR] Could not create a request to create the new product: invalid product ID.";
-		[self reportError];
-		return;
-	}
-
-	if (key == nil || value.length == 0)
-	{
-		errorMessage = @"[ERROR] Could not create a request to create the new product: data field name.";
-		[self reportError];
-		return;
-	}
-
-	NSDictionary *pDictionary = [self makeDictionary:key :value];
-	NSMutableURLRequest *request = [self makePATCHrequest:[_baseURL stringByAppendingFormat:@"products/%@", productID] :pDictionary];
-
-	if (request)
-	{
-		[self launchConnection:request :kConnectTypeUpdateProduct];
-	}
-	else
-	{
-		errorMessage = @"[ERROR] Could not create a request to create the new product.";
-		[self reportError];
-	}
-}
+*/
 
 
 
 #pragma mark - Logging Methods
 
-
+/*
 - (void)startLogging:(NSString *)deviceID
 {
 	if (deviceID.length == 0 || deviceID == nil) return;
@@ -1018,6 +1166,8 @@
 	return _loggingDevices.count;
 }
 
+*/
+
 
 
 #pragma mark - HTTP Request Construction Methods
@@ -1035,7 +1185,7 @@
     NSError *error = nil;
 
     NSMutableURLRequest *request = [self makeRequest:@"POST" :path];
-    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    [request setValue:@"application/vnd.api+json" forHTTPHeaderField:@"Content-Type"];
 
     if (bodyDictionary) [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:bodyDictionary options:0 error:&error]];
 
@@ -1051,29 +1201,9 @@
 
 
 
-- (NSMutableURLRequest *)makePUTrequest:(NSString *)path :(NSDictionary *)bodyDictionary
-{
-    NSError *error = nil;
-
-    NSMutableURLRequest *request = [self makeRequest:@"PUT" :path];
-    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-    [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:bodyDictionary options:0 error:&error]];
-
-    if (error)
-    {
-        return nil;
-    }
-    else
-    {
-        return request;
-    }
-}
-
-
-
 - (NSMutableURLRequest *)makeDELETErequest:(NSString *)path
 {
-    return [self makeRequest:@"DELETE" :path];
+	return [self makeRequest:@"DELETE" :path];
 }
 
 
@@ -1083,9 +1213,29 @@
 	NSError *error = nil;
 
 	NSMutableURLRequest *request = [self makeRequest:@"PATCH" :path];
-	[request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+	[request setValue:@"application/vnd.api+json" forHTTPHeaderField:@"Content-Type"];
 
 	if (bodyDictionary) [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:bodyDictionary options:0 error:&error]];
+
+	if (error)
+	{
+		return nil;
+	}
+	else
+	{
+		return request;
+	}
+}
+
+
+
+- (NSMutableURLRequest *)makePUTrequest:(NSString *)path :(NSDictionary *)bodyDictionary
+{
+	NSError *error = nil;
+
+	NSMutableURLRequest *request = [self makeRequest:@"PUT" :path];
+	[request setValue:@"application/vnd.api+json" forHTTPHeaderField:@"Content-Type"];
+	[request setHTTPBody:[NSJSONSerialization dataWithJSONObject:bodyDictionary options:0 error:&error]];
 
 	if (error)
 	{
@@ -1268,7 +1418,7 @@ didReceiveResponse:(NSURLResponse *)response
 				if (conn == aConnexion)
 				{
 					[aLogDevice removeObjectForKey:@"connection"];
-					[self startLogging:[aLogDevice objectForKey:@"id"]];
+					//[self startLogging:[aLogDevice objectForKey:@"id"]];
 				}
 			}
 		}
@@ -1453,119 +1603,24 @@ didReceiveResponse:(NSURLResponse *)response
 
 		if (parsedData != nil)
 		{
-			// 'parsedData' should contain a description of the error, eg. unknown device, or a code syntax error
+			// 'parsedData' should contain aan array of errors, eg. unknown device, or a code syntax error
 
-			NSDictionary *errDict = [parsedData objectForKey:@"error"];
-			NSString *errString = [errDict objectForKey:@"message_short"];
-			errorMessage = [errorMessage stringByAppendingString:errString];
+			NSArray *errors = [parsedData objectForKey:@"errors"];
+			NSInteger count = 0;
 
-			if (connexion.errorCode == 400)
+			for (NSDictionary *error in errors)
 			{
-				// Check for lapsed token errors
+				NSString *errString = [error objectForKey:@"title"];
+				NSString *errDetail = [error objectForKey:@"detail"];
 
-				NSRange eRange = [errString rangeOfString:@"Token may have expired" options:NSCaseInsensitiveSearch];
-
-				if (eRange.location != NSNotFound)
+				if (errors.count > 1)
 				{
-					// This IS a lapsed token. We need to restart logging for this device from scratch
-
-					NSMutableDictionary *loggingDevice = nil;
-
-					for (NSMutableDictionary *aLogDevice in _loggingDevices)
-					{
-						Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
-
-						if (aConnexion == connexion)
-						{
-							loggingDevice = aLogDevice;
-							break;
-						}
-					}
-
-					if (loggingDevice)
-					{
-						[_loggingDevices removeObject:loggingDevice];
-						[self startLogging:[loggingDevice objectForKey:@"id"]];
-						errorMessage = [errorMessage stringByAppendingFormat:@". Restarting log stream for device '%@'", [loggingDevice objectForKey:@"name"]];
-					}
+					errorMessage = [errorMessage stringByAppendingFormat:@"%li. %@: %@\n", (count + 1), errString, errDetail];
 				}
-			}
-
-			errString = [errDict objectForKey:@"code"];
-
-            if (codeErrors == nil)
-            {
-                codeErrors = [[NSMutableArray alloc] init];
-            }
-            else
-            {
-                [codeErrors removeAllObjects];
-            }
-
-			// Is the problem a code syntax error?
-
-			if ([errString compare:@"CompileFailed"] == NSOrderedSame)
-			{
-				// The returned error description contains a 'message_short' field, if this key’s
-				// value is 'CompileFailed', we have a syntax error in the (just) uploaded Squirrel
-
-				errDict = [errDict objectForKey:@"details"];
-				NSArray *aArray = nil;
-				NSArray *dArray = nil;
-				aArray = [errDict objectForKey:@"agent_errors"];
-				dArray = [errDict objectForKey:@"device_errors"];
-
-				// We have to check for [NSNull null] because this is how an empty
-				// 'agent_errors' or 'device_errors' fields will be decoded
-
-				if (aArray != nil && (NSNull *)aArray != [NSNull null])
+				else
 				{
-					// We have error(s) in the agent Squirrel - decode and report them
-
-					errorMessage = [errorMessage stringByAppendingString:@"\n  Agent Code errors:"];
-
-					for (NSUInteger j = 0 ; j < aArray.count ; ++j)
-					{
-						errDict = [aArray objectAtIndex:j];
-						NSNumber *row = [errDict valueForKey:@"row"];
-						NSNumber *col = [errDict valueForKey:@"column"];
-						errorMessage = [errorMessage stringByAppendingFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue];
-
-                        // Preserve the error details, and add extra keys - 'message' and 'type' -
-                        // to the error record dictionary
-
-                        NSMutableDictionary *aDict = [NSMutableDictionary dictionaryWithDictionary:errDict];
-                        [aDict setObject:@"agent" forKey:@"type"];
-                        [aDict setObject:[NSString stringWithFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue] forKey:@"message"];
-
-                        [codeErrors addObject:aDict];
-					}
+					errorMessage = [errorMessage stringByAppendingFormat:@"%@: %@", errString, errDetail];
 				}
-
-				if (dArray != nil && (NSNull *)dArray != [NSNull null])
-				{
-					// We have error(s) in the device Squirrel - decode and report them
-
-					errorMessage = [errorMessage stringByAppendingString:@"\n  Device Code errors:"];
-
-					for (NSUInteger j = 0 ; j < dArray.count ; ++j)
-					{
-						errDict = [dArray objectAtIndex:j];
-						NSNumber *row = [errDict valueForKey:@"row"];
-						NSNumber *col = [errDict valueForKey:@"column"];
-						errorMessage = [errorMessage stringByAppendingFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue];
-
-                        NSMutableDictionary *aDict = [NSMutableDictionary dictionaryWithDictionary:errDict];
-                        [aDict setObject:[NSString stringWithFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue] forKey:@"message"];
-                        [aDict setObject:@"device" forKey:@"type"];
-
-                        [codeErrors addObject:aDict];
-					}
-				}
-			}
-			else
-			{
-				errorMessage = [errorMessage stringByAppendingString:@"Unknown error"];
 			}
 		}
 		else
@@ -1849,7 +1904,7 @@ didReceiveResponse:(NSURLResponse *)response
 				NSArray *revs = [data objectForKey:@"revisions"];
 				NSDictionary *latestBuild = [revs objectAtIndex:0];
 				NSNumber *num = [latestBuild valueForKey:@"version"];
-				[self getCodeRev:_currentModelID :num.integerValue];
+				//[self getCodeRev:_currentModelID :num.integerValue];
 				break;
 			}
 
@@ -1902,7 +1957,7 @@ didReceiveResponse:(NSURLResponse *)response
 
 						// Start logging with the device ID
 
-						[self startLogging:[aLogDevice objectForKey:@"id"]];
+						//[self startLogging:[aLogDevice objectForKey:@"id"]];
 
 						break;
 					}
@@ -1934,7 +1989,7 @@ didReceiveResponse:(NSURLResponse *)response
 
 						// Resume logging with the device ID
 
-						[self startLogging:[aLogDevice objectForKey:@"id"]];
+						//[self startLogging:[aLogDevice objectForKey:@"id"]];
 
 						break;
 					}
@@ -2064,7 +2119,7 @@ didReceiveResponse:(NSURLResponse *)response
 				break;
 			}
 
-			case kConnectTypeNewProduct:
+			case kConnectTypeCreateProduct:
 			{
 				// We created a new product, so we need to update the products list so that the
 				// change is reflected in our local data. First, notify the host app that
@@ -2072,9 +2127,8 @@ didReceiveResponse:(NSURLResponse *)response
 
 				[nc postNotificationName:@"BuildAPIProductCreated" object:nil];
 
-				// Now get a new list of products and then a new list of deviceGroups
+				// Now get a new list of products
 
-				_followOnFlag = YES; // Necessary now?
 				[self getProducts];
 				break;
 			}
@@ -2091,8 +2145,36 @@ didReceiveResponse:(NSURLResponse *)response
 
 				// Now get a new list of models, and then a new list of devices
 
+				[self getProducts];
+				break;
+			}
+
+			case kConnectTypeCreateDeviceGroup:
+			{
+				// We created a new device group, so we need to update the products list so that the
+				// change is reflected in our local data. First, notify the host app that
+				// the device group creation was a success
+
+				[nc postNotificationName:@"BuildAPIDeviceGroupCreated" object:nil];
+
+				// Now get a new list of products and their device groups
+
 				_followOnFlag = YES;
 				[self getProducts];
+				break;
+			}
+
+			case kConnectTypeUpdateDeviceGroup:
+			{
+				// We updated a device group, so we need to update the device group list so that the
+				// change is reflected in our local data. First, notify the host app that
+				// the device group update was a success
+
+				[nc postNotificationName:@"BuildAPIDeviceGroupUpdated" object:nil];
+
+				// Now get a new list of products and their device groups
+
+				[self getDeviceGroups];
 				break;
 			}
 
@@ -2103,6 +2185,10 @@ didReceiveResponse:(NSURLResponse *)response
 
 				NSLog([_token objectForKey:@"token"]);
 				NSLog([_token objectForKey:@"expires"]);
+
+				// Get user's account before we do anything else
+
+				[self getMyAccount];
 
 				// Do we have any pending connections we need to process?
 
@@ -2119,6 +2205,18 @@ didReceiveResponse:(NSURLResponse *)response
 						numberOfConnections = _connexions.count;
 					}
 				}
+
+				break;
+			}
+
+			case kConnectTypeGetMyAccount:
+			{
+				data = [data objectForKey:@"data"];
+				NSMutableDictionary *account = [NSMutableDictionary dictionaryWithDictionary:[self makeDictionary:@"id" :[data objectForKey:@"id"]]];
+				[account setObject:@"account" forKey:@"type"];
+				_me = [NSDictionary dictionaryWithDictionary:account];
+				NSLog(@"My account details obtained");
+				break;
 			}
 
 			default:
@@ -2184,6 +2282,15 @@ didReceiveResponse:(NSURLResponse *)response
     // Signal the host app that we have an error message for it to display (in 'errorMessage')
 
     [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIError" object:self];
+}
+
+
+
+- (NSString *)getDeviceGroupType:(NSInteger)type
+{
+	if (type == kDeviceGroupTypeFactory) return @"factoryfixture_devicegroup";
+	if (type == kDeviceGroupTypeProduction) return @"production_devicegroup";
+	return @"development_devicegroup";
 }
 
 

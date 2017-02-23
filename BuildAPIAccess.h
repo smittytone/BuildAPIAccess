@@ -14,55 +14,43 @@
 
 {
     NSMutableArray *_connexions, *_loggingDevices, *_pendingConnections;
-	NSDictionary *_token;
+	NSDictionary *_token, *_me;
     NSString *_baseURL, *_currentModelID, *_logURL, *_lastStamp, *_userAgent, *_username, *_password;
 	NSInteger _pagesize;
-    BOOL _followOnFlag, _useSessionFlag, _pagesizeChangeFlag;
+    BOOL _followOnFlag, _pagesizeChangeFlag;
 }
 
 
 // Initialization Methods
 
 - (instancetype)init NS_DESIGNATED_INITIALIZER;
+
+// Login Methods
+
 - (void)login:(NSString *)username :(NSString *)password;
 - (void)getNewToken;
 - (BOOL)checkToken;
 
-- (void)killAllConnections;
+// Pagination Methods
+
+- (void)setPageSize:(NSInteger)size;
 
 // v5 Data Request Methods
 
 - (void)getProducts;
 - (void)getProducts:(BOOL)withDeviceGroups;
 - (void)getDeviceGroups;
-
-// Data Request Methods
-
 - (void)getDevices;
-- (void)getCode:(NSString *)modelID;
-- (void)getCodeRev:(NSString *)modelID :(NSInteger)build;
-- (void)getLogsForDevice:(NSString *)deviceID :(NSString *)since :(BOOL)isStream;
 
-// Action Methods
+// v5 Action Methods
 
-- (void)createNewModel:(NSString *)modelName;
-- (void)updateModel:(NSString *)modelID :(NSString *)key :(NSString *)value;
-- (void)uploadCode:(NSString *)modelID :(NSString *)newDeviceCode :(NSString *)newAgentCode;
-- (void)deleteModel:(NSString *)modelID;
-- (void)assignDevice:(NSString *)deviceID toModel:(NSString *)modelID;
-- (void)restartDevice:(NSString *)deviceID;
-- (void)restartDevices:(NSString *)modelID;
-- (void)deleteDevice:(NSString *)deviceID;
-- (void)updateDevice:(NSString *)deviceID :(NSString *)key :(NSString *)value;
-- (void)autoRenameDevice:(NSString *)deviceID;
+- (void)createProduct:(NSString *)name :(NSString *)description;
+- (void)updateProduct:(NSString *)productID :(NSString *)key :(NSString *)value;
+- (void)createDeviceGroup:(NSString *)name :(NSString *)description :(NSString *)productID :(NSInteger)type;
+- (void)updateDeviceGroup:(NSDictionary *)devicegroup :(NSString *)key :(NSString *)value;
 
 // Logging Methods
 
-- (void)startLogging:(NSString *)deviceID;
-- (void)stopLogging:(NSString *)deviceID;
-- (BOOL)isDeviceLogging:(NSString *)deviceID;
-- (NSInteger)indexForID:(NSString *)deviceID;
-- (NSUInteger)loggingCount;
 
 // HTTP Request Construction Methods
 
@@ -75,6 +63,7 @@
 
 - (Connexion *)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode;
 - (void)relaunchConnection:(id)userInfo;
+- (void)killAllConnections;
 
 // NSURLSession/NSURLConnection Joint Methods
 
@@ -92,6 +81,7 @@
 - (NSMutableURLRequest *)makeRequest:(NSString *)verb :(NSString *)path;
 - (void)setRequestAuthorization:(NSMutableURLRequest *)request;
 - (void)reportError;
+- (NSString *)getDeviceGroupType:(NSInteger)type;
 
 
 @property (nonatomic, strong) NSMutableArray *devices;
