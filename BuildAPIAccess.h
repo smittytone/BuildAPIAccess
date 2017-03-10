@@ -16,8 +16,8 @@
     NSMutableArray *_connexions, *_loggingDevices, *_pendingConnections;
 	NSDictionary *_token, *_me;
     NSString *_baseURL, *_currentModelID, *_logURL, *_lastStamp, *_userAgent, *_username, *_password;
-	NSInteger _pagesize;
-    BOOL _followOnFlag, _pagesizeChangeFlag;
+	NSInteger _pageSize;
+    BOOL _followOnFlag, _pageSizeChangeFlag;
 }
 
 
@@ -28,8 +28,8 @@
 // Login Methods
 
 - (void)login:(NSString *)username :(NSString *)password;
-- (void)getNewToken;
-- (BOOL)checkToken;
+- (void)getNewSessionToken;
+- (BOOL)checkSessionToken;
 
 // Pagination Methods
 
@@ -55,7 +55,7 @@
 // HTTP Request Construction Methods
 
 - (NSMutableURLRequest *)makeGETrequest:(NSString *)path;
-- (NSMutableURLRequest *)makePUTrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
+- (NSMutableURLRequest *)makePATCHrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
 - (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
 - (NSMutableURLRequest *)makeDELETErequest:(NSString *)path;
 
@@ -77,11 +77,13 @@
 
 // Utility Methods
 
+- (void)reportError;
 - (NSDictionary *)makeDictionary:(NSString *)key :(NSString *)value;
 - (NSMutableURLRequest *)makeRequest:(NSString *)verb :(NSString *)path;
 - (void)setRequestAuthorization:(NSMutableURLRequest *)request;
-- (void)reportError;
 - (NSString *)getDeviceGroupType:(NSInteger)type;
+- (BOOL)isFirstPage:(NSDictionary *)links;
+- (NSString *)nextPageLink:(NSDictionary *)links;
 
 
 @property (nonatomic, strong) NSMutableArray *devices;
@@ -100,5 +102,6 @@
 @property (nonatomic, strong) NSMutableArray *deployments;
 @property (nonatomic, strong) NSMutableDictionary *currentDeployment;
 @property (nonatomic, readonly) BOOL loggedInFlag;
+@property (nonatomic, readwrite) NSInteger pageSize;
 
 @end

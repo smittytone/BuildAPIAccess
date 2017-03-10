@@ -29,17 +29,20 @@
 #define kConnectTypeGetLogEntriesStreamed   15
 
 #define kConnectTypeGetProducts				20
-#define kConnectTypeGetDeviceGroups			21
-#define kConnectTypeGetDeployments			22
-#define kConnectTypeGetDeployment			23
+#define kConnectTypeCreateProduct			21
+#define kConnectTypeUpdateProduct			22
 
-#define kConnectTypeCreateProduct			30
-#define kConnectTypeUpdateProduct			31
-#define kConnectTypeCreateDeviceGroup		32
-#define kConnectTypeUpdateDeviceGroup		33
+#define kConnectTypeGetDeviceGroups			30
+#define kConnectTypeCreateDeviceGroup		31
+#define kConnectTypeUpdateDeviceGroup		32
 
-#define kConnectTypeGetToken				50
-#define kConnectTypeGetMyAccount			51
+#define kConnectTypeGetDeployments			40
+#define kConnectTypeGetDeployment			41
+
+#define kConnectTypeGetDevices              50
+
+#define kConnectTypeGetToken				60
+#define kConnectTypeGetMyAccount			61
 
 #define kConnectTypeGetRevisions			99
 #define kConnectTypeGetRevision				99

@@ -19,10 +19,10 @@
 - (instancetype)init;
 
 
-@property (nonatomic, strong) NSURLSessionTask *task;
-@property (nonatomic, strong) NSMutableData *data;
-@property (nonatomic, readwrite) NSInteger actionCode;
-@property (nonatomic, readwrite) NSInteger errorCode;
+@property (nonatomic, strong)       NSURLSessionTask    *task;
+@property (nonatomic, strong)       NSMutableData       *data;
+@property (nonatomic, readwrite)    NSInteger           actionCode;
+@property (nonatomic, readwrite)    NSInteger           errorCode;
 
 
 @end
