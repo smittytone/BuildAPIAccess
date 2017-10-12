@@ -2033,7 +2033,7 @@ didReceiveResponse:(NSURLResponse *)response
 	[request setValue:_userAgent forHTTPHeaderField:@"User-Agent"];
 
 #ifdef DEBUG
-	NSLog(_userAgent);
+	NSLog(@"%@", _userAgent);
 #endif
 
     return request;
