@@ -8,17 +8,40 @@
 #import <Foundation/Foundation.h>
 #import "BuildAPIAccessConstants.h"
 #import "Connexion.h"
+#import "LogStreamEvent.h"
 
 
-@interface BuildAPIAccess : NSObject <NSURLConnectionDataDelegate, NSURLSessionDataDelegate, NSURLSessionTaskDelegate>
+@interface BuildAPIAccess : NSObject <NSURLSessionDataDelegate, NSURLSessionTaskDelegate>
 
 {
-    NSMutableArray *_connexions, *_loggingDevices, *_pendingConnections;
-	NSDictionary *_token, *_me;
-    NSString *_baseURL, *_currentModelID, *_logURL, *_lastStamp, *_userAgent, *_username, *_password;
-	NSInteger _pageSize;
-    BOOL _followOnFlag, _pageSizeChangeFlag;
+	NSMutableArray *connexions, *pendingConnections, *loggingDevices;
+	NSMutableArray *products, *devices, *devicegroups, *deployments, *history, *logs;
+
+	NSMutableDictionary *token;
+	NSDictionary *me;
+
+	NSOperationQueue *connectionQueue, *messageQueue;
+
+	NSString *baseURL, *userAgent, *username, *password;
+	NSString *logStreamID, *deviceToStream;
+
+	NSURL *logStreamURL;
+
+	NSTimeInterval logTimeout, logRetryInterval;
+
+	NSInteger pageSize;
+
+	BOOL pageSizeChangeFlag, logIsClosed, useTwoFactor;
+
+	id logLastEventID;
+
+	Connexion *logConnexion;
 }
+
+
+// Define Post-Login Callback
+
+typedef void (^OnLoginCallback)(NSInteger resultCode);
 
 
 // Initialization Methods
@@ -27,81 +50,167 @@
 
 // Login Methods
 
-- (void)login:(NSString *)username :(NSString *)password;
+- (void)login:(NSString *)userName :(NSString *)passWord :(BOOL)is2FA;
 - (void)getNewSessionToken;
-- (BOOL)checkSessionToken;
+- (void)refreshSessionToken;
+- (BOOL)isSessionTokenValid;
+- (void)clearCredentials;
+- (void)logout;
 
 // Pagination Methods
 
 - (void)setPageSize:(NSInteger)size;
+- (BOOL)isFirstPage:(NSDictionary *)links;
+- (NSString *)nextPageLink:(NSDictionary *)links;
+- (NSString *)getNextURL:(NSString *)url;
 
-// v5 Data Request Methods
+// Data Request Methods
 
 - (void)getProducts;
-- (void)getProducts:(BOOL)withDeviceGroups;
-- (void)getDeviceGroups;
-- (void)getDevices;
+- (void)getProducts:(id)someObject;
+- (void)getProducts:(NSString *)uuid :(NSString *)filter;
+- (void)getProducts:(NSString *)uuid :(NSString *)filter :(id)someObject;
 
-// v5 Action Methods
+- (void)getProduct:(NSString *)productID;
+- (void)getProduct:(NSString *)productID :(id)someObject;
+
+- (void)getDevicegroups;
+- (void)getDevicegroups:(id)someObject;
+- (void)getDevicegroups:(NSString *)uuid :(NSString *)filter;
+- (void)getDevicegroups:(NSString *)uuid :(NSString *)filter :(id)someObject;
+
+- (void)getDevicegroup:(NSString *)devicegroupID;
+- (void)getDevicegroup:(NSString *)devicegroupID :(id)someObject;
+
+- (void)getDevices;
+- (void)getDevices:(id)someObject;
+- (void)getDevices:(NSString *)uuid :(NSString *)filter;
+- (void)getDevices:(NSString *)uuid :(NSString *)filter :(id)someObject;
+
+- (void)getDevice:(NSString *)deviceID;
+- (void)getDevice:(NSString *)deviceID :(id)someObject;
+
+- (void)startLogging:(NSString *)deviceID;
+- (void)startLogging:(NSString *)deviceID :(id)someObject;
+
+- (void)stopLogging:(NSString *)deviceID;
+- (void)stopLogging:(NSString *)deviceID :(id)someObject;
+
+- (void)getDeviceLogs:(NSString *)deviceID;
+- (void)getDeviceLogs:(NSString *)deviceID :(id)someObject;
+
+- (void)getDeviceHistory:(NSString *)deviceID;
+- (void)getDeviceHistory:(NSString *)deviceID :(id)someObject;
+
+- (void)getDeployments;
+- (void)getDeployments:(id)someObject;
+- (void)getDeployments:(NSString *)uuid :(NSString *)filter;
+- (void)getDeployments:(NSString *)uuid :(NSString *)filter :(id)someObject;
+
+- (void)getDeployment:(NSString *)deploymentID;
+- (void)getDeployment:(NSString *)deploymentID :(id)someObject;
+
+// Action Methods
 
 - (void)createProduct:(NSString *)name :(NSString *)description;
+- (void)createProduct:(NSString *)name :(NSString *)description :(id)someObject;
+
 - (void)updateProduct:(NSString *)productID :(NSString *)key :(NSString *)value;
-- (void)createDeviceGroup:(NSString *)name :(NSString *)description :(NSString *)productID :(NSInteger)type;
-- (void)updateDeviceGroup:(NSDictionary *)devicegroup :(NSString *)key :(NSString *)value;
+- (void)updateProduct:(NSString *)productID :(NSString *)key :(NSString *)value :(id)someObject;
+
+- (void)deleteProduct:(NSString *)productID;
+- (void)deleteProduct:(NSString *)productID :(id)someObject;
+
+- (void)createDevicegroup:(NSString *)name :(NSString *)description :(NSString *)productID :(NSString *)targetID :(NSString *)type;
+- (void)createDevicegroup:(NSString *)name :(NSString *)description :(NSString *)productID :(NSString *)targetID :(NSString *)type :(id)someObject;
+
+- (void)updateDevicegroup:(NSString *)devicegroupID :(NSString *)devicegroupType :(NSString *)key :(NSString *)value;
+- (void)updateDevicegroup:(NSString *)devicegroupID :(NSString *)devicegroupType :(NSString *)key :(NSString *)value :(id)someObject;
+
+- (void)deleteDevicegroup:(NSString *)devicegroupID;
+- (void)deleteDevicegroup:(NSString *)devicegroupID :(id)someObject;
+
+- (void)restartDevices:(NSString *)devicegroupID;
+- (void)restartDevices:(NSString *)devicegroupID :(id)someObject;
+
+- (void)restartDevice:(NSString *)deviceID;
+- (void)restartDevice:(NSString *)deviceID :(id)someObject;
+
+- (void)updateDevice:(NSString *)deviceID :(NSString *)key :(NSString *)value;
+- (void)updateDevice:(NSString *)deviceID :(NSString *)key :(NSString *)value :(id)someObject;
+
+- (void)unassignDevice:(NSDictionary *)device;
+- (void)unassignDevice:(NSDictionary *)device :(id)someObject;
+
+- (void)assignDevice:(NSMutableDictionary *)device :(NSString *)devicegroupID;
+- (void)assignDevice:(NSMutableDictionary *)device :(NSString *)devicegroupID :(id)someObject;
+
+- (void)deleteDevice:(NSDictionary *)device;
+- (void)deleteDevice:(NSDictionary *)device :(id)someObject;
+
+- (void)createDeployment:(NSDictionary *)deployment;
+- (void)createDeployment:(NSDictionary *)deployment :(id)someObject;
+
+- (void)updateDeployment:(NSString *)deploymentID :(NSString *)key :(NSString *)value;
+- (void)updateDeployment:(NSString *)deploymentID :(NSString *)key :(NSString *)value :(id)someObject;
+
+- (void)deleteDeployment:(NSString *)deploymentID;
+- (void)deleteDeployment:(NSString *)deploymentID :(id)someObject;
 
 // Logging Methods
 
+- (void)startStream:(NSURL *)url;
+- (void)openStream;
+- (void)closeStream;
+- (void)dispatchEvent:(LogStreamEvent *)event;
+- (void)dispatchEvent:(LogStreamEvent *)event :(NSInteger)eventType;
+- (void)relayLogEntry:(NSDictionary *)entry;
+- (void)logOpened;
+- (void)logClosed:(NSDictionary *)error;
+- (BOOL)isDeviceLogging:(NSString *)deviceID;
+- (NSInteger)indexOfLoggedDevice:(NSString *)deviceID;
 
 // HTTP Request Construction Methods
 
-- (NSMutableURLRequest *)makeGETrequest:(NSString *)path;
-- (NSMutableURLRequest *)makePATCHrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
-- (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)bodyDictionary;
+- (NSMutableURLRequest *)makeGETrequest:(NSString *)path :(BOOL)multiple;
 - (NSMutableURLRequest *)makeDELETErequest:(NSString *)path;
+- (NSMutableURLRequest *)makePATCHrequest:(NSString *)path :(NSDictionary *)body;
+- (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)body;
+- (NSMutableURLRequest *)makePUTrequest:(NSString *)path :(NSDictionary *)body;
+- (NSMutableURLRequest *)makeRequest:(NSString *)verb :(NSString *)path :(BOOL)addContentType :(BOOL)getMultipleItems;
+- (void)setRequestAuthorization:(NSMutableURLRequest *)request;
 
 // Connection Methods
 
-- (Connexion *)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode;
+- (Connexion *)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode :(id)someObject;
 - (void)relaunchConnection:(id)userInfo;
 - (void)killAllConnections;
 
-// NSURLSession/NSURLConnection Joint Methods
+// Connection Result Processing Methods
 
 - (NSDictionary *)processConnection:(Connexion *)connexion;
 - (void)processResult:(Connexion *)connexion :(NSDictionary *)data;
+
+// Utility Methods
+
+- (void)reportError;
+- (void)reportError:(NSInteger)errCode;
+- (BOOL)checkFilter:(NSString *)filter :(NSArray *)validFilters;
 
 // Base64 Methods
 
 - (NSString *)encodeBase64String:(NSString *)plainString;
 - (NSString *)decodeBase64String:(NSString *)base64String;
 
-// Utility Methods
 
-- (void)reportError;
-- (NSDictionary *)makeDictionary:(NSString *)key :(NSString *)value;
-- (NSMutableURLRequest *)makeRequest:(NSString *)verb :(NSString *)path;
-- (void)setRequestAuthorization:(NSMutableURLRequest *)request;
-- (NSString *)getDeviceGroupType:(NSInteger)type;
-- (BOOL)isFirstPage:(NSDictionary *)links;
-- (NSString *)nextPageLink:(NSDictionary *)links;
+// Properties
 
+@property (nonatomic, strong)		NSString	*errorMessage;
+@property (nonatomic, strong)		NSString	*statusMessage;
+@property (nonatomic, readonly)		NSUInteger	numberOfConnections;
+@property (nonatomic, readonly)		NSUInteger	numberOfLogStreams;
+@property (nonatomic, readwrite)	NSInteger	pageSize;
+@property (nonatomic, readonly)		BOOL		isLoggedIn;
 
-@property (nonatomic, strong) NSMutableArray *devices;
-@property (nonatomic, strong) NSMutableArray *models;  // REMOVE
-@property (nonatomic, strong) NSMutableArray *codeErrors;
-@property (nonatomic, strong) NSString *errorMessage;
-@property (nonatomic, strong) NSString *statusMessage;
-@property (nonatomic, strong) NSString *deviceCode; // v4 MAY remove
-@property (nonatomic, strong) NSString *agentCode; // v4 MAY remove
-@property (nonatomic, readonly) NSUInteger numberOfConnections;
-
-// v5 API entities
-
-@property (nonatomic, strong) NSMutableArray *products;
-@property (nonatomic, strong) NSMutableArray *deviceGroups;
-@property (nonatomic, strong) NSMutableArray *deployments;
-@property (nonatomic, strong) NSMutableDictionary *currentDeployment;
-@property (nonatomic, readonly) BOOL loggedInFlag;
-@property (nonatomic, readwrite) NSInteger pageSize;
 
 @end
