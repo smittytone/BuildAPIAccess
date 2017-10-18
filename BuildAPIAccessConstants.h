@@ -63,12 +63,13 @@
 
 #define kBaseAPIURL							@"https://api.electricimp.com"
 #define kAPIVersion							@"/v5/"
-// @"https://preview-api.electricimp.com"
 
 // Logging
 
 #define kConnectTypeLogStream				99
 #define kMaxHistoricalLogs					200
+#define kLogTimeout							300.0
+#define klogRetryInterval					10.0
 
 // Pagination
 
