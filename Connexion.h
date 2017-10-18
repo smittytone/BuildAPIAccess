@@ -12,7 +12,7 @@
 
 
 // Required by BuildAPI access class
-// Connexion simply a packaging object for NSURLSessionTasks
+// Connexion is simply a packaging object for NSURLSessionTasks
 // and associated data ie. it has no methods, just four properties:
 
 
