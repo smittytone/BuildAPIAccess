@@ -9,21 +9,22 @@
 #import "BuildAPIAccessConstants.h"
 #import "Connexion.h"
 #import "LogStreamEvent.h"
+#import "Token.h"
 
 
 @interface BuildAPIAccess : NSObject <NSURLSessionDataDelegate, NSURLSessionTaskDelegate>
 
 {
-	NSMutableArray *connexions, *pendingConnections, *loggingDevices;
-	NSMutableArray *products, *devices, *devicegroups, *deployments, *history, *logs;
+	NSMutableArray *connexions, *pendingConnections, *loggingDevices, *products, *devices;
+	NSMutableArray *devicegroups, *deployments, *history, *logs;
 
-	NSMutableDictionary *token;
 	NSDictionary *me;
 
 	NSOperationQueue *connectionQueue, *messageQueue;
 
-	NSString *baseURL, *userAgent, *username, *password;
-	NSString *logStreamID, *deviceToStream;
+	NSString *baseURL, *userAgent, *username, *password, *logStreamID, *deviceToStream;
+
+	NSDateFormatter *dateFormatter;
 
 	NSURL *logStreamURL;
 
@@ -36,12 +37,9 @@
 	id logLastEventID;
 
 	Connexion *logConnexion;
+
+	Token *token;
 }
-
-
-// Define Post-Login Callback
-
-typedef void (^OnLoginCallback)(NSInteger resultCode);
 
 
 // Initialization Methods
@@ -68,24 +66,24 @@ typedef void (^OnLoginCallback)(NSInteger resultCode);
 
 - (void)getProducts;
 - (void)getProducts:(id)someObject;
-- (void)getProducts:(NSString *)uuid :(NSString *)filter;
-- (void)getProducts:(NSString *)uuid :(NSString *)filter :(id)someObject;
+- (void)getProductsWithFilter:(NSString *)filter :(NSString *)uuid;
+- (void)getProductsWithFilter:(NSString *)filter :(NSString *)uuid :(id)someObject;
 
 - (void)getProduct:(NSString *)productID;
 - (void)getProduct:(NSString *)productID :(id)someObject;
 
 - (void)getDevicegroups;
 - (void)getDevicegroups:(id)someObject;
-- (void)getDevicegroups:(NSString *)uuid :(NSString *)filter;
-- (void)getDevicegroups:(NSString *)uuid :(NSString *)filter :(id)someObject;
+- (void)getDevicegroupsWithFilter:(NSString *)filter :(NSString *)uuid;
+- (void)getDevicegroupsWithFilter:(NSString *)filter :(NSString *)uuid :(id)someObject;
 
 - (void)getDevicegroup:(NSString *)devicegroupID;
 - (void)getDevicegroup:(NSString *)devicegroupID :(id)someObject;
 
 - (void)getDevices;
 - (void)getDevices:(id)someObject;
-- (void)getDevices:(NSString *)uuid :(NSString *)filter;
-- (void)getDevices:(NSString *)uuid :(NSString *)filter :(id)someObject;
+- (void)getDevicesWithFilter:(NSString *)filter :(NSString *)uuid;
+- (void)getDevicesWithFilter:(NSString *)filter :(NSString *)uuid :(id)someObject;
 
 - (void)getDevice:(NSString *)deviceID;
 - (void)getDevice:(NSString *)deviceID :(id)someObject;
@@ -104,8 +102,8 @@ typedef void (^OnLoginCallback)(NSInteger resultCode);
 
 - (void)getDeployments;
 - (void)getDeployments:(id)someObject;
-- (void)getDeployments:(NSString *)uuid :(NSString *)filter;
-- (void)getDeployments:(NSString *)uuid :(NSString *)filter :(id)someObject;
+- (void)getDeploymentsWithFilter:(NSString *)filter :(NSString *)uuid;
+- (void)getDeploymentsWithFilter:(NSString *)filter :(NSString *)uuid :(id)someObject;
 
 - (void)getDeployment:(NSString *)deploymentID;
 - (void)getDeployment:(NSString *)deploymentID :(id)someObject;
@@ -115,14 +113,14 @@ typedef void (^OnLoginCallback)(NSInteger resultCode);
 - (void)createProduct:(NSString *)name :(NSString *)description;
 - (void)createProduct:(NSString *)name :(NSString *)description :(id)someObject;
 
-- (void)updateProduct:(NSString *)productID :(NSString *)key :(NSString *)value;
-- (void)updateProduct:(NSString *)productID :(NSString *)key :(NSString *)value :(id)someObject;
+- (void)updateProduct:(NSString *)productID :(NSArray *)keys :(NSArray *)values;
+- (void)updateProduct:(NSString *)productID :(NSArray *)keys :(NSArray *)values :(id)someObject;
 
 - (void)deleteProduct:(NSString *)productID;
 - (void)deleteProduct:(NSString *)productID :(id)someObject;
 
-- (void)createDevicegroup:(NSString *)name :(NSString *)description :(NSString *)productID :(NSString *)targetID :(NSString *)type;
-- (void)createDevicegroup:(NSString *)name :(NSString *)description :(NSString *)productID :(NSString *)targetID :(NSString *)type :(id)someObject;
+- (void)createDevicegroup:(NSDictionary *)details;
+- (void)createDevicegroup:(NSDictionary *)details :(id)someObject;
 
 - (void)updateDevicegroup:(NSString *)devicegroupID :(NSString *)devicegroupType :(NSString *)key :(NSString *)value;
 - (void)updateDevicegroup:(NSString *)devicegroupID :(NSString *)devicegroupType :(NSString *)key :(NSString *)value :(id)someObject;
@@ -172,7 +170,7 @@ typedef void (^OnLoginCallback)(NSInteger resultCode);
 
 // HTTP Request Construction Methods
 
-- (NSMutableURLRequest *)makeGETrequest:(NSString *)path :(BOOL)multiple;
+- (NSMutableURLRequest *)makeGETrequest:(NSString *)path :(BOOL)getMultipleItems;
 - (NSMutableURLRequest *)makeDELETErequest:(NSString *)path;
 - (NSMutableURLRequest *)makePATCHrequest:(NSString *)path :(NSDictionary *)body;
 - (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)body;
@@ -184,6 +182,7 @@ typedef void (^OnLoginCallback)(NSInteger resultCode);
 
 - (Connexion *)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode :(id)someObject;
 - (void)relaunchConnection:(id)userInfo;
+- (void)launchPendingConnections;
 - (void)killAllConnections;
 
 // Connection Result Processing Methods
@@ -195,6 +194,7 @@ typedef void (^OnLoginCallback)(NSInteger resultCode);
 
 - (void)reportError;
 - (void)reportError:(NSInteger)errCode;
+- (NSString *)processAPIError:(NSDictionary *)error;
 - (BOOL)checkFilter:(NSString *)filter :(NSArray *)validFilters;
 
 // Base64 Methods
