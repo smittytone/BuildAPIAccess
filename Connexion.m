@@ -11,7 +11,7 @@
 @implementation Connexion
 
 
-@synthesize actionCode, data, errorCode, task, representedObject;
+@synthesize actionCode, data, errorCode, task, representedObject, originalRequest;
 
 
 - (instancetype)init
@@ -21,6 +21,7 @@
 		task = nil;
 		data = nil;
 		representedObject = nil;
+		originalRequest = nil;
 		actionCode = -1;
 		errorCode = -1;
 	}
