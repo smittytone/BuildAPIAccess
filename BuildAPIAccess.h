@@ -117,8 +117,8 @@
 - (void)createDevicegroup:(NSDictionary *)details;
 - (void)createDevicegroup:(NSDictionary *)details :(id)someObject;
 
-- (void)updateDevicegroup:(NSString *)devicegroupID :(NSString *)devicegroupType :(NSString *)key :(NSString *)value;
-- (void)updateDevicegroup:(NSString *)devicegroupID :(NSString *)devicegroupType :(NSString *)key :(NSString *)value :(id)someObject;
+- (void)updateDevicegroup:(NSString *)devicegroupID :(NSArray *)keys :(NSArray *)values;
+- (void)updateDevicegroup:(NSString *)devicegroupID :(NSArray *)keys :(NSArray *)values :(id)someObject;
 
 - (void)deleteDevicegroup:(NSString *)devicegroupID;
 - (void)deleteDevicegroup:(NSString *)devicegroupID :(id)someObject;
@@ -129,8 +129,8 @@
 - (void)restartDevice:(NSString *)deviceID;
 - (void)restartDevice:(NSString *)deviceID :(id)someObject;
 
-- (void)updateDevice:(NSString *)deviceID :(NSString *)key :(NSString *)value;
-- (void)updateDevice:(NSString *)deviceID :(NSString *)key :(NSString *)value :(id)someObject;
+- (void)updateDevice:(NSString *)deviceID :(NSString *)name;
+- (void)updateDevice:(NSString *)deviceID :(NSString *)name :(id)someObject;
 
 - (void)unassignDevice:(NSDictionary *)device;
 - (void)unassignDevice:(NSDictionary *)device :(id)someObject;
