@@ -1029,21 +1029,44 @@
 
 	// Check the keys for validity - only a product's attributes.name and attributes.description can be changed
 
-	for (NSString *key in keys)
+	NSMutableDictionary *attributes = [[NSMutableDictionary alloc] init];
+	NSString *name = nil;
+
+	for (NSUInteger i = 0 ; i < keys.count ; ++i)
 	{
-		if (([key compare:@"name"] != NSOrderedSame) && ([key compare:@"description"] != NSOrderedSame))
+		NSString *key = [keys objectAtIndex:i];
+
+		if ([key compare:@"name"] == NSOrderedSame)
 		{
-			errorMessage = @"Could not create a request to update the product: invalid data field name.";
-			[self reportError];
-			return;
+			name = [values objectAtIndex:i];
+
+			if (name != nil)
+			{
+				if (name.length > 0)
+				{
+					[attributes setValue:name forKey:@"name"];
+				}
+				else
+				{
+					errorMessage = @"Could not create a request to update the product: invalid product name supplied.";
+					[self reportError];
+					return;
+				}
+			}
+
+			break;
+		}
+
+		if ([key compare:@"description"] == NSOrderedSame)
+		{
+			name = [values objectAtIndex:i];
+			if (name != nil) [attributes setValue:name forKey:@"name"];
 		}
 	}
 
-	NSDictionary *attributes = [NSDictionary dictionaryWithObjects:values forKeys:keys];
-
 	NSDictionary *dict = @{ @"type" : @"product",
 							@"id" : productID,
-							@"attributes" : attributes };
+							@"attributes" : [NSDictionary dictionaryWithDictionary:attributes] };
 
 	NSDictionary *data = @{ @"data" : dict };
 
@@ -1191,9 +1214,6 @@
 					@"id" : targetID };
 	}
 
-	//NSString *loadcode = [details valueForKey:@"loadcode"];
-	//if (loadcode == nil) loadcode = @"afterblessing";
-
 	NSDictionary *attributes = @{ @"name" : name,
 								  @"description" : description };
 
@@ -1284,7 +1304,7 @@
 				}
 				else
 				{
-					errorMessage = @"Could not create a request to update the device group: invalid device group type supplied.";
+					errorMessage = @"Could not create a request to update the device group: invalid device group name supplied.";
 					[self reportError];
 					return;
 				}
