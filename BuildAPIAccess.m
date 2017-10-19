@@ -1060,7 +1060,7 @@
 		if ([key compare:@"description"] == NSOrderedSame)
 		{
 			name = [values objectAtIndex:i];
-			if (name != nil) [attributes setValue:name forKey:@"name"];
+			if (name != nil) [attributes setValue:name forKey:@"description"];
 		}
 	}
 
@@ -1341,7 +1341,7 @@
 		{
 			devicegroupType = [values objectAtIndex:i];
 
-			if (devicegroupType == nil || devicegroupType.length == 0) devicegroupType = @"development_devicegroup";
+			if (devicegroupType.length == 0) devicegroupType = @"development_devicegroup";
 
 			BOOL flag = NO;
 			NSArray *allowedTypes = @[ @"pre_production_devicegroup",
@@ -1386,6 +1386,8 @@
 	}
 
 	NSDictionary *dict;
+
+	if (devicegroupType == nil) devicegroupType = @"development_devicegroup";
 
 	if (attributes.count > 0)
 	{
