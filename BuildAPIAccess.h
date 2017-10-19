@@ -49,11 +49,12 @@
 // Login Methods
 
 - (void)login:(NSString *)userName :(NSString *)passWord :(BOOL)is2FA;
-- (void)getNewSessionToken;
-- (void)refreshSessionToken;
-- (BOOL)isSessionTokenValid;
+- (void)getNewAccessToken;
+- (void)refreshAccessToken;
+- (BOOL)isAccessTokenValid;
 - (void)clearCredentials;
 - (void)logout;
+- (void)twoFactorLogin:(NSString *)loginToken :(NSString *)otp;
 
 // Pagination Methods
 
@@ -87,12 +88,6 @@
 
 - (void)getDevice:(NSString *)deviceID;
 - (void)getDevice:(NSString *)deviceID :(id)someObject;
-
-- (void)startLogging:(NSString *)deviceID;
-- (void)startLogging:(NSString *)deviceID :(id)someObject;
-
-- (void)stopLogging:(NSString *)deviceID;
-- (void)stopLogging:(NSString *)deviceID :(id)someObject;
 
 - (void)getDeviceLogs:(NSString *)deviceID;
 - (void)getDeviceLogs:(NSString *)deviceID :(id)someObject;
@@ -157,11 +152,18 @@
 
 // Logging Methods
 
+- (void)startLogging:(NSString *)deviceID;
+- (void)startLogging:(NSString *)deviceID :(id)someObject;
+- (void)stopLogging:(NSString *)deviceID;
+- (void)stopLogging:(NSString *)deviceID :(id)someObject;
+
 - (void)startStream:(NSURL *)url;
 - (void)openStream;
 - (void)closeStream;
+
 - (void)dispatchEvent:(LogStreamEvent *)event;
 - (void)dispatchEvent:(LogStreamEvent *)event :(NSInteger)eventType;
+
 - (void)relayLogEntry:(NSDictionary *)entry;
 - (void)logOpened;
 - (void)logClosed:(NSDictionary *)error;

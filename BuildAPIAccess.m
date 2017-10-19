@@ -125,14 +125,14 @@
 
 	// Get a new token using the credentials provided
 
-	[self getNewSessionToken];
+	[self getNewAccessToken];
 }
 
 
 
-- (void)getNewSessionToken
+- (void)getNewAccessToken
 {
-	// Request a new session token using the stored credentials,
+	// Request a new access token using the stored credentials,
 	// failing if neither has been provided (by 'login:')
 
 	if (!username || !password)
@@ -171,7 +171,7 @@
 
 
 
-- (void)refreshSessionToken
+- (void)refreshAccessToken
 {
 	// Getting a new session token using the refresh_token does not require the account username and pw
 
@@ -179,7 +179,7 @@
 	{
 		// We don't have a token, so just get a new one
 
-		[self getNewSessionToken];
+		[self getNewAccessToken];
 		return;
 	}
 
@@ -212,42 +212,7 @@
 
 
 
-- (void)twoFactorLogin:(NSString *)loginToken :(NSString *)otp
-{
-	// This is essentially a placeholder for whe 2FA is introduced for impCentral API logins
-
-	NSDictionary *dict = @{ @"otp" : otp,
-							@"login_token" : loginToken };
-
-	NSError *error = nil;
-	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"auth"]]];
-
-	[request setHTTPMethod:@"POST"];
-	[request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
-	[request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-	[request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
-
-	if (error)
-	{
-		errorMessage = @"Could not create a request to submit your impCloud OTP token.";
-		[self reportError];
-		return;
-	}
-
-	if (request)
-	{
-		[self launchConnection:request :kConnectTypeGetToken :nil];
-	}
-	else
-	{
-		errorMessage = @"Could not create a request to submit your impCloud OTP token.";
-		[self reportError];
-	}
-}
-
-
-
-- (BOOL)isSessionTokenValid
+- (BOOL)isAccessTokenValid
 {
 	// No token available; return BAD TOKEN
 
@@ -312,6 +277,41 @@
 
 	token = nil;
 	isLoggedIn = NO;
+}
+
+
+
+- (void)twoFactorLogin:(NSString *)loginToken :(NSString *)otp
+{
+	// This is essentially a placeholder for whe 2FA is introduced for impCentral API logins
+
+	NSDictionary *dict = @{ @"otp" : otp,
+							@"login_token" : loginToken };
+
+	NSError *error = nil;
+	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"auth"]]];
+
+	[request setHTTPMethod:@"POST"];
+	[request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
+	[request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+	[request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
+
+	if (error)
+	{
+		errorMessage = @"Could not create a request to submit your impCloud OTP token.";
+		[self reportError];
+		return;
+	}
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeGetToken :nil];
+	}
+	else
+	{
+		errorMessage = @"Could not create a request to submit your impCloud OTP token.";
+		[self reportError];
+	}
 }
 
 
@@ -1383,12 +1383,16 @@
 	}
 
 	BOOL flag = NO;
-	NSArray *allowedTypes = @[ @"development_devicegroup",
+	NSArray *allowedTypes = @[ @"pre_production_devicegroup",
+							   @"pre_factoryfixture_devicegroup",
+							   @"development_devicegroup",
 							   @"production_devicegroup",
 							   @"factoryfixture_devicegroup",
 							   @"development",
 							   @"production",
-							   @"factoryfixture" ];
+							   @"factoryfixture",
+							   @"pre_factoryfixture",
+							   @"pre_production" ];
 
 	for (NSUInteger i = 0 ; i < allowedTypes.count ; ++i)
 	{
@@ -2015,7 +2019,7 @@
 	// If we are not logged in, we won't have a token and so we need to let the
 	// check pass so that a token is retrieved in the first place
 
-	if (!isLoggedIn || (token.accessToken.length != 0 && [self isSessionTokenValid]))
+	if (!isLoggedIn || (token.accessToken.length != 0 && [self isAccessTokenValid]))
 	{
 		[aConnexion.task resume];
 
@@ -2045,7 +2049,7 @@
 		{
 			// We have no queued connections yet, so get a new token
 
-			[self refreshSessionToken];
+			[self refreshAccessToken];
 		}
 
 		// Add the current request to the pending queue while the new token is retrieved
@@ -3327,6 +3331,20 @@ didReceiveResponse:(NSURLResponse *)response
 			: @{ @"data" : @"restarted" };
 
 			[nc postNotificationName:@"BuildAPIDeviceRestarted" object:returnData];
+			break;
+		}
+
+		case kConnectTypeGetDevice:
+		{
+			// The server returns a record of the single deployment
+
+			NSDictionary *device = [data objectForKey:@"data"];
+
+			returnData = connexion.representedObject != nil
+			? @{ @"data" : device, @"object" : connexion.representedObject }
+			: @{ @"data" : device };
+
+			[nc postNotificationName:@"BuildAPIGotDevice" object:returnData];
 			break;
 		}
 
