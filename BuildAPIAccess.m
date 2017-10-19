@@ -265,12 +265,12 @@
 		dateFormatter.timeZone = [NSTimeZone timeZoneWithAbbreviation:@"UTC"];
 	}
 
-	NSLog(@"Getting expiry date %@ as NSDate", token.expiryDate);
+	NSLog(@"Expiry date: %@", token.expiryDate);
 
 	NSDate *expiry = [dateFormatter dateFromString:token.expiryDate];
 	NSDate *now = [NSDate date];
 
-	NSLog(@"Comparing expiry date to now %@", [dateFormatter stringFromDate:now]);
+	NSLog(@"Now: %@", [dateFormatter stringFromDate:now]);
 
 	NSDate *latest = [now laterDate:expiry];
 
@@ -281,7 +281,6 @@
 		NSLog(@"Token EXPIRED");
 
 		// Clear the access token (we can't use it anyway)
-		token.accessToken = @"";
 		return NO;
 	}
 
@@ -1914,8 +1913,8 @@
 	NSMutableURLRequest *request = [self makeRequest:@"POST" :path :YES :NO];
 
     if (body != nil) [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:body options:0 error:&error]];
-
-	return (error != nil ? request : nil);
+	if (error != nil) return nil;
+	return request;
 }
 
 
@@ -1926,8 +1925,8 @@
 	NSMutableURLRequest *request = [self makeRequest:@"PATCH" :path :YES :NO];
 
 	if (body != nil) [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:body options:0 error:&error]];
-
-	return (error != nil ? request : nil);
+	if (error != nil) return nil;
+	return request;
 }
 
 
@@ -1938,8 +1937,8 @@
 	NSMutableURLRequest *request = [self makeRequest:@"PUT" :path :YES :NO];
 
 	if (body) [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:body options:0 error:&error]];
-
-	return (error != nil ? request : nil);
+	if (error != nil) return nil;
+	return request;
 }
 
 
@@ -2015,7 +2014,7 @@
 	// If we are not logged in, we won't have a token and so we need to let the
 	// check pass so that a token is retrieved in the first place
 
-	if (!isLoggedIn || (token.accessToken.length != 0 && [self isSessionTokenValid]))
+	if (aConnexion.actionCode == kConnectTypeGetToken || aConnexion.actionCode == kConnectTypeRefreshToken || [self isSessionTokenValid])
 	{
 		[aConnexion.task resume];
 
@@ -2049,7 +2048,13 @@
 		}
 
 		// Add the current request to the pending queue while the new token is retrieved
+		// Zap the NSURLSession to avoid memory leaks and becuase it's not needed (we'll
+		// recreate a session when we need it)
 
+		aConnexion.originalRequest = request;
+		aConnexion.task = nil;
+		
+		[session invalidateAndCancel];
 		[pendingConnections addObject:aConnexion];
 	}
 
@@ -2082,6 +2087,14 @@
 	{
 		for (Connexion *conn in pendingConnections)
 		{
+			[self setRequestAuthorization:conn.originalRequest];
+
+			NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
+																  delegate:self
+															 delegateQueue:[NSOperationQueue mainQueue]];
+
+			conn.task = [session dataTaskWithRequest:conn.originalRequest];
+
 			[conn.task resume];
 
 			if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStart" object:nil];
@@ -3631,7 +3644,7 @@ didReceiveResponse:(NSURLResponse *)response
 	}
 
 	prefix = index != 99 ? [types objectAtIndex:index] : @"Unknown";
-	return [NSString stringWithFormat:@"[API %@] %@", prefix, message];
+	return [NSString stringWithFormat:@"[API %@] %@ (%@)", prefix, message, status];
 }
 
 
