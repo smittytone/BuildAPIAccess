@@ -144,8 +144,8 @@
 - (void)createDeployment:(NSDictionary *)deployment;
 - (void)createDeployment:(NSDictionary *)deployment :(id)someObject;
 
-- (void)updateDeployment:(NSString *)deploymentID :(NSString *)key :(NSString *)value;
-- (void)updateDeployment:(NSString *)deploymentID :(NSString *)key :(NSString *)value :(id)someObject;
+- (void)updateDeployment:(NSString *)deploymentID :(NSArray *)keys :(NSArray *)values;
+- (void)updateDeployment:(NSString *)deploymentID :(NSArray *)keys :(NSArray *)values :(id)someObject;
 
 - (void)deleteDeployment:(NSString *)deploymentID;
 - (void)deleteDeployment:(NSString *)deploymentID :(id)someObject;

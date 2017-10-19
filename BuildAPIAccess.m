@@ -1013,7 +1013,7 @@
 		return;
 	}
 
-	if (keys.count == 0)
+	if (keys == nil || keys.count == 0)
 	{
 		errorMessage = @"Could not create a request to update the product: no data fields specified.";
 		[self reportError];
@@ -1064,21 +1064,31 @@
 		}
 	}
 
-	NSDictionary *dict = @{ @"type" : @"product",
-							@"id" : productID,
-							@"attributes" : [NSDictionary dictionaryWithDictionary:attributes] };
-
-	NSDictionary *data = @{ @"data" : dict };
-
-	NSMutableURLRequest *request = [self makePATCHrequest:[NSString stringWithFormat:@"products/%@", productID] :data];
-
-	if (request)
+	if (attributes.count > 0)
 	{
-		[self launchConnection:request :kConnectTypeUpdateProduct :someObject];
+		// Only proceed with if valid changes have been made
+		
+		NSDictionary *dict = @{ @"type" : @"product",
+								@"id" : productID,
+								@"attributes" : [NSDictionary dictionaryWithDictionary:attributes] };
+
+		NSDictionary *data = @{ @"data" : dict };
+
+		NSMutableURLRequest *request = [self makePATCHrequest:[NSString stringWithFormat:@"products/%@", productID] :data];
+
+		if (request)
+		{
+			[self launchConnection:request :kConnectTypeUpdateProduct :someObject];
+		}
+		else
+		{
+			errorMessage = @"Could not create a request to update the product.";
+			[self reportError];
+		}
 	}
 	else
 	{
-		errorMessage = @"Could not create a request to update the product.";
+		errorMessage = @"Could not create a request to update the product - no changes made.";
 		[self reportError];
 	}
 }
@@ -1265,7 +1275,7 @@
 		return;
 	}
 
-	if (keys.count == 0)
+	if (keys == nil || keys.count == 0)
 	{
 		errorMessage = @"Could not create a request to update the device group: no data fields specified.";
 		[self reportError];
@@ -1403,7 +1413,7 @@
 		}
 		else
 		{
-			errorMessage = @"Could not create a request to update the device group: invalid data supplied.";
+			errorMessage = @"Could not create a request to update the device group: no changes made.";
 			[self reportError];
 			return;
 		}
@@ -1775,14 +1785,14 @@
 
 
 
-- (void)updateDeployment:(NSString *)deploymentID :(NSString *)key :(NSString *)value
+- (void)updateDeployment:(NSString *)deploymentID :(NSArray *)keys :(NSArray *)values
 {
-	[self updateDeployment:deploymentID :key :value :nil];
+	[self updateDeployment:deploymentID :keys :values :nil];
 }
 
 
 
-- (void)updateDeployment:(NSString *)deploymentID :(NSString *)key :(NSString *)value :(id)someObject
+- (void)updateDeployment:(NSString *)deploymentID :(NSArray *)keys :(NSArray *)values :(id)someObject
 {
 	// Set up a PATCH request to /deployments/{id}
 	// We can ONLY update a deployments flagged state and description FOR NOW
@@ -1795,37 +1805,66 @@
 		return;
 	}
 
-	if (key == nil || key.length == 0)
+	if (keys == nil || keys.count == 0)
 	{
-		errorMessage = @"Could not create a request to update the deployment: no data field specified.";
+		errorMessage = @"Could not create a request to update the deployment: no data fields specified.";
 		[self reportError];
 		return;
 	}
 
-	if (([key compare:@"description"] != NSOrderedSame) && ([key compare:@"flagged"] != NSOrderedSame))
+	if (values.count == 0 || values.count != keys.count)
 	{
-		errorMessage = @"Could not create a request to update the deployment: invalid data field name specified.";
+		errorMessage = @"Could not create a request to update the deployment: insufficient or extraneous data supplied.";
 		[self reportError];
 		return;
 	}
 
-	NSDictionary *attributes = @{ key : value };
+	NSMutableDictionary *attributes = [[NSMutableDictionary alloc] init];
+	NSString *desc = nil;
 
-	NSDictionary *dict = @{ @"id" : deploymentID,
-							@"type" : @"deployment",
-							@"attributes" : attributes};
-
-	NSDictionary *data = @{ @"data" : dict };
-
-	NSMutableURLRequest *request = [self makePATCHrequest:[NSString stringWithFormat:@"deployments/%@", deploymentID] :data];
-
-	if (request)
+	for (NSUInteger i = 0 ; i < keys.count ; ++i)
 	{
-		[self launchConnection:request :kConnectTypeUpdateDeployment :someObject];
+		NSString *key = [keys objectAtIndex:i];
+
+		if ([key compare:@"description"] == NSOrderedSame)
+		{
+			desc = [values objectAtIndex:i];
+			if (desc != nil) [attributes setValue:desc forKey:@"description"];
+			break;
+		}
+
+		if ([key compare:@"flagged"] == NSOrderedSame)
+		{
+			NSNumber *value = [values objectAtIndex:i];
+			if (value != nil) [attributes setValue:value forKey:@"flagged"];
+		}
+	}
+
+	if (attributes.count > 0)
+	{
+		// Only proceed if valid changes have actually been made
+
+		NSDictionary *dict= @{ @"id" : deploymentID,
+								@"type" : @"deployment",
+								@"attributes" : [NSDictionary dictionaryWithDictionary:attributes] };
+
+		NSDictionary *data = @{ @"data" : dict };
+
+		NSMutableURLRequest *request = [self makePATCHrequest:[NSString stringWithFormat:@"deployments/%@", deploymentID] :data];
+
+		if (request)
+		{
+			[self launchConnection:request :kConnectTypeUpdateDeployment :someObject];
+		}
+		else
+		{
+			errorMessage = @"Could not create a request to update the deployment.";
+			[self reportError];
+		}
 	}
 	else
 	{
-		errorMessage = @"Could not create a request to update the deployment.";
+		errorMessage = @"Could not create a request to update the deployment - no valid changes made.";
 		[self reportError];
 	}
 }
