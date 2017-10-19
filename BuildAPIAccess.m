@@ -759,135 +759,6 @@
 
 
 
-- (void)startLogging:(NSString *)deviceID
-{
-	[self startLogging:deviceID :nil];
-}
-
-
-
-- (void)startLogging:(NSString *)deviceID :(id)someObject
-{
-	if (deviceID == nil || deviceID.length == 0)
-	{
-		// No ID? Can't proceed
-
-		errorMessage = @"Could not create a request to stream the device logs: no device specified.";
-		[self reportError];
-		return;
-	}
-
-	if (loggingDevices == nil) loggingDevices = [[NSMutableArray alloc] init];
-
-	// Check whether this is first device we're starting logging for, ie. whether we have a stream ID
-
-	if (logStreamID == nil || logStreamID.length == 0)
-	{
-		// This is the first device, so we need to first get the stream ID and stream URL
-		// POST-ing to /logstream will return a stream ID by way of a 302, which we will trap later
-
-		NSMutableURLRequest *request = [self makePOSTrequest:@"logstream?format=json" :nil];
-
-		if (request)
-		{
-			// Pass in the first device's ID so we have it to use after the stream has been established
-
-			NSDictionary *dict = (someObject != nil) ? @{ @"device" : deviceID, @"object" : someObject } : @{ @"device" : deviceID };
-
-			[self launchConnection:request :kConnectTypeGetLogStreamID :dict];
-		}
-		else
-		{
-			errorMessage = @"Could not create a request to stream the specified device logs.";
-			[self reportError];
-		}
-	}
-	else
-	{
-		// We are already streaming from one or more devices, so just add the new one to the list
-
-		[self addDeviceToLogStream:deviceID :someObject];
-	}
-}
-
-
-
-- (void)addDeviceToLogStream:(NSString *)deviceID :(id)someObject
-{
-	// PUT { device identifier } to /logstream/<stream_id>
-	// { device identifier } eg. { id: ‘d9f6f253-d203-487f-bdb0-70ea1529ee1b’, type: ‘device’ }
-
-	if (loggingDevices.count > 0)
-	{
-		// First check that the device is not already logging; if it is, bail
-
-		for (NSString *devid in loggingDevices)
-		{
-			if ([devid compare:deviceID] == NSOrderedSame) return;
-		}
-	}
-
-	NSDictionary *dict = @{ @"id" : deviceID,
-							@"type" : @"device" };
-
-	NSMutableURLRequest *request = [self makePUTrequest:[NSString stringWithFormat:@"logstream/%@/%@", logStreamID, deviceID] :dict];
-
-	if (request)
-	{
-		dict = (someObject != nil) ? @{ @"device" : deviceID, @"object" : someObject } : @{ @"device" : deviceID };
-
-		[self launchConnection:request :kConnectTypeAddLogStream :dict];
-	}
-	else
-	{
-		errorMessage = @"Could not create a request to stream the specified device logs.";
-		[self reportError];
-	}
-}
-
-
-
-- (void)stopLogging:(NSString *)deviceID
-{
-	[self stopLogging:deviceID :nil];
-}
-
-
-
-- (void)stopLogging:(NSString *)deviceID :(id)someObject
-{
-	// DELETE /logstream/<stream_id>/<device_identifier>
-	// { id: ‘d9f6f253-d203-487f-bdb0-70ea1529ee1b’, type: ‘device’ }
-
-	NSDictionary *dict = @{ @"id" : deviceID,
-							@"type" : @"device" };
-
-	NSMutableURLRequest *request = [self makeRequest:@"DELETE" :[NSString stringWithFormat:@"logstream/%@/%@", logStreamID, deviceID] :NO :NO];
-	NSError *error;
-
-	[request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
-
-	if (error)
-	{
-		errorMessage = @"Could not create a request to stop streaming the specified device logs: bad JSON data.";
-		[self reportError];
-		return;
-	}
-
-	if (request)
-	{
-		dict = (someObject != nil) ? @{ @"device" : deviceID, @"object" : someObject } : @{ @"device" : deviceID };
-
-		[self launchConnection:request :kConnectTypeEndLogStream :dict];
-	}
-	else
-	{
-		errorMessage = @"Could not create a request to stop streaming the specified device logs.";
-		[self reportError];
-	}
-}
-
-
 - (void)getDeviceLogs:(NSString *)deviceID
 {
 	[self getDeviceLogs:deviceID :nil];
@@ -1388,42 +1259,55 @@
 		return;
 	}
 
-	// Check the keys for validity - only a device group's attributes.name, attributes.description, attributes.load_code_after_blessing,
-	// and relationships.production_target can be changed
+	// Check the keys for validity - only a device group's attributes.name, attributes.description,
+	// attributes.load_code_after_blessing, and relationships.production_target can be changed
 
 	NSMutableDictionary *attributes = [[NSMutableDictionary alloc] init];
-	NSMutableDictionary *relationships  = [[NSMutableDictionary alloc] init];
+	NSMutableDictionary *relationships = [[NSMutableDictionary alloc] init];
 
 	NSString *devicegroupType = nil;
 	NSString *name = nil;
-	BOOL loadFlag = NO;
 
 	for (NSUInteger i = 0 ; i < keys.count ; ++i)
 	{
 		NSString *key = [keys objectAtIndex:i];
 
-		if ([key compare@"name"] == NSOrderedSame)
+		if ([key compare:@"name"] == NSOrderedSame)
 		{
 			name = [values objectAtIndex:i];
-			if (name != nil && name.length > 0) [attributes setValue:name forObject:@"name"];
+
+			if (name != nil)
+			{
+				if (name.length > 0)
+				{
+					[attributes setValue:name forKey:@"name"];
+				}
+				else
+				{
+					errorMessage = @"Could not create a request to update the device group: invalid device group type supplied.";
+					[self reportError];
+					return;
+				}
+			}
+
 			break;
 		}
 
-		if ([key compare@"description"] == NSOrderedSame)
+		if ([key compare:@"description"] == NSOrderedSame)
 		{
 			name = [values objectAtIndex:i];
-			if (name != nil) [attributes setValue:name forObject:@"description"];
+			if (name != nil) [attributes setValue:name forKey:@"description"];
 			break;
 		}
 
-		if ([key compare@"production_target"] == NSOrderedSame)
+		if ([key compare:@"production_target"] == NSOrderedSame)
 		{
 			NSDictionary *pt = [values objectAtIndex:i];
-			if (pt != nil) [relationships setValue:pt forObject:@"production_target"];
+			if (pt != nil) [relationships setValue:pt forKey:@"production_target"];
 			break;
 		}
 
-		if ([key compare@"type"] == NSOrderedSame)
+		if ([key compare:@"type"] == NSOrderedSame)
 		{
 			devicegroupType = [values objectAtIndex:i];
 
@@ -1463,10 +1347,10 @@
 			break;
 		}
 
-		if ([key compare@"load_code_after_blessing"] == NSOrderedSame)
+		if ([key compare:@"load_code_after_blessing"] == NSOrderedSame)
 		{
 			NSNumber *val = [values objectAtIndex:i];
-			if (val != nil) [attributes setValue:val forObject:@"load_code_after_blessing"];
+			if (val != nil) [attributes setValue:val forKey:@"load_code_after_blessing"];
 			break;
 		}
 	}
@@ -1496,6 +1380,12 @@
 			dict = @{ @"id" : devicegroupID,
 					  @"type" : devicegroupType,
 					  @"relationships" : [NSDictionary dictionaryWithDictionary:relationships] };
+		}
+		else
+		{
+			errorMessage = @"Could not create a request to update the device group: invalid data supplied.";
+			[self reportError];
+			return;
 		}
 	}
 
@@ -1638,7 +1528,7 @@
 	// NOTE watch for a zero-length name - this is valid as it removes the device name,
 	// ie. sets it to the device ID
 
-	NSDictionary *attributes = { @"name" : name };
+	NSDictionary *attributes = @{ @"name" : name };
 
 	NSDictionary *dict = @{ @"type" : @"device",
 							@"id" : deviceID,
@@ -2078,7 +1968,7 @@
 	// If we are not logged in, we won't have a token and so we need to let the
 	// check pass so that a token is retrieved in the first place
 
-	if (aConnexion.actionCode == kConnectTypeGetToken || aConnexion.actionCode == kConnectTypeRefreshToken || [self isSessionTokenValid])
+	if (aConnexion.actionCode == kConnectTypeGetToken || aConnexion.actionCode == kConnectTypeRefreshToken || [self isAccessTokenValid])
 	{
 		[aConnexion.task resume];
 
@@ -2219,6 +2109,136 @@
 
 
 #pragma mark - Log Stream Methods
+
+
+- (void)startLogging:(NSString *)deviceID
+{
+	[self startLogging:deviceID :nil];
+}
+
+
+
+- (void)startLogging:(NSString *)deviceID :(id)someObject
+{
+	if (deviceID == nil || deviceID.length == 0)
+	{
+		// No ID? Can't proceed
+
+		errorMessage = @"Could not create a request to stream the device logs: no device specified.";
+		[self reportError];
+		return;
+	}
+
+	if (loggingDevices == nil) loggingDevices = [[NSMutableArray alloc] init];
+
+	// Check whether this is first device we're starting logging for, ie. whether we have a stream ID
+
+	if (logStreamID == nil || logStreamID.length == 0)
+	{
+		// This is the first device, so we need to first get the stream ID and stream URL
+		// POST-ing to /logstream will return a stream ID by way of a 302, which we will trap later
+
+		NSMutableURLRequest *request = [self makePOSTrequest:@"logstream?format=json" :nil];
+
+		if (request)
+		{
+			// Pass in the first device's ID so we have it to use after the stream has been established
+
+			NSDictionary *dict = (someObject != nil) ? @{ @"device" : deviceID, @"object" : someObject } : @{ @"device" : deviceID };
+
+			[self launchConnection:request :kConnectTypeGetLogStreamID :dict];
+		}
+		else
+		{
+			errorMessage = @"Could not create a request to stream the specified device logs.";
+			[self reportError];
+		}
+	}
+	else
+	{
+		// We are already streaming from one or more devices, so just add the new one to the list
+
+		[self addDeviceToLogStream:deviceID :someObject];
+	}
+}
+
+
+
+- (void)addDeviceToLogStream:(NSString *)deviceID :(id)someObject
+{
+	// PUT { device identifier } to /logstream/<stream_id>
+	// { device identifier } eg. { id: ‘d9f6f253-d203-487f-bdb0-70ea1529ee1b’, type: ‘device’ }
+
+	if (loggingDevices.count > 0)
+	{
+		// First check that the device is not already logging; if it is, bail
+
+		for (NSString *devid in loggingDevices)
+		{
+			if ([devid compare:deviceID] == NSOrderedSame) return;
+		}
+	}
+
+	NSDictionary *dict = @{ @"id" : deviceID,
+							@"type" : @"device" };
+
+	NSMutableURLRequest *request = [self makePUTrequest:[NSString stringWithFormat:@"logstream/%@/%@", logStreamID, deviceID] :dict];
+
+	if (request)
+	{
+		dict = (someObject != nil) ? @{ @"device" : deviceID, @"object" : someObject } : @{ @"device" : deviceID };
+
+		[self launchConnection:request :kConnectTypeAddLogStream :dict];
+	}
+	else
+	{
+		errorMessage = @"Could not create a request to stream the specified device logs.";
+		[self reportError];
+	}
+}
+
+
+
+- (void)stopLogging:(NSString *)deviceID
+{
+	[self stopLogging:deviceID :nil];
+}
+
+
+
+- (void)stopLogging:(NSString *)deviceID :(id)someObject
+{
+	// DELETE /logstream/<stream_id>/<device_identifier>
+	// { id: ‘d9f6f253-d203-487f-bdb0-70ea1529ee1b’, type: ‘device’ }
+
+	NSDictionary *dict = @{ @"id" : deviceID,
+							@"type" : @"device" };
+
+	NSMutableURLRequest *request = [self makeRequest:@"DELETE" :[NSString stringWithFormat:@"logstream/%@/%@", logStreamID, deviceID] :NO :NO];
+	NSError *error;
+
+	[request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
+
+	if (error)
+	{
+		errorMessage = @"Could not create a request to stop streaming the specified device logs: bad JSON data.";
+		[self reportError];
+		return;
+	}
+
+	if (request)
+	{
+		dict = (someObject != nil) ? @{ @"device" : deviceID, @"object" : someObject } : @{ @"device" : deviceID };
+
+		[self launchConnection:request :kConnectTypeEndLogStream :dict];
+	}
+	else
+	{
+		errorMessage = @"Could not create a request to stop streaming the specified device logs.";
+		[self reportError];
+	}
+}
+
 
 
 - (void)startStream:(NSURL *)url
@@ -3634,6 +3654,7 @@ didReceiveResponse:(NSURLResponse *)response
 				: @{ @"device" : devid };
 
 				[loggingDevices addObject:devid];
+
 				numberOfLogStreams = loggingDevices.count;
 
 				[nc postNotificationName:@"BuildAPIDeviceAddedToStream" object:dict];
