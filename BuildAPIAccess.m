@@ -125,14 +125,14 @@
 
 	// Get a new token using the credentials provided
 
-	[self getNewSessionToken];
+	[self getNewAccessToken];
 }
 
 
 
-- (void)getNewSessionToken
+- (void)getNewAccessToken
 {
-	// Request a new session token using the stored credentials,
+	// Request a new access token using the stored credentials,
 	// failing if neither has been provided (by 'login:')
 
 	if (!username || !password)
@@ -171,7 +171,7 @@
 
 
 
-- (void)refreshSessionToken
+- (void)refreshAccessToken
 {
 	// Getting a new session token using the refresh_token does not require the account username and pw
 
@@ -179,7 +179,7 @@
 	{
 		// We don't have a token, so just get a new one
 
-		[self getNewSessionToken];
+		[self getNewAccessToken];
 		return;
 	}
 
@@ -212,42 +212,7 @@
 
 
 
-- (void)twoFactorLogin:(NSString *)loginToken :(NSString *)otp
-{
-	// This is essentially a placeholder for whe 2FA is introduced for impCentral API logins
-
-	NSDictionary *dict = @{ @"otp" : otp,
-							@"login_token" : loginToken };
-
-	NSError *error = nil;
-	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"auth"]]];
-
-	[request setHTTPMethod:@"POST"];
-	[request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
-	[request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-	[request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
-
-	if (error)
-	{
-		errorMessage = @"Could not create a request to submit your impCloud OTP token.";
-		[self reportError];
-		return;
-	}
-
-	if (request)
-	{
-		[self launchConnection:request :kConnectTypeGetToken :nil];
-	}
-	else
-	{
-		errorMessage = @"Could not create a request to submit your impCloud OTP token.";
-		[self reportError];
-	}
-}
-
-
-
-- (BOOL)isSessionTokenValid
+- (BOOL)isAccessTokenValid
 {
 	// No token available; return BAD TOKEN
 
@@ -311,6 +276,41 @@
 
 	token = nil;
 	isLoggedIn = NO;
+}
+
+
+
+- (void)twoFactorLogin:(NSString *)loginToken :(NSString *)otp
+{
+	// This is essentially a placeholder for whe 2FA is introduced for impCentral API logins
+
+	NSDictionary *dict = @{ @"otp" : otp,
+							@"login_token" : loginToken };
+
+	NSError *error = nil;
+	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"auth"]]];
+
+	[request setHTTPMethod:@"POST"];
+	[request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
+	[request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+	[request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
+
+	if (error)
+	{
+		errorMessage = @"Could not create a request to submit your impCloud OTP token.";
+		[self reportError];
+		return;
+	}
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeGetToken :nil];
+	}
+	else
+	{
+		errorMessage = @"Could not create a request to submit your impCloud OTP token.";
+		[self reportError];
+	}
 }
 
 
@@ -1354,14 +1354,14 @@
 
 
 
-- (void)updateDevicegroup:(NSString *)devicegroupID :(NSString *)devicegroupType :(NSString *)key :(NSString *)value
+- (void)updateDevicegroup:(NSString *)devicegroupID :(NSArray *)keys :(NSArray *)values
 {
-	[self updateDevicegroup:devicegroupID :devicegroupType :key :value :nil];
+	[self updateDevicegroup:devicegroupID :keys :values :nil];
 }
 
 
 
-- (void)updateDevicegroup:(NSString *)devicegroupID :(NSString *)devicegroupType :(NSString *)key :(NSString *)value :(id)someObject
+- (void)updateDevicegroup:(NSString *)devicegroupID :(NSArray *)keys :(NSArray *)values :(id)someObject
 {
 	// Set up a PATCH request to /devicegroups
 	// We can ONLY update a device group's name or description FOR NOW
@@ -1374,52 +1374,130 @@
 		return;
 	}
 
-	if (devicegroupType == nil || devicegroupType.length == 0)
+	if (keys.count == 0)
 	{
-		errorMessage = @"Could not create a request to update a device group: no device group type specified.";
+		errorMessage = @"Could not create a request to update the device group: no data fields specified.";
 		[self reportError];
 		return;
 	}
 
-	BOOL flag = NO;
-	NSArray *allowedTypes = @[ @"development_devicegroup",
-							   @"production_devicegroup",
-							   @"factoryfixture_devicegroup",
-							   @"development",
-							   @"production",
-							   @"factoryfixture" ];
-
-	for (NSUInteger i = 0 ; i < allowedTypes.count ; ++i)
+	if (values.count == 0 || values.count != keys.count)
 	{
-		NSString *pType = [allowedTypes objectAtIndex:i];
+		errorMessage = @"Could not create a request to update the device group: insufficient or extraneous data supplied.";
+		[self reportError];
+		return;
+	}
 
-		if ([devicegroupType compare:pType] == NSOrderedSame)
+	// Check the keys for validity - only a device group's attributes.name, attributes.description, attributes.load_code_after_blessing,
+	// and relationships.production_target can be changed
+
+	NSMutableDictionary *attributes = [[NSMutableDictionary alloc] init];
+	NSMutableDictionary *relationships  = [[NSMutableDictionary alloc] init];
+
+	NSString *devicegroupType = nil;
+	NSString *name = nil;
+	BOOL loadFlag = NO;
+
+	for (NSUInteger i = 0 ; i < keys.count ; ++i)
+	{
+		NSString *key = [keys objectAtIndex:i];
+
+		if ([key compare@"name"] == NSOrderedSame)
 		{
-			flag = YES;
+			name = [values objectAtIndex:i];
+			if (name != nil && name.length > 0) [attributes setValue:name forObject:@"name"];
+			break;
+		}
 
-			if (i > 2) devicegroupType = [devicegroupType stringByAppendingString:@"_devicegroup"];
+		if ([key compare@"description"] == NSOrderedSame)
+		{
+			name = [values objectAtIndex:i];
+			if (name != nil) [attributes setValue:name forObject:@"description"];
+			break;
+		}
+
+		if ([key compare@"production_target"] == NSOrderedSame)
+		{
+			NSDictionary *pt = [values objectAtIndex:i];
+			if (pt != nil) [relationships setValue:pt forObject:@"production_target"];
+			break;
+		}
+
+		if ([key compare@"type"] == NSOrderedSame)
+		{
+			devicegroupType = [values objectAtIndex:i];
+
+			if (devicegroupType == nil || devicegroupType.length == 0) devicegroupType = @"development_devicegroup";
+
+			BOOL flag = NO;
+			NSArray *allowedTypes = @[ @"pre_production_devicegroup",
+									   @"pre_factoryfixture_devicegroup",
+									   @"development_devicegroup",
+									   @"production_devicegroup",
+									   @"factoryfixture_devicegroup",
+									   @"development",
+									   @"production",
+									   @"factoryfixture",
+									   @"pre_factoryfixture",
+									   @"pre_production" ];
+
+			for (NSUInteger i = 0 ; i < allowedTypes.count ; ++i)
+			{
+				NSString *pType = [allowedTypes objectAtIndex:i];
+
+				if ([devicegroupType compare:pType] == NSOrderedSame)
+				{
+					flag = YES;
+
+					if (i > 4) devicegroupType = [devicegroupType stringByAppendingString:@"_devicegroup"];
+				}
+			}
+
+			if (!flag)
+			{
+				errorMessage = @"Could not create a request to update the device group: invalid device group type supplied.";
+				[self reportError];
+				return;
+			}
+
+			break;
+		}
+
+		if ([key compare@"load_code_after_blessing"] == NSOrderedSame)
+		{
+			NSNumber *val = [values objectAtIndex:i];
+			if (val != nil) [attributes setValue:val forObject:@"load_code_after_blessing"];
+			break;
 		}
 	}
 
-	if (key == nil || key.length == 0)
+	NSDictionary *dict;
+
+	if (attributes.count > 0)
 	{
-		errorMessage = @"Could not create a request to update the device group: no data field specified.";
-		[self reportError];
-		return;
+		if (relationships.count > 0)
+		{
+			dict = @{ @"id" : devicegroupID,
+						@"type" : devicegroupType,
+					    @"attributes" : [NSDictionary dictionaryWithDictionary:attributes],
+						@"relationships" : [NSDictionary dictionaryWithDictionary:relationships] };
+		}
+		else
+		{
+			dict = @{ @"id" : devicegroupID,
+					  @"type" : devicegroupType,
+					  @"attributes" : [NSDictionary dictionaryWithDictionary:attributes] };
+		}
 	}
-
-	if (([key compare:@"name"] != NSOrderedSame) && ([key compare:@"description"] != NSOrderedSame))
+	else
 	{
-		errorMessage = @"Could not create a request to update the device group: invalid data field name specified.";
-		[self reportError];
-		return;
+		if (relationships.count > 0)
+		{
+			dict = @{ @"id" : devicegroupID,
+					  @"type" : devicegroupType,
+					  @"relationships" : [NSDictionary dictionaryWithDictionary:relationships] };
+		}
 	}
-
-	NSDictionary *attributes = @{ key : value };
-
-	NSDictionary *dict = @{ @"id" : devicegroupID,
-							@"type" : devicegroupType,
-							@"attributes" : attributes};
 
 	NSDictionary *data = @{ @"data" : dict };
 
@@ -1536,14 +1614,14 @@
 
 
 
-- (void)updateDevice:(NSString *)deviceID :(NSString *)key :(NSString *)value
+- (void)updateDevice:(NSString *)deviceID :(NSString *)name
 {
-	[self updateDevice:deviceID :key :value :nil];
+	[self updateDevice:deviceID :name :nil];
 }
 
 
 
-- (void)updateDevice:(NSString *)deviceID :(NSString *)key :(NSString *)value :(id)someObject
+- (void)updateDevice:(NSString *)deviceID :(NSString *)name :(id)someObject
 {
 	// Set up a PATCH request to /devices/
 	// We can ONLY change the device's name
@@ -1555,26 +1633,12 @@
 		return;
 	}
 
-	if (key == nil || key.length == 0)
-	{
-		errorMessage = @"Could not create a request to update the device: no data field specified.";
-		[self reportError];
-		return;
-	}
-
-	if ([key compare:@"name"] != NSOrderedSame)
-	{
-		errorMessage = @"Could not create a request to update the device: invalid data field specified.";
-		[self reportError];
-		return;
-	}
+	if (name == nil || name.length == 0) name = @"";
 
 	// NOTE watch for a zero-length name - this is valid as it removes the device name,
 	// ie. sets it to the device ID
 
-	NSDictionary *attributes = value.length == 0
-		? @{ }
-		: @{ key : value };
+	NSDictionary *attributes = { @"name" : name };
 
 	NSDictionary *dict = @{ @"type" : @"device",
 							@"id" : deviceID,
@@ -2044,7 +2108,7 @@
 		{
 			// We have no queued connections yet, so get a new token
 
-			[self refreshSessionToken];
+			[self refreshAccessToken];
 		}
 
 		// Add the current request to the pending queue while the new token is retrieved
@@ -2298,6 +2362,9 @@
 #ifdef DEBUG
 					NSLog(@"%@", @"State: Connection open");
 #endif
+					// The log stream signals that it is open, so we can now add the first device,
+					// whose ID has been retained through the stream set-up process. Calling logOpened: does this
+
 					[self performSelectorOnMainThread:@selector(logOpened) withObject:nil waitUntilDone:NO];
 					break;
 
@@ -2314,12 +2381,11 @@
 			break;
 
 		case kLogStreamEventMessage:
-
 #ifdef DEBUG
 			NSLog(@"Message received: %@", event.data);
 #endif
 
-			// Relay the log message to the host app
+			// A mesage has been received from the server. Relay it to the host app via relayLogEntry:
 
 			if (event.data != nil && [event.event compare:@"message"] == NSOrderedSame)
 			{
@@ -2331,6 +2397,8 @@
 			break;
 
 		case kLogStreamEventError:
+			// An error has broken the stream. Relay the error to the host app via logClosed:
+
 			dict = @{ @"message" : event.error,
 					  @"code" : [NSNumber numberWithInteger:event.readyState] };
 
@@ -3343,6 +3411,20 @@ didReceiveResponse:(NSURLResponse *)response
 			break;
 		}
 
+		case kConnectTypeGetDevice:
+		{
+			// The server returns a record of the single deployment
+
+			NSDictionary *device = [data objectForKey:@"data"];
+
+			returnData = connexion.representedObject != nil
+			? @{ @"data" : device, @"object" : connexion.representedObject }
+			: @{ @"data" : device };
+
+			[nc postNotificationName:@"BuildAPIGotDevice" object:returnData];
+			break;
+		}
+
 		case kConnectTypeGetDeviceLogs:
 		{
 			// The server returns an array of one or more log entries, which we add to an
@@ -3545,13 +3627,13 @@ didReceiveResponse:(NSURLResponse *)response
 			if (connexion.representedObject != nil)
 			{
 				id source = [connexion.representedObject objectForKey:@"object"];
-				NSString *dvid = [connexion.representedObject objectForKey:@"device"];
+				NSString *devid = [connexion.representedObject objectForKey:@"device"];
 
 				NSDictionary *dict = source != nil
-				? @{ @"device" : dvid, @"object" : source }
-				: @{ @"device" : dvid };
+				? @{ @"device" : devid, @"object" : source }
+				: @{ @"device" : devid };
 
-				[loggingDevices addObject:dvid];
+				[loggingDevices addObject:devid];
 				numberOfLogStreams = loggingDevices.count;
 
 				[nc postNotificationName:@"BuildAPIDeviceAddedToStream" object:dict];
@@ -3572,6 +3654,8 @@ didReceiveResponse:(NSURLResponse *)response
 				: @{ @"device" : devid };
 
 				[loggingDevices removeObject:devid];
+
+				numberOfLogStreams = loggingDevices.count;
 
 				if (loggingDevices.count == 0) [self closeStream];
 
