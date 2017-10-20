@@ -21,6 +21,7 @@
 		readyState = -1;
 		event = nil;
 		error = nil;
+		data = nil;
 	}
 
 	return self;
