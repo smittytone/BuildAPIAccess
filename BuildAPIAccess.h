@@ -136,7 +136,7 @@
 - (void)unassignDevice:(NSDictionary *)device :(id)someObject;
 
 - (void)unassignDevices:(NSArray *)devices;
-- (void)unassignDevices:(NSArray *)devices :(id)someObject
+- (void)unassignDevices:(NSArray *)devices :(id)someObject;
 
 - (void)assignDevice:(NSDictionary *)device :(NSString *)devicegroupID;
 - (void)assignDevice:(NSDictionary *)device :(NSString *)devicegroupID :(id)someObject;

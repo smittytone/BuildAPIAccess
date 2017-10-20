@@ -75,7 +75,7 @@
 					  [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"], (long)sysVer.majorVersion, (long)sysVer.minorVersion, (long)sysVer.patchVersion];
 
 #ifdef DEBUG
-		NSLog(@"User Agent: %@", userAgent);
+	NSLog(@"User Agent: %@", userAgent);
 #endif
 
     }
@@ -216,11 +216,7 @@
 {
 	// No token available; return BAD TOKEN
 
-	if (token == nil)
-	{
-		NSLog(@"Token ABSENT");
-		return NO;
-	}
+	if (token == nil) return NO;
 
 	if (dateFormatter == nil)
 	{
@@ -230,12 +226,16 @@
 		dateFormatter.timeZone = [NSTimeZone timeZoneWithAbbreviation:@"UTC"];
 	}
 
-	NSLog(@"Expiry date: %@", token.expiryDate);
+#ifdef DEBUG
+	NSLog(@"Expiry: %@", token.expiryDate);
+#endif
 
 	NSDate *expiry = [dateFormatter dateFromString:token.expiryDate];
 	NSDate *now = [NSDate date];
 
-	NSLog(@"Now: %@", [dateFormatter stringFromDate:now]);
+#ifdef DEBUG
+	NSLog(@"   Now: %@", [dateFormatter stringFromDate:now]);
+#endif
 
 	NSDate *latest = [now laterDate:expiry];
 
@@ -243,15 +243,19 @@
 
 	if (now == latest)
 	{
-		NSLog(@"Token EXPIRED");
+#ifdef DEBUG
+	NSLog(@"Token EXPIRED");
+#endif
 
 		// Clear the access token (we can't use it anyway)
 		return NO;
 	}
 
-	// Return GOOD TOKEN
-
+#ifdef DEBUG
 	NSLog(@"Token NOT EXPIRED");
+#endif
+
+	// Return GOOD TOKEN
 	return YES;
 }
 
@@ -1824,31 +1828,35 @@
 	}
 
 	NSMutableArray *array = [[NSMutableArray alloc] init];
-	BOOL flag = NO;
 
 	for (NSDictionary *device in devices)
 	{
 		NSDictionary *relationships = [device objectForKey:@"relationships"];
 		NSDictionary *dg = [relationships objectForKey:@"devicegroup"];
 
-		if ([dg compare:devicegroupID] == NSOrderedSame)
+		if (dg != nil)
 		{
-			// Device is already assigned to this device group
+			NSString *dgid = [dg objectForKey:@"id"];
 
-			NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+			if ([dgid compare:devicegroupID] == NSOrderedSame)
+			{
+				// Device is already assigned to this device group
 
-			NSDictionary *dict = someObject != nil
-			? @{ @"data" : @"already assigned", @"object" : someObject }
-			: @{ @"data" : @"already assigned" };
+				NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
 
-			[nc postNotificationName:@"BuildAPIDeviceAssigned" object:dict];
-		}
-		else
-		{
-			NSDictionary *dict = @{ @"type" : @"device",
-									@"id" : [device objectForKey:@"id"] };
+				NSDictionary *dict = someObject != nil
+				? @{ @"data" : @"already assigned", @"object" : someObject }
+				: @{ @"data" : @"already assigned" };
 
-			[array addObject:dict];
+				[nc postNotificationName:@"BuildAPIDeviceAssigned" object:dict];
+			}
+			else
+			{
+				NSDictionary *dict = @{ @"type" : @"device",
+										@"id" : [device objectForKey:@"id"] };
+
+				[array addObject:dict];
+			}
 		}
 	}
 
@@ -2595,13 +2603,13 @@
 			{
 				case kLogStreamEventStateConnecting:
 #ifdef DEBUG
-					NSLog(@"%@", @"State: Connecting");
+	NSLog(@"%@", @"State: Connecting");
 #endif
 					break;
 
 				case kLogStreamEventStateOpen:
 #ifdef DEBUG
-					NSLog(@"%@", @"State: Connection open");
+	NSLog(@"%@", @"State: Connection open");
 #endif
 					// The log stream signals that it is open, so we can now add the first device,
 					// whose ID has been retained through the stream set-up process. Calling logOpened: does this
@@ -2611,7 +2619,6 @@
 
 #ifdef DEBUG
 				default:
-
 					NSLog(@"%@", @"State: Connection closed");
 #endif
 			}
@@ -2623,7 +2630,7 @@
 
 		case kLogStreamEventMessage:
 #ifdef DEBUG
-			NSLog(@"Message received: %@", event.data);
+    NSLog(@"Message received: %@", event.data);
 #endif
 
 			// A mesage has been received from the server. Relay it to the host app via relayLogEntry:
@@ -2872,7 +2879,7 @@ didReceiveResponse:(NSURLResponse *)response
 		NSArray *lines = [eventString componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]];
 
 #ifdef DEBUG
-		NSLog(@"%@", (eventString.length > 2 ? [eventString substringToIndex:eventString.length - 2] : eventString));
+    NSLog(@"%@", (eventString.length > 2 ? [eventString substringToIndex:eventString.length - 2] : eventString));
 #endif
 
 		LogStreamEvent *event = [[LogStreamEvent alloc] init];
@@ -3803,8 +3810,8 @@ didReceiveResponse:(NSURLResponse *)response
 			isLoggedIn = YES;
 
 #ifdef DEBUG
-			NSLog(@"Initial Token: %@", token.accessToken);
-			NSLog(@"      Expires: %@", token.expiryDate);
+    NSLog(@"Initial Token: %@", token.accessToken);
+    NSLog(@"      Expires: %@", token.expiryDate);
 #endif
 
 			// Get user's account information before we do anything else
@@ -3831,8 +3838,8 @@ didReceiveResponse:(NSURLResponse *)response
 			token.expiryDate = [data valueForKey:@"expires_at"];
 
 #ifdef DEBUG
-			NSLog(@"Refreshed Token: %@", token.accessToken);
-			NSLog(@"        Expires: %@", token.expiryDate);
+    NSLog(@"Refreshed Token: %@", token.accessToken);
+    NSLog(@"        Expires: %@", token.expiryDate);
 #endif
 
 			// Do we have any pending connections we need to process?
@@ -3852,7 +3859,7 @@ didReceiveResponse:(NSURLResponse *)response
 					@"id" : [data objectForKey:@"id"] };
 
 #ifdef DEBUG
-			NSLog(@"My Account ID: %@", [me objectForKey:@"id"]);
+    NSLog(@"My Account ID: %@", [me objectForKey:@"id"]);
 #endif
 
 			break;
