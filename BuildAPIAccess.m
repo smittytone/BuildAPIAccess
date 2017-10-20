@@ -2197,7 +2197,7 @@
 
 	if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
 														  delegate:self
-													 delegateQueue:sessionQueue];
+													 delegateQueue:[NSOperationQueue mainQueue]];
 
 	// Do we have a valid access token - or are we getting/refreshing the access token?
 
@@ -2287,7 +2287,7 @@
 
 			if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
 																  delegate:self
-															 delegateQueue:sessionQueue];
+															 delegateQueue:[NSOperationQueue mainQueue]];
 
 			conn.task = [apiSession dataTaskWithRequest:conn.originalRequest];
 
@@ -2530,7 +2530,7 @@
 
 	if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
 																	  delegate:self
-																 delegateQueue:sessionQueue];
+																 delegateQueue:[NSOperationQueue mainQueue]];
 
 	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:logStreamURL
 														   cachePolicy:NSURLRequestReloadIgnoringCacheData
@@ -2870,7 +2870,7 @@ didReceiveResponse:(NSURLResponse *)response
 
 			// Record the error code for all other status codes
 
-			connexion.errorCode = code;
+			connexion.errorCode = statusCode;
 		}
 	}
 
@@ -4099,6 +4099,8 @@ didReceiveResponse:(NSURLResponse *)response
 	NSData *data = [[NSData alloc] initWithBase64EncodedString:base64String options:0];
 	return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
 }
+
+
 
 
 
