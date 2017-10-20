@@ -1655,7 +1655,96 @@
 
 
 
-- (void)assignDevice:(NSMutableDictionary *)device :(NSString *)devicegroupID
+- (void)unassignDevices:(NSArray *)devices
+{
+	[self unassignDevices:devices :nil];
+}
+
+
+
+- (void)unassignDevices:(NSArray *)devices :(id)someObject
+{
+	if (devices == nil || devices.count == 0)
+	{
+		errorMessage = @"Could not create a request to unassign devices: no devices specified.";
+		[self reportError];
+		return;
+	}
+
+	NSMutableArray *array = [[NSMutableArray alloc] init];
+	NSString *groupid;
+
+	for (NSDictionary *device in devices)
+	{
+		NSDictionary *relationships = [device objectForKey:@"relationships"];
+		NSDictionary *dg = [relationships objectForKey:@"devicegroup"];
+
+		if (dg == nil)
+		{
+			// If there is no devicegroup set for the device, it is unassigned
+			// This is not an error, so we replicate the post-uhassignment process
+			// to inform the host app
+
+			NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+
+			NSDictionary *dict = someObject != nil
+			? @{ @"object" : someObject, @"data" : @"already unassigned" }
+			: @{ @"data" : @"already unassigned" };
+
+			[nc postNotificationName:@"BuildAPIDeviceUnassigned" object:dict];
+		}
+		else
+		{
+			NSString *dgid = [dg objectForKey:@"id"];
+
+			NSDictionary *dict = @{ @"type" : @"device",
+								@"id" : [device objectForKey:@"id"] };
+
+			if (groupid == nil)
+			{
+				// Store the first device group ID on the list - this will be used for all
+				// further devices on the list
+
+				groupid = dgid;
+
+			}
+
+			if ([groupid compare:dgid] == NSOrderedSame)
+			{
+				// Add the device info to the data array
+
+				[array addObject:dict];
+			}
+		}
+	}
+
+	NSDictionary *data = @{ @"data" : [NSArray arrayWithArray:array] };
+	NSError *error;
+	NSMutableURLRequest *request = [self makeRequest:@"DELETE" :[NSString stringWithFormat:@"/devicegroups/%@/relationships/devices", groupid] :YES :NO];
+
+	[request setHTTPBody:[NSJSONSerialization dataWithJSONObject:data options:0 error:&error]];
+
+	if (error)
+	{
+		errorMessage = @"Could not create a request to unassign the devices: bad JSON data.";
+		[self reportError];
+		return;
+	}
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeUnassignDevices :someObject];
+	}
+	else
+	{
+		errorMessage = @"Could not create a request to unassign the device: bad request.";
+		[self reportError];
+	}
+}
+
+
+
+- (void)assignDevice:(NSDictionary *)device :(NSString *)devicegroupID
 {
 	[self assignDevice:device :devicegroupID :nil];
 }
@@ -1689,7 +1778,7 @@
 		NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
 
 		NSDictionary *dict = someObject != nil
-		? @{ @"object" : someObject, @"data" : @"already assigned" }
+		? @{ @"data" : @"already assigned", @"object" : someObject }
 		: @{ @"data" : @"already assigned" };
 
 		[nc postNotificationName:@"BuildAPIDeviceAssigned" object:dict];
@@ -1718,25 +1807,96 @@
 
 
 
-- (void)deleteDevice:(NSDictionary *)device
+- (void)assignDevices:(NSArray *)devices :(NSString *)devicegroupID
 {
-	[self deleteDevice:device :nil];
+	[self assignDevices:devices :devicegroupID :nil];
 }
 
 
 
-- (void)deleteDevice:(NSDictionary *)device :(id)someObject
+- (void)assignDevices:(NSArray *)devices :(NSString *)devicegroupID :(id)someObject
 {
-	// Set up a DLETE to /devices/{id}
+	if (devices == nil || devices.count == 0)
+	{
+		errorMessage = @"Could not create a request to assign devices: no devices specified.";
+		[self reportError];
+		return;
+	}
 
-	if (device == nil)
+	NSMutableArray *array = [[NSMutableArray alloc] init];
+	BOOL flag = NO;
+
+	for (NSDictionary *device in devices)
+	{
+		NSDictionary *relationships = [device objectForKey:@"relationships"];
+		NSDictionary *dg = [relationships objectForKey:@"devicegroup"];
+
+		if ([dg compare:devicegroupID] == NSOrderedSame)
+		{
+			// Device is already assigned to this device group
+
+			NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+
+			NSDictionary *dict = someObject != nil
+			? @{ @"data" : @"already assigned", @"object" : someObject }
+			: @{ @"data" : @"already assigned" };
+
+			[nc postNotificationName:@"BuildAPIDeviceAssigned" object:dict];
+		}
+		else
+		{
+			NSDictionary *dict = @{ @"type" : @"device",
+									@"id" : [device objectForKey:@"id"] };
+
+			[array addObject:dict];
+		}
+	}
+
+	NSDictionary *data = @{ @"data" : [NSArray arrayWithArray:array] };
+	NSError *error;
+	NSMutableURLRequest *request = [self makePOSTrequest:[NSString stringWithFormat:@"/devicegroups/%@/relationships/devices", devicegroupID] :data];
+
+	[request setHTTPBody:[NSJSONSerialization dataWithJSONObject:data options:0 error:&error]];
+
+	if (error)
+	{
+		errorMessage = @"Could not create a request to unassign the devices: bad JSON data.";
+		[self reportError];
+		return;
+	}
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeUnassignDevices :someObject];
+	}
+	else
+	{
+		errorMessage = @"Could not create a request to unassign the device: bad request.";
+		[self reportError];
+	}
+}
+
+
+
+- (void)deleteDevice:(NSString *)deviceID
+{
+	[self deleteDevice:deviceID :nil];
+}
+
+
+
+- (void)deleteDevice:(NSString *)deviceID :(id)someObject
+{
+	// Set up a DELETE to /devices/{id}
+
+	if (deviceID == nil || deviceID.length == 0)
 	{
 		errorMessage = @"Could not create a request to delete a device: no device specified.";
 		[self reportError];
 		return;
 	}
 
-	NSMutableURLRequest *request = [self makeDELETErequest:[NSString stringWithFormat:@"/devices/%@", [device objectForKey:@"id"]]];
+	NSMutableURLRequest *request = [self makeDELETErequest:[NSString stringWithFormat:@"/devices/%@", deviceID]];
 
 	if (request)
 	{
@@ -3468,6 +3628,18 @@ didReceiveResponse:(NSURLResponse *)response
 			break;
 		}
 
+		case kConnectTypeAssignDevices:
+		{
+			// The server returns no data
+
+			returnData = connexion.representedObject != nil
+			? @{ @"data" : @"assigned", @"object" : connexion.representedObject }
+			: @{ @"data" : @"assigned" };
+
+			[nc postNotificationName:@"BuildAPIDevicesAssigned" object:returnData];
+			break;
+		}
+
 		case kConnectTypeUnassignDevice:
 		{
 			// The server returns no data
@@ -3480,6 +3652,18 @@ didReceiveResponse:(NSURLResponse *)response
 			break;
 		}
 			
+		case kConnectTypeUnassignDevices:
+		{
+			// The server returns no data
+
+			returnData = connexion.representedObject != nil
+			? @{ @"data" : @"unassigned", @"object" : connexion.representedObject }
+			: @{ @"data" : @"unassigned" };
+
+			[nc postNotificationName:@"BuildAPIDevicesUnassigned" object:returnData];
+			break;
+		}
+
 		case kConnectTypeRestartDevice:
 		{
 			// The server returns no data

@@ -39,17 +39,19 @@
 #define kConnectTypeUpdateDevice			41
 #define kConnectTypeDeleteDevice			42
 #define kConnectTypeAssignDevice			43
-#define kConnectTypeUnassignDevice			44
-#define kConnectTypeRestartDevice			45
-#define kConnectTypeGetDevice				46
-#define kConnectTypeGetDeviceLogs			48
-#define kConnectTypeGetDeviceHistory		49
+#define kConnectTypeAssignDevices			44
+#define kConnectTypeUnassignDevice			45
+#define kConnectTypeUnassignDevices		46
+#define kConnectTypeRestartDevice			47
+#define kConnectTypeGetDevice				48
+#define kConnectTypeGetDeviceLogs			49
+#define kConnectTypeGetDeviceHistory		50
 
-#define kConnectTypeGetWebhooks				50
-#define kConnectTypeCreateWebhook			51
-#define kConnectTypeUpdateWebhook			52
-#define kConnectTypeDeleteWebhook			53
-#define kConnectTypeGetWebhook				54
+#define kConnectTypeGetWebhooks				60
+#define kConnectTypeCreateWebhook			61
+#define kConnectTypeUpdateWebhook			62
+#define kConnectTypeDeleteWebhook			63
+#define kConnectTypeGetWebhook				64
 
 #define kConnectTypeGetToken				80
 #define kConnectTypeRefreshToken			81

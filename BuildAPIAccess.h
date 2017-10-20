@@ -135,11 +135,17 @@
 - (void)unassignDevice:(NSDictionary *)device;
 - (void)unassignDevice:(NSDictionary *)device :(id)someObject;
 
-- (void)assignDevice:(NSMutableDictionary *)device :(NSString *)devicegroupID;
-- (void)assignDevice:(NSMutableDictionary *)device :(NSString *)devicegroupID :(id)someObject;
+- (void)unassignDevices:(NSArray *)devices;
+- (void)unassignDevices:(NSArray *)devices :(id)someObject
 
-- (void)deleteDevice:(NSDictionary *)device;
-- (void)deleteDevice:(NSDictionary *)device :(id)someObject;
+- (void)assignDevice:(NSDictionary *)device :(NSString *)devicegroupID;
+- (void)assignDevice:(NSDictionary *)device :(NSString *)devicegroupID :(id)someObject;
+
+- (void)assignDevices:(NSArray *)devices :(NSString *)devicegroupID;
+- (void)assignDevices:(NSArray *)devices :(NSString *)devicegroupID :(id)someObject;
+
+- (void)deleteDevice:(NSString *)deviceID;
+- (void)deleteDevice:(NSString *)deviceID :(id)someObject;
 
 - (void)createDeployment:(NSDictionary *)deployment;
 - (void)createDeployment:(NSDictionary *)deployment :(id)someObject;
