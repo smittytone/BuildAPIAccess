@@ -2,7 +2,7 @@
 
 BuildAPIAccess is an Objective-C (macOS, iOS and tvOS) wrapper for [Electric Imp’s impCentral API](https://electricimp.com/docs/tools/impcentralapi/). It is called BuildAPIAccess for historical reasons: it was written to the support Electric Imp’s Build API, the predecessor to the impCentral API. BuildAPIAccess 3.0.0 does not support the Build API, which has been deprecated and will soon be removed from service.
 
-BuildAPIAccess requires the (included) classes Connexion and Token. Both are convenience classes for combining properties. Connexion combines an [NSURLSession](https://developer.apple.com/library/prerelease/mac/documentation/Foundation/Reference/NSURLSession_class/index.html) instance and associated impCentral API connection data. Token is used to store impCentral API authorization data.
+BuildAPIAccess requires the (included) classes Connexion, LogStreamEvent and Token. All three are convenience classes for combining properties. Connexion combines an [NSURLSession](https://developer.apple.com/library/prerelease/mac/documentation/Foundation/Reference/NSURLSession_class/index.html) instance and associated impCentral API connection data. Token is used to store impCentral API authorization data. LogStreamEvent is a packaging object for Server-Sent Event (SSE) events issued by the impCentral API's logging system.
 
 ## impCentral API Authorization ##
 
@@ -19,7 +19,7 @@ The impCentral API is &copy; Electric Imp, 2017.
 From version 2.0.1, BuildAPIAccess issues HTTPS requests with a custom user agent string of the following form:
 
 ```
-BuildAPIAcces/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
+BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 ```
 
 ## Class Usage ##
@@ -162,7 +162,7 @@ The instance posts the notification `@"BuildAPIProductCreated"` when the product
 
 ### - (void)updateProduct:(NSString *)productID :(NSArray *)keys :(NSArray *)values ###
 
-Updates the specified product using the supplied keys and their associated values. The order of items in the keys and values arrays should match; no check is made to ensure that this is the case. The method checks that the two arrays are of equal length, however. The only supported key values are `@"name"` and `@"description"`.
+Updates the specified product using the supplied keys and their associated values. The order of items in the keys and values arrays should match; no check is made to ensure that this is the case. The method checks that the two arrays are of equal length, however. The only supported key values are *name* and *description*.
 
 The instance posts the notification `@"BuildAPIProductUpdated"` when the product has been updated. The notification includes an NSDictionary: its *data* key points to a record of the updated product as an NSDictionary.
 
@@ -182,7 +182,11 @@ The value of *targetid* is the ID of a production device group and can be omitte
 
 The instance posts the notification `@"BuildAPIDeviceGroupCreated"` when the device group has been created. The notification includes an NSDictionary: its *data* key points to a record of the new device group as an NSDictionary.
 
-### - (void)updateDevicegroup:(NSString *)devicegroupID :(NSString *)devicegroupType :(NSString *)key :(NSString *)value ###
+### - (void)updateDevicegroup:(NSString *)devicegroupID :(NSString *)keys :(NSString *)values ###
+
+Updates the specified device group using the supplied keys and their associated values. The order of items in the keys and values arrays should match; no check is made to ensure that this is the case. The method checks that the two arrays are of equal length, however. The only supported keys are *name*, *description*, *type*, *production_target* and *load_code_after_blessing*. The first three of these reference strings; *production_target* references a dictionary with the keys *id* (the ID of the target production device group) and *type* (the string `@"production_devicegroup"`); and *load_code_after_blessing* references an NSNumber created from a boolean value.
+
+The instance posts the notification `@"BuildAPIDeviceGroupUpdated"` when the product has been updated. The notification includes an NSDictionary: its *data* key points to a record of the updated device group as an NSDictionary.
 
 ### - (void)deleteDevicegroup:(NSString *)devicegroupID ###
 
@@ -190,13 +194,21 @@ Deletes the device group of the specified ID. Device groups cannot be deleted if
 
 The instance posts the notification `@"BuildAPIDeviceGroupDeleted"` when the device group has been deleted.
 
-### - (void)updateDevice:(NSString *)deviceID :(NSString *)key :(NSString *)value ###
+### - (void)updateDevice:(NSString *)deviceID :(NSString *)name ###
+
+Updates the specified device group using the supplied name values. Name may be `nil` &mdash; this removes the device’s name, if it has one.
+
+The instance posts the notification `@"BuildAPIDeviceUpdated"` when the product has been updated. The notification includes an NSDictionary: its *data* key points to a record of the updated device as an NSDictionary.
 
 ### - (void)deleteDevice:(NSDictionary *)device ###
 
+Removes the specified development device from the account to which it is currently assigned. Production devices cannot be deleted.
+
+The instance posts the notification `@"BuildAPIDeviceDeleted"` when the device has been deleted.
+
 ### - (void)createDeployment:(NSDictionary *)deployment ###
 
-### - (void)updateDeployment:(NSString *)deploymentID :(NSString *)key :(NSString *)value ###
+### - (void)updateDeployment:(NSString *)deploymentID :(NSArray *)keys :(NSArray *)values ###
 
 ### - (void)deleteDeployment:(NSString *)deploymentID ###
 
@@ -204,11 +216,37 @@ The instance posts the notification `@"BuildAPIDeviceGroupDeleted"` when the dev
 
 ### - (void)restartDevices:(NSString *)devicegroupID ###
 
+Restarts all of the devices that are assigned to the specified device group. The instance posts the notification `@"BuildAPIDeviceGroupRestarted"` when all the devices has been instructed to restart. Note that not all devices will restart there and then as this depends upon their connection status.
+
 ### - (void)restartDevice:(NSString *)deviceID ###
+
+Restarts the specified device. The instance posts the notification `@"BuildAPIDeviceRestarted"` when the device has been instructed to restart. Note that the device may not restart there and then as this depends upon its connection status.
 
 ### - (void)unassignDevice:(NSDictionary *)device ###
 
+Removes a device from its assigned device group and leaves it in an unassigned state. The device is specified using a dictionary which matches the standard impCentral device record (see [the impCentral API reference](https://preview-apidoc.electricimp.com/#tag/Devices)).
+
+The instance posts the notification `@"BuildAPIDeviceUnassigned"` when the device has been unassigned.
+
+### - (void)unassignDevices:(NSArray *)devices ###
+
+Removes a set of devices from their assigned device group (singular) and leaves them in an unassigned state. Each device is specified using a dictionary which matches the standard impCentral device record (see [the impCentral API reference](https://preview-apidoc.electricimp.com/#tag/Devices)), all provided to the method as an array.
+
+Note that the method checks for already unassigned devices based on the information in the impCentral device records passed in. It also notes the first referenced device group &mdash; this is the device group from which all other devices will be unassigned. Any devices included which are not already assigned to this device group will be ignored.
+
+The instance posts the notification `@"BuildAPIDevicesUnassigned"` when the device has been unassigned.
+
 ### - (void)assignDevice:(NSMutableDictionary *)device :(NSString *)devicegroupID ###
+
+Assigns the specified device to the specified device group. The device is specified using a dictionary which matches the standard impCentral device record (see [the impCentral API reference](https://preview-apidoc.electricimp.com/#tag/Devices)).
+
+The instance posts the notification `@"BuildAPIDeviceAssigned"` when the device has been assigned.
+
+### - (void)assignDevices:(NSArray *)devices :(NSString *)devicegroupID ###
+
+Assigns the specified devices to the specified device group. Each device is specified using a dictionary which matches the standard impCentral device record (see [the impCentral API reference](https://preview-apidoc.electricimp.com/#tag/Devices)); these records are added to an array, which is passed into the method.
+
+The instance posts the notification `@"BuildAPIDevicesAssigned"` when the device has been assigned.
 
 ## Class Methods: Logging ##
 
