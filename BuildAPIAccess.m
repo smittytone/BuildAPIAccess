@@ -239,15 +239,14 @@
 
 	NSDate *latest = [now laterDate:expiry];
 
-	// Token has expired; return BAD TOKEN
-
 	if (now == latest)
 	{
 #ifdef DEBUG
 	NSLog(@"Token EXPIRED");
 #endif
 
-		// Clear the access token (we can't use it anyway)
+		// Return BAD TOKEN
+
 		return NO;
 	}
 
@@ -256,6 +255,7 @@
 #endif
 
 	// Return GOOD TOKEN
+
 	return YES;
 }
 
