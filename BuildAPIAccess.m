@@ -42,6 +42,7 @@
 		// Message-handling Operation Queue
 
 		messageQueue = nil;
+		sessionQueue = nil;
 
 		// Account
 
@@ -91,7 +92,7 @@
 - (void)login:(NSString *)userName :(NSString *)passWord :(BOOL)is2FA
 {
 	// Login is the process of sending the user's username/email address and password to the API
- 	// in return for a new session token. We retain the credentials in case the token
+ 	// in return for a new access token. We retain the credentials in case the token
 	// expires during the host application's runtime, but we don't save them -
 	// this is the job of the host application.
 
@@ -2181,63 +2182,69 @@
 
     Connexion *aConnexion = [[Connexion alloc] init];
     aConnexion.actionCode = actionCode;
+	aConnexion.originalRequest = request;
     aConnexion.data = [NSMutableData dataWithCapacity:0];
 
 	if (someObject) aConnexion.representedObject = someObject;
 
     // Use NSURLSession for the connection. Compatible with iOS, tvOS and Mac OS X
 
-	NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
+	if (sessionQueue == nil)
+	{
+		sessionQueue = [[NSOperationQueue alloc] init];
+		sessionQueue.maxConcurrentOperationCount = 1;
+	}
+
+	if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
 														  delegate:self
-													 delegateQueue:[NSOperationQueue mainQueue]];
+													 delegateQueue:sessionQueue];
 
-	aConnexion.task = [session dataTaskWithRequest:request];
-
-	// Check that we have a valid session token - we can't proceed without one
-	// If we are not logged in, we won't have a token and so we need to let the
-	// check pass so that a token is retrieved in the first place
+	// Do we have a valid access token - or are we getting/refreshing the access token?
 
 	if (aConnexion.actionCode == kConnectTypeGetToken || aConnexion.actionCode == kConnectTypeRefreshToken || [self isAccessTokenValid])
 	{
+		// Create and begin the task
+
+		aConnexion.task = [apiSession dataTaskWithRequest:request];
+
 		[aConnexion.task resume];
 
-		if (connexions.count == 0)
-		{
-			// Notify the main app to trigger the progress indicator
+		// Notify the main app to show and start its progress indicator, if it has one
 
-			[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStart" object:nil];
-		}
+		if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStart" object:nil];
 
 		// Add the new connection to the list
 
 		[connexions addObject:aConnexion];
+
+		// Update the public property, numberOfConnections
+
 		numberOfConnections = connexions.count;
+
+		// Set 'tokenConnexion' if we need to
+
+		if (aConnexion.actionCode == kConnectTypeGetToken || aConnexion.actionCode == kConnectTypeRefreshToken) tokenConnexion = aConnexion;
 	}
 	else
 	{
 		// We do not have a valid token, so we must now acquire one. In the meantime, we
-        // cache all new connexions in '_pendingConnections' so they can be actioned when
+        // cache all new connexions in 'pendingConnections' so they can be actioned when
         // we finally get the token
 
-        // Q: do we want to put a limit on '_pendingConnections' size?
+        // Q: do we want to put a limit on 'pendingConnections' size?
 
 		if (pendingConnections == nil) pendingConnections = [[NSMutableArray alloc] init];
 
-		if (pendingConnections.count == 0)
+		if (tokenConnexion == nil)
 		{
 			// We have no queued connections yet, so get a new token
+			// NOTE we need to ensure this is called only once per refresh
 
 			[self refreshAccessToken];
 		}
 
 		// Add the current request to the pending queue while the new token is retrieved
-		// Zap the NSURLSession to avoid memory leaks and becuase it's not needed (we'll
-		// recreate a session when we need it)
 
-		aConnexion.originalRequest = request;
-		aConnexion.task = nil;
-		
-		[session invalidateAndCancel];
 		[pendingConnections addObject:aConnexion];
 	}
 
@@ -2266,26 +2273,32 @@
 	// token has yet been received. Having elsewhere received the new token, we can now
 	// launch the pending connections, if there are any
 
-	if (pendingConnections.count > 0)
+	if (pendingConnections != nil && pendingConnections.count > 0)
 	{
 		for (Connexion *conn in pendingConnections)
 		{
 			[self setRequestAuthorization:conn.originalRequest];
 
-			NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
-																  delegate:self
-															 delegateQueue:[NSOperationQueue mainQueue]];
+			if (sessionQueue == nil)
+			{
+				sessionQueue = [[NSOperationQueue alloc] init];
+				sessionQueue.maxConcurrentOperationCount = 1;
+			}
 
-			conn.task = [session dataTaskWithRequest:conn.originalRequest];
+			if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
+																  delegate:self
+															 delegateQueue:sessionQueue];
+
+			conn.task = [apiSession dataTaskWithRequest:conn.originalRequest];
 
 			[conn.task resume];
-
-			if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStart" object:nil];
-
 			[connexions addObject:conn];
+
+			if (connexions.count == 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStart" object:nil];
+
+			numberOfConnections = connexions.count;
 		}
 
-		numberOfConnections = connexions.count;
 		[pendingConnections removeAllObjects];
 	}
 }
@@ -2318,9 +2331,7 @@
 
 		// Kill the remaining connections
 
-		for (Connexion *aConnexion in connexions) [aConnexion.task cancel];
-
-		[connexions removeAllObjects];
+		if (apiSession != nil) [apiSession invalidateAndCancel];
 	}
 
 	if (pendingConnections != nil && pendingConnections.count > 0)
@@ -2328,11 +2339,7 @@
 		// Remove any pending connections
 
 		[pendingConnections removeAllObjects];
-
-		pendingConnections = nil;
 	}
-
-	numberOfConnections = 0;
 }
 
 
@@ -2515,9 +2522,15 @@
 
 	logIsClosed = NO;
 
-	NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
-														  delegate:self
-													 delegateQueue:[NSOperationQueue currentQueue]];
+	if (sessionQueue == nil)
+	{
+		sessionQueue = [[NSOperationQueue alloc] init];
+		sessionQueue.maxConcurrentOperationCount = 1;
+	}
+
+	if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
+																	  delegate:self
+																 delegateQueue:sessionQueue];
 
 	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:logStreamURL
 														   cachePolicy:NSURLRequestReloadIgnoringCacheData
@@ -2527,7 +2540,7 @@
 
 	if (logLastEventID) [request setValue:logLastEventID forHTTPHeaderField:@"Last-Event-ID"];
 
-	logConnexion.task = [session dataTaskWithRequest:request];
+	logConnexion.task = [apiSession dataTaskWithRequest:request];
 
 	[logConnexion.task resume];
 
@@ -2734,6 +2747,8 @@ didReceiveResponse:(NSURLResponse *)response
 	// It is used to trap certain status codes / errors which affect connections rather than data
 	// eg. rate-limiting responses
 
+	// Get the connexion instance representing this connection task
+
 	Connexion *connexion = nil;
 
 	for (Connexion *aConnexion in connexions)
@@ -2745,14 +2760,16 @@ didReceiveResponse:(NSURLResponse *)response
 		}
 	}
 
-	NSHTTPURLResponse *rps = (NSHTTPURLResponse *)response;
-	NSInteger code = rps.statusCode;
+	// Get the HTTP status code
+
+	NSHTTPURLResponse *resp = (NSHTTPURLResponse *)response;
+	NSInteger statusCode = resp.statusCode;
 
 	if (connexion == logConnexion)
 	{
 		// Is this the live log streaming connection?
 
-		if (code == 200)
+		if (statusCode == 200)
 		{
 			// The stream is open, so signal this with a state-change event
 
@@ -2764,17 +2781,20 @@ didReceiveResponse:(NSURLResponse *)response
 	}
 	else
 	{
-		if (code > 399 || code == 302)
+		// This is a non-log stream connection
+
+		if (statusCode > 399 || statusCode == 302)
 		{
-			// The API has responded with a status code that indicates an error
+			// The API has responded with a status code that indicates an error.
 			// Examine the status code to deal with specific errors
 
-			if (code == 302)
+			if (statusCode == 302)
 			{
 				if (connexion.actionCode == kConnectTypeGetLogStreamID)
 				{
-					NSDictionary *headers = rps.allHeaderFields;
-					logStreamID = [headers objectForKey:@"location"];
+					// We have asked for a log stream ID; this is returned as a 302, which we trap here
+
+					logStreamID = [resp.allHeaderFields objectForKey:@"location"];
 
 #ifdef DEBUG
 	NSLog(@"Log Stream ID received: %@", logStreamID);
@@ -2783,12 +2803,13 @@ didReceiveResponse:(NSURLResponse *)response
 				}
 			}
 
-			if (code == 400)
+			if (statusCode == 400)
 			{
 				if (connexion.actionCode == kConnectTypeGetToken)
 				{
-					// This indicates a login credentials failure - we can proceed no further
-					// Report the error back to the host app and end the connection
+					// We have asked for an access token, so this indicates a login credentials failure -
+					// we can proceed no further at this time. Report the error back to the host app
+					// and end the connection
 
 					isLoggedIn = NO;
 
@@ -2800,15 +2821,20 @@ didReceiveResponse:(NSURLResponse *)response
 
 					if (connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
+					// Run the completion handler with a 'cancel' response becuase we are killing this connection
+
 					if (completionHandler != nil) completionHandler(NSURLSessionResponseCancel);
 
 					return;
 				}
 			}
 
-			if (code == 429)
+			if (statusCode == 429)
 			{
-				// impCentral API rate limit exceeded
+				// impCentral API rate limit has been exceeded, which we neeed to deal with here
+				// Bundle up connection data and pass it to 'relauchConnection:' in 'limit' * 1000 seconds' time
+				// 'limit' is the milliseconds time to wait before reconnecting that has been submitted by
+				// the server
 
 				NSDictionary *dict = connexion.representedObject != nil
 				? @{ @"request" : [dataTask.originalRequest copy],
@@ -2817,10 +2843,9 @@ didReceiveResponse:(NSURLResponse *)response
 				: @{ @"request" : [dataTask.originalRequest copy],
 					 @"actioncode" : [NSNumber numberWithInteger:connexion.actionCode] };
 
-				NSDictionary *headers = rps.allHeaderFields;
-				NSInteger limit = [[headers valueForKey:@"X-RateLimit-Reset"] integerValue];
+				NSInteger limit = [[resp.allHeaderFields valueForKey:@"X-RateLimit-Reset"] integerValue];
 
-				// Wait (limit * 1000) seconds and re-access the impCloud
+				// Wait ('limit' * 1000) seconds and re-access the impCloud
 
 				[NSTimer scheduledTimerWithTimeInterval:(limit * 1000)
 												 target:self
@@ -2834,14 +2859,16 @@ didReceiveResponse:(NSURLResponse *)response
 					numberOfConnections = connexions.count;
 				}
 
-				if (connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+				if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+
+				// Run the completion handler with a 'cancel' response becuase we are killing this connection
 
 				if (completionHandler != nil) completionHandler(NSURLSessionResponseCancel);
 
 				return;
 			}
 
-			// Record the error code
+			// Record the error code for all other status codes
 
 			connexion.errorCode = code;
 		}
@@ -2857,7 +2884,8 @@ didReceiveResponse:(NSURLResponse *)response
 - (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask didReceiveData:(NSData *)data
 {
     // This delegate method is called when the server sends some data back
-	// Run through the connections in our list and add the incoming data to the correct one
+
+	// Get the connexion instance representing this connection task
 
 	Connexion *connexion = nil;
 
@@ -2872,8 +2900,7 @@ didReceiveResponse:(NSURLResponse *)response
 
 	if (connexion == logConnexion)
 	{
-		// This the live log streaming connection, so we need to do some work to extract the
-		// message information
+		// This the live log streaming connection, so we need to extract the message information
 
 		NSString *eventString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
 		NSArray *lines = [eventString componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]];
@@ -2921,7 +2948,7 @@ didReceiveResponse:(NSURLResponse *)response
 				[scanner scanString:kLogStreamKeyValueDelimiter intoString:nil];
 				[scanner scanUpToCharactersFromSet:[NSCharacterSet newlineCharacterSet] intoString:&value];
 
-				if (key && value)
+				if (key != nil && value != nil)
 				{
 					if ([key isEqualToString:kLogStreamEventEventKey])
 					{
@@ -2945,7 +2972,10 @@ didReceiveResponse:(NSURLResponse *)response
 	}
 	else
     {
-        [connexion.data appendData:data];
+		// For non-logging connections, we just append the incoming data chunk to the store in the
+		// appropriate connexion instance
+
+		[connexion.data appendData:data];
     }
 }
 
@@ -2956,7 +2986,7 @@ didReceiveResponse:(NSURLResponse *)response
 	// All the data has been supplied by the server in response to a connection - or an error has been encountered
 	// Parse the data and, according to the connection activity - update device, create product, etc. – apply the results
 
-	// Get the Connexion object representing this connection
+	// Get the connexion instance representing this connection task
 
 	Connexion *connexion = nil;
 
@@ -2972,15 +3002,20 @@ didReceiveResponse:(NSURLResponse *)response
 
 	}
 
+	// Complete the finished NSURLSessionTask - this may be redundant, but just in case...
+
+	[task cancel];
+
+	connexion.task = nil;
+
 	if (connexion.actionCode == kConnectTypeLogStream)
 	{
 		// Are we logging? Yes we are, so handle this type of connection here
+		// NOTE 'connexion' should equal 'logConnection'
 
-		// Is the connection already closed? If so, bail
+		// Is the connection already closed? If so, just bail
 
 		if (logIsClosed) return;
-
-		connexion.task = nil;
 
 		// Create an error event
 
@@ -3012,22 +3047,18 @@ didReceiveResponse:(NSURLResponse *)response
 	{
 		// Process completed non-logging connections
 
-		// Complete the finished NSURLSessionTask
-
-		[task cancel];
-		
 		if (error)
 		{
 			// React to a passed client-side error - most likely a timeout or inability to resolve the URL
 			// ie. the client is not connected to the Internet
 
-			// NOTE 'error.code' will equal NSURLErrorCancelled when we kill all connections
+			// NOTE 'error.code' will equal NSURLErrorCancelled when we cancel a live connection task, eg. kill all connections
 
 			if (error.code == NSURLErrorCancelled) return;
 
-			// Remove the connection from the list of current connections
-
 			errorMessage = @"Could not connect to the Electric Imp impCloud.";
+
+			// Remove the connection from the list of current connections
 
 			if (connexion != nil)
 			{
@@ -3051,14 +3082,14 @@ didReceiveResponse:(NSURLResponse *)response
 
 			// Check if there are any active connections - signal the host app if not
 
-			if (connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+			if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
 			return;
 		}
 	}
 
-	// The connection has come to a conclusion without error, so
-	// If we have a valid action code, process the received data
+	// The connection has come to a conclusion without error, so if we have a valid action code,
+	// proceed to process the received data
 
 	if (connexion.actionCode != kConnectTypeNone)
 	{
@@ -3068,6 +3099,8 @@ didReceiveResponse:(NSURLResponse *)response
 	}
 	else
 	{
+		// This might be redundant - can a connexion ever have a kConnectTypeNone 'actionCode' at this point?
+
 		if (connexion != nil)
 		{
 			[connexions removeObject:connexion];
@@ -3077,8 +3110,24 @@ didReceiveResponse:(NSURLResponse *)response
 
 		// Check if there are any active connections - signal the host app if not
 
-		if (connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+		if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 	}
+}
+
+
+
+- (void)URLSession:(NSURLSession *)session didBecomeInvalidWithError:(NSError *)error
+{
+	// Called after we have called invalidateAndCancel on 'session', eg. in 'killAllConnections:'
+
+	// Clear all the connexions from the list
+
+	[connexions removeAllObjects];
+
+	// Zero the connection-related properties
+
+	apiSession = nil;
+	numberOfConnections = 0;
 }
 
 
@@ -3786,7 +3835,7 @@ didReceiveResponse:(NSURLResponse *)response
 
 		case kConnectTypeGetToken:
 		{
-			// The server returns the requested session token directly
+			// The server returns the requested access token directly
 
 			if ((connexion.errorCode == 403) && useTwoFactor)
 			{
@@ -3808,6 +3857,9 @@ didReceiveResponse:(NSURLResponse *)response
 			token.expiryDate = [data valueForKey:@"expires_at"];
 			token.refreshToken = [data valueForKey:@"refresh_token"];
 			isLoggedIn = YES;
+			tokenConnexion = nil;
+
+			// TODO check that we actually have the data we require
 
 #ifdef DEBUG
     NSLog(@"Initial Token: %@", token.accessToken);
@@ -3819,6 +3871,7 @@ didReceiveResponse:(NSURLResponse *)response
 			[self getMyAccount];
 
 			// Do we have any pending connections we need to process?
+			// NOTE 'launchPendingConnections' returns immediately if there are no pending connections
 
 			[self launchPendingConnections];
 
@@ -3832,10 +3885,11 @@ didReceiveResponse:(NSURLResponse *)response
 
 		case kConnectTypeRefreshToken:
 		{
-			// The server returns the requested session token directly
+			// The server returns the requested access token directly
 
 			token.accessToken = [data valueForKey:@"access_token"];
 			token.expiryDate = [data valueForKey:@"expires_at"];
+			tokenConnexion = nil;
 
 #ifdef DEBUG
     NSLog(@"Refreshed Token: %@", token.accessToken);
@@ -3843,6 +3897,7 @@ didReceiveResponse:(NSURLResponse *)response
 #endif
 
 			// Do we have any pending connections we need to process?
+			// NOTE 'launchPendingConnections' returns immediately if there are no pending connections
 
 			[self launchPendingConnections];
 

@@ -15,12 +15,14 @@
 @interface BuildAPIAccess : NSObject <NSURLSessionDataDelegate, NSURLSessionTaskDelegate>
 
 {
+	NSURLSession *apiSession;
+
 	NSMutableArray *connexions, *pendingConnections, *loggingDevices, *products, *devices;
 	NSMutableArray *devicegroups, *deployments, *history, *logs;
 
 	NSDictionary *me;
 
-	NSOperationQueue *connectionQueue, *messageQueue;
+	NSOperationQueue *sessionQueue, *messageQueue;
 
 	NSString *baseURL, *userAgent, *username, *password, *logStreamID, *deviceToStream;
 
@@ -36,7 +38,7 @@
 
 	id logLastEventID;
 
-	Connexion *logConnexion;
+	Connexion *logConnexion, *tokenConnexion;
 
 	Token *token;
 }
