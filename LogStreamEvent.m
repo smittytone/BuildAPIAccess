@@ -13,4 +13,18 @@
 @synthesize eid, event, data, readyState, error;
 
 
+- (instancetype)init
+{
+	if (self = [super init])
+	{
+		eid = nil;
+		readyState = -1;
+		event = nil;
+		error = nil;
+	}
+
+	return self;
+}
+
+
 @end
