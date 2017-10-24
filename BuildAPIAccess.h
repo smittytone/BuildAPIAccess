@@ -219,8 +219,10 @@
 @property (nonatomic, strong)		NSString	*statusMessage;
 @property (nonatomic, readonly)		NSUInteger	numberOfConnections;
 @property (nonatomic, readonly)		NSUInteger	numberOfLogStreams;
-@property (nonatomic, readwrite)	NSInteger	pageSize;
+@property (nonatomic, readwrite) 	NSUInteger	maxListCount;
 @property (nonatomic, readonly)		BOOL		isLoggedIn;
+@property (nonatomic, readwrite,
+		   setter=setPageSize:)		NSInteger	pageSize;
 
 
 @end

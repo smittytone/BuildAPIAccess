@@ -13,7 +13,7 @@
 
 
 @synthesize errorMessage, statusMessage, isLoggedIn, pageSize;
-@synthesize numberOfConnections, numberOfLogStreams;
+@synthesize numberOfConnections, numberOfLogStreams, maxListCount;
 
 
 
@@ -56,6 +56,7 @@
 		logTimeout = kLogTimeout;
 		logRetryInterval = klogRetryInterval;
 		logIsClosed = YES;
+		maxListCount = kMaxHistoricalLogs;
 
 		// Misc
 
@@ -3526,7 +3527,7 @@ didReceiveResponse:(NSURLResponse *)response
 
 			for (NSMutableDictionary *deployment in deploymentList) [deployments addObject:deployment];
 
-			if (nextURL.length != 0)
+			if (nextURL.length != 0 && deployments.count < maxListCount)
 			{
 				NSMutableURLRequest *request = [self makeGETrequest:nextURL :YES];
 
@@ -3764,7 +3765,7 @@ didReceiveResponse:(NSURLResponse *)response
 
 			for (NSDictionary *entry in batch) [logs addObject:entry];
 
-			if (nextURL.length != 0 && logs.count < kMaxHistoricalLogs)
+			if (nextURL.length != 0 && logs.count < maxListCount)
 			{
 				NSMutableURLRequest *request = [self makeGETrequest:nextURL :YES];
 
@@ -3806,7 +3807,7 @@ didReceiveResponse:(NSURLResponse *)response
 
 			for (NSDictionary *entry in batch) [history addObject:entry];
 
-			if (nextURL.length != 0)
+			if (nextURL.length != 0 && history.count < maxListCount)
 			{
 				// There is at least one more page of data, so go and get it
 

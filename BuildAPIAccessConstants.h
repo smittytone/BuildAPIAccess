@@ -69,7 +69,7 @@
 // Logging
 
 #define kConnectTypeLogStream				99
-#define kMaxHistoricalLogs					200
+#define kMaxHistoricalLogs					1000
 #define kLogTimeout							300.0
 #define klogRetryInterval					10.0
 
