@@ -98,7 +98,7 @@
 
 // Data delimiters
 
-#define kLogStreamKeyValueDelimiter				@":"
+#define kLogStreamKeyValueDelimiter				@": "
 #define kLogStreamEventSeparatorLFLF			@"\n\n"
 #define kLogStreamEventSeparatorCRCR			@"\r\r"
 #define kLogStreamEventSeparatorCRLFCRLF		@"\r\n\r\n"

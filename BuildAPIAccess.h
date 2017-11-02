@@ -197,6 +197,7 @@
 
 // Connection Result Processing Methods
 
+- (void)parseStreamData:(NSData *)data :(Connexion *)connexion;
 - (NSDictionary *)processConnection:(Connexion *)connexion;
 - (void)processResult:(Connexion *)connexion :(NSDictionary *)data;
 
@@ -211,7 +212,6 @@
 
 - (NSString *)encodeBase64String:(NSString *)plainString;
 - (NSString *)decodeBase64String:(NSString *)base64String;
-
 
 // Properties
 

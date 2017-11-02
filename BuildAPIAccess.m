@@ -2644,7 +2644,7 @@
 
 		case kLogStreamEventMessage:
 #ifdef DEBUG
-    NSLog(@"Message received: %@", event.data);
+    //NSLog(@"Message received: %@", event.data);
 #endif
 
 			// A mesage has been received from the server. Relay it to the host app via relayLogEntry:
@@ -2901,6 +2901,13 @@ didReceiveResponse:(NSURLResponse *)response
 
 	if (connexion == logConnexion)
 	{
+		[self parseStreamData:data :connexion];
+		return;
+
+#ifdef DEBUG
+		NSDate *date = [NSDate date];
+#endif
+
 		// This the live log streaming connection, so we need to extract the message information
 
 		NSString *eventString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
@@ -2970,6 +2977,12 @@ didReceiveResponse:(NSURLResponse *)response
 				}
 			}
 		}
+
+#ifdef DEBUG
+		double timePassed_ms = [date timeIntervalSinceNow] * -1000.0;
+		NSLog(@"parseStreamLog duration: %f", timePassed_ms);
+#endif
+
 	}
 	else
     {
@@ -2978,6 +2991,7 @@ didReceiveResponse:(NSURLResponse *)response
 
 		[connexion.data appendData:data];
     }
+
 }
 
 
@@ -3134,6 +3148,149 @@ didReceiveResponse:(NSURLResponse *)response
 
 
 #pragma mark - Connection Result Processing Methods
+
+
+- (void)parseStreamData:(NSData *)data :(Connexion *)connexion
+{
+	// Wrangle an incoming batch of streamed data to pull out server-sent events and extract
+	// the data from them (and defer incomplete events until the rest of them arrives)
+
+#ifdef DEBUG
+	NSDate *date = [NSDate date];
+#endif
+
+	NSString *eventString;
+
+	if (connexion.data != nil)
+	{
+		// Add in existing data from the last streamed chunk, if there is any
+
+		[connexion.data appendData:data];
+		eventString = [[NSString alloc] initWithData:connexion.data encoding:NSUTF8StringEncoding];
+		connexion.data = [NSMutableData dataWithLength:0];
+	}
+	else
+	{
+		// Otherwise, just work with the freshly passed in data alone
+
+		eventString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+	}
+
+	// Check the last two characters of the string: are they newlines? If not, the data
+	// is truncated and needs to be retained for the next pass
+
+	NSString *lastTwoChars = @"";
+	if (eventString.length > 2) lastTwoChars = [eventString substringFromIndex:eventString.length - 2];
+	BOOL lastMessageTruncated = ([lastTwoChars compare:kLogStreamEventSeparatorLFLF] == NSOrderedSame) ? NO : YES;
+
+	// Separate the string into individual events (separated by newline pairs)
+
+	NSArray *events = [eventString componentsSeparatedByString:kLogStreamEventSeparatorLFLF];
+
+	if (events.count > 1)
+	{
+		for (NSUInteger i = 0 ; i < events.count ; ++i)
+		{
+			NSString *event = [events objectAtIndex:i];
+
+			if (event.length == 0) continue;
+
+			if (i == events.count - 1 && lastMessageTruncated)
+			{
+				// This is the detected event and it MIGHT be truncated, so just hold it for the next pass
+
+				connexion.data = [NSMutableData dataWithData:[event dataUsingEncoding:NSUTF8StringEncoding]];
+
+#ifdef DEBUG
+				NSLog(@"Holding data for next stream chunk: %@", event);
+#endif
+
+			}
+			else
+			{
+				// We have an event that we KNOW has been terminated with a \n\n,
+				// ie. it is complete and can be processed
+
+				LogStreamEvent *logStreamEvent = [[LogStreamEvent alloc] init];
+				logStreamEvent.readyState = kLogStreamEventStateOpen;
+
+				// Separate the key-value pairs (separated by newlines)
+
+				NSArray *lines = [event componentsSeparatedByString:kLogStreamEventKeyValuePairSeparator];
+#ifdef DEBUG
+				NSLog(@"Lines: %lu", (long)lines.count);
+#endif
+
+				for (NSString *line in lines)
+				{
+#ifdef DEBUG
+					NSLog(@"Line: %@", line);
+#endif
+
+					if ([line hasPrefix:@":"]) continue;
+					
+					NSString *key, *value;
+					NSRange fieldSeparatorRange = [line rangeOfString:kLogStreamKeyValueDelimiter];
+
+					if (fieldSeparatorRange.location != NSNotFound)
+					{
+						key = [line substringToIndex:fieldSeparatorRange.location];
+						value = [line substringFromIndex:fieldSeparatorRange.location + 2];
+
+						if (key != nil && value != nil)
+						{
+							if ([key isEqualToString:kLogStreamEventEventKey])
+							{
+								logStreamEvent.event = value;
+							}
+							else if ([key isEqualToString:kLogStreamEventDataKey])
+							{
+								logStreamEvent.data = logStreamEvent.data != nil ? [logStreamEvent.data stringByAppendingFormat:@"\n%@", value] : value;
+							}
+							else if ([key isEqualToString:kLogStreamEventIDKey])
+							{
+								logLastEventID = value;
+							}
+							else if ([key isEqualToString:kLogStreamEventRetryKey])
+							{
+								logRetryInterval = [value doubleValue];
+							}
+						}
+					}
+					else
+					{
+						// No field separator????
+						NSLog(@"Incoming event malformed");
+						NSLog(@"Line: %@", line);
+					}
+				}
+
+				if (logStreamEvent.data != nil)
+				{
+					// Dispatch message to the message queue
+
+					[messageQueue addOperationWithBlock:^{
+						[self dispatchEvent:logStreamEvent];
+					}];
+				}
+			}
+		}
+	}
+	else
+	{
+		// Partial event (no \n\n in received data) so preserve it in the connexion
+		// so it's ready to be added to the next chunk of data
+
+		[connexion.data appendData:data];
+	}
+
+#ifdef DEBUG
+	double timePassed_ms = [date timeIntervalSinceNow] * -1000.0;
+	NSLog(@"parseStreamLog duration: %f milliseconds", timePassed_ms);
+#endif
+
+}
+
 
 
 - (NSDictionary *)processConnection:(Connexion *)connexion
