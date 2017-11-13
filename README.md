@@ -186,7 +186,7 @@ The instance posts the notification `@"BuildAPIDeviceGroupCreated"` when the dev
 
 Updates the specified device group using the supplied keys and their associated values. The order of items in the keys and values arrays should match; no check is made to ensure that this is the case. The method checks that the two arrays are of equal length, however. The only supported keys are *name*, *description*, *type*, *production_target* and *load_code_after_blessing*. The first three of these reference strings; *production_target* references a dictionary with the keys *id* (the ID of the target production device group) and *type* (the string `@"production_devicegroup"`); and *load_code_after_blessing* references an NSNumber created from a boolean value.
 
-The instance posts the notification `@"BuildAPIDeviceGroupUpdated"` when the product has been updated. The notification includes an NSDictionary: its *data* key points to a record of the updated device group as an NSDictionary.
+The instance posts the notification `@"BuildAPIDeviceGroupUpdated"` when the device group has been updated. The notification includes an NSDictionary: its *data* key points to a record of the updated device group as an NSDictionary.
 
 ### - (void)deleteDevicegroup:(NSString *)devicegroupID ###
 
@@ -208,9 +208,21 @@ The instance posts the notification `@"BuildAPIDeviceDeleted"` when the device h
 
 ### - (void)createDeployment:(NSDictionary *)deployment ###
 
+Creates a deployment with the settings specified as the *deployment* dictionary’s key-value pairs. The dictionary’s keys and values should match those expected by the impCentral API.
+
+The instance posts the notification `@"BuildAPIDeploymentCreated"` when the deployment has been created. The notification includes an NSDictionary: its *data* key points to a record of the new deployment as an NSDictionary.
+
 ### - (void)updateDeployment:(NSString *)deploymentID :(NSArray *)keys :(NSArray *)values ###
 
+Updates the specified deployment using the supplied keys and their associated values. The order of items in the keys and values arrays should match; no check is made to ensure that this is the case. The method checks that the two arrays are of equal length, however. The only supported keys are *description* and *flagged*.
+
+The instance posts the notification `@"BuildAPIDeploymentUpdated"` when the deployment has been updated. The notification includes an NSDictionary: its *data* key points to a record of the updated deployment as an NSDictionary.
+
 ### - (void)deleteDeployment:(NSString *)deploymentID ###
+
+Deletes the deployment of the specified ID. Deployments cannot be deleted if the deployment is flagged, or it is a device group's most recent deployment. If you attempt to delete a deployment that meets either of these criteria, the API will issue an error, which the BuildAPIAccess instance will relay to the host app.
+
+The instance posts the notification `@"BuildAPIDeploymentDeleted"` when the device group has been deleted.
 
 ## Class Methods: Other Actions ##
 
@@ -252,23 +264,19 @@ The instance posts the notification `@"BuildAPIDevicesAssigned"` when the device
 
 ### - (void)startLogging:(NSString *)deviceID ###
 
+Adds the specified device (by its ID) to the list of devices for which streamed log entries are being received. If no stream is in place, BuildAPIAccess will set one up. The instance posts the notification `@"BuildAPIDeviceAddedToStream"` when the device has been added to the stream. The notification's object is a dictionary containing the key *device* &mdash; its value is the added device’s ID.
+
+The instance also posts the notification `@"BuildAPILogEntryReceived"` when a log entry has been received. The log entry is passed as the notification’s object, which is a dictionary with the keys *message* and *code*. The former is the raw log entry data, which will be in the form:
+
+```
+"232390b030728cee 2017-05-19T17:28:19.095Z development server.log Connected by WiFi on SSID \"darkmatter\" with IP address 192.168.0.2"
+```
+
+The *code* key is only present in the case of an error; the value of *message* will then be an error message. Errors are relayed via the notification `@"BuildAPILogStreamClosed"`.
+
 ### - (void)stopLogging:(NSString *)deviceID ###
 
-### - (void)startStream:(NSURL *)url ###
-
-### - (void)openStream ###
-
-### - (void)closeStream ###
-
-### - (void)dispatchEvent:(LogStreamEvent *)event ###
-
-### - (void)dispatchEvent:(LogStreamEvent *)event :(NSInteger)eventType ###
-
-### - (void)relayLogEntry:(NSDictionary *)entry ###
-
-### - (void)logOpened ###
-
-### - (void)logClosed:(NSDictionary *)error ###
+Removes the specified device (by its ID) from the list of devices for which streamed log entries are being received. The instance posts the notification `@"BuildAPIDeviceRemovedFromStream"` when the device has been added to the stream. The notification's object is a dictionary containing the key *device* &mdash; its value is the added device’s ID.
 
 Relays the notification `@"BuildAPILogStreamClosed"` to the host app if logging is terminated because of a connection error.
 
@@ -276,29 +284,9 @@ Relays the notification `@"BuildAPILogStreamClosed"` to the host app if logging 
 
 Returns `YES` if the supplied device ID is that of a device which is currently live-streaming log data, otherwise `NO`.
 
-### - (NSInteger)indexOfLoggedDevice:(NSString *)deviceID ###
-
-The BuildAPIAccess instance maintains a list of devices (as their device IDs) which are currently live-streaming log data. This utility method returns the index of the specified device within that array, or -1 if it is not present.
-
-## Class Methods: HTTP Request Constructors ##
-
-### - (NSMutableURLRequest *)makeGETrequest:(NSString *)path :(BOOL)getMultipleItems ###
-
-### - (NSMutableURLRequest *)makeDELETErequest:(NSString *)path ###
-
-### - (NSMutableURLRequest *)makePATCHrequest:(NSString *)path :(NSDictionary *)body ###
-
-### - (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)body ###
-
-## Class Methods: Making Connections ##
-
-### - (Connexion *)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode :(id)someObject ###
-
-### - (void)relaunchConnection:(id)userInfo ###
-
-### - (void)launchPendingConnections ###
-
 ### - (void)killAllConnections ###
+
+Immediately halt all in-flight connections to the impCentral API, including log streams.
 
 ## Class Methods: Processing Connections ##
 
