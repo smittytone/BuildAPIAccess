@@ -36,22 +36,6 @@ BuildAPIAccess *api = [[BuildAPIAccess alloc] init];
 
 Log in using the supplied credentials. The method uses the credentials to retrieve a new API access token, which is used to authorize all further API accesses during the lifetime of the token.
 
-### - (void)getNewAccessToken ###
-
-Acquires a new access token using Electric Imp account credentials. Called automatically by *login:*.
-
-### - (void)refreshAccessToken ###
-
-Obtains a new access token when the current token has expired. Refreshing access tokens uses a different mechanism that obtaining the initial token, which is why this is a separate method from *getNewAccessToken*. It uses the refresh token supplied with the initial access token.
-
-### - (BOOL)isAccessTokenValid ###
-
-Returns `YES` if the current access token has not expired, or `NO` if it has.
-
-### - (void)clearCredentials ###
-
-Clears the instance's record of the user's Electric Imp account credentials. Called when the instance successfully obtains an initial access token.
-
 ### - (void)twoFactorLogin:(NSString *)loginToken :(NSString *)otp ###
 
 Placeholder for support of two-factor authentication in due course.
@@ -288,16 +272,6 @@ Returns `YES` if the supplied device ID is that of a device which is currently l
 
 Immediately halt all in-flight connections to the impCentral API, including log streams.
 
-## Class Methods: Processing Connections ##
-
-### - (NSDictionary *)processConnection:(Connexion *)connexion ###
-
-When a connection to impCentral API returns, it is processed here. Its data payload is decoded. Any data-centric error conditions, eg. a request for a non-existent resource, a permissions error, or errors relayed by the impCloud's Squirrel syntax checker, are handled here. Valid data is passed to *processResult:* for further processing.
-
-### - (void)processResult:(Connexion *)connexion :(NSDictionary *)data ###
-
-Processes any valid data returned by the impCentral API and stores it in relevant internal arrays and other variables. It also issues asynchronous notifications to the host app to provide it with the information it has requested, in the form of dictionaries derived from the API-supplied data.
-
 ## Class Methods: Utilities ##
 
 ### - (void)reportError ###
@@ -307,10 +281,6 @@ Issue the contents of the *errorMessage* property to the host app as a simple er
 ### - (void)reportError:(NSInteger)errCode ###
 
 Issue the contents of the *errorMessage* property with an associated error code to the host app as a simple error via the notification `@"BuildAPIError"`. The error is passed as a dictionary with the keys *message* and *code*. The latter is an NSNumber with the value of *errCode*.
-
-### - (NSString *)processAPIError:(NSDictionary *)error ###
-
-Extracts key information from an impCentral API error record and formats it into a string for relay to the host app via *reportError:*.
 
 ### - (BOOL)checkFilter:(NSString *)filter :(NSArray *)validFilters ###
 
