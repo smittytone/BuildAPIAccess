@@ -1508,6 +1508,37 @@
 
 
 
+- (void)conditionalRestartDevices:(NSString *)devicegroupID
+{
+	[self conditionalRestartDevices:devicegroupID :nil];
+}
+
+
+
+- (void)conditionalRestartDevices:(NSString *)devicegroupID :(id)someObject
+{
+	if (devicegroupID == nil || devicegroupID.length == 0)
+	{
+		errorMessage = @"Could not create a request to conditionally restart a device group: no device group ID specified.";
+		[self reportError];
+		return;
+	}
+
+	NSMutableURLRequest *request = [self makePOSTrequest:[NSString stringWithFormat:@"devicegroups/%@/conditional_restart", devicegroupID] :nil];
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeRestartDevices :someObject];
+	}
+	else
+	{
+		errorMessage = @"Could not create a request to conditionally restart the device group.";
+		[self reportError];
+	}
+}
+
+
+
 #pragma mark Devices
 
 
@@ -2052,7 +2083,7 @@
 
 - (void)deleteDeployment:(NSString *)deploymentID :(id)someObject
 {
-	// Set up a DLETE to /devices/{id}
+	// Set up a DELETE to /devices/{id}
 
 	if (deploymentID == nil || deploymentID.length == 0)
 	{
@@ -2073,6 +2104,41 @@
 		[self reportError];
 	}
 }
+
+
+
+- (void)setMinimumDeployment:(NSString *)devicegroupID
+{
+	[self setMinimumDeployment:devicegroupID :nil];
+}
+
+
+
+- (void)setMinimumDeployment:(NSString *)devicegroupID :(id)someObject
+{
+	// Set up a PUT to /devicegroups/{ID}/relationships/min_supported_deployment
+
+	if (devicegroupID == nil || devicegroupID.length == 0)
+	{
+		errorMessage = @"Could not create a request to set a minimum deployment: no device group specified.";
+		[self reportError];
+		return;
+	}
+
+	NSDictionary *body = @{};
+	NSMutableURLRequest *request = [self makePUTrequest:[NSString stringWithFormat:@"/devicegroups/%@/relationships/min_supported_deployment", devicegroupID] :body];
+
+	if (request)
+	{
+		[self launchConnection:request :kConnectTypeSetMinDeployment :someObject];
+	}
+	else
+	{
+		errorMessage = @"Could not create a request to set a minimum deployment: bad request.";
+		[self reportError];
+	}
+}
+
 
 
 #pragma mark - HTTP Request Construction Methods

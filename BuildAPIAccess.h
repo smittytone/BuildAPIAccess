@@ -128,6 +128,9 @@
 - (void)restartDevices:(NSString *)devicegroupID;
 - (void)restartDevices:(NSString *)devicegroupID :(id)someObject;
 
+- (void)conditionalRestartDevices:(NSString *)devicegroupID;
+- (void)conditionalRestartDevices:(NSString *)devicegroupID :(id)someObject;
+
 - (void)restartDevice:(NSString *)deviceID;
 - (void)restartDevice:(NSString *)deviceID :(id)someObject;
 
@@ -157,6 +160,9 @@
 
 - (void)deleteDeployment:(NSString *)deploymentID;
 - (void)deleteDeployment:(NSString *)deploymentID :(id)someObject;
+
+- (void)setMinimumDeployment:(NSString *)devicegroupID;
+- (void)setMinimumDeployment:(NSString *)devicegroupID :(id)someObject;
 
 // Logging Methods
 
