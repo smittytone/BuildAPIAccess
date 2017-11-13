@@ -1964,7 +1964,7 @@
 
 - (void)createDeployment:(NSDictionary *)deployment :(id)someObject
 {
-	// Set up a POST to /devicegroups/{id}/relationships/devices
+	// Set up a POST to /deployments
 
 	if (deployment == nil)
 	{
