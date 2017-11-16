@@ -54,8 +54,8 @@
 #define kConnectTypeDeleteWebhook			63
 #define kConnectTypeGetWebhook			64
 
-#define kConnectTypeGetToken				80
-#define kConnectTypeRefreshToken			81
+#define kConnectTypeGetAccessToken		80
+#define kConnectTypeRefreshAccessToken		81
 #define kConnectTypeGetMyAccount			82
 #define kConnectTypeGetLogStreamID		83
 #define kConnectTypeStreamActive			84

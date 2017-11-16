@@ -162,7 +162,7 @@
 
 	if (request && !error)
 	{
-		[self launchConnection:request :kConnectTypeGetToken :nil];
+		[self launchConnection:request :kConnectTypeGetAccessToken :nil];
 	}
 	else
 	{
@@ -203,7 +203,7 @@
 
 	if (request)
 	{
-		[self launchConnection:request :kConnectTypeRefreshToken :nil];
+		[self launchConnection:request :kConnectTypeRefreshAccessToken :nil];
 	}
 	else
 	{
@@ -224,18 +224,14 @@
 	{
 		dateFormatter = [[NSDateFormatter alloc] init];
 		dateFormatter.dateFormat = @"yyyy-MM-dd'T'HH:mm:ss.SSSZZZZZZ"; // @"yyyy'-'MM'-'dd'T'HH':'mm':'ss.SSS'Z'";
-		dateFormatter.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
 		dateFormatter.timeZone = [NSTimeZone timeZoneWithAbbreviation:@"UTC"];
 	}
-
-#ifdef DEBUG
-	NSLog(@"Expiry: %@", token.expiryDate);
-#endif
 
 	NSDate *expiry = [dateFormatter dateFromString:token.expiryDate];
 	NSDate *now = [NSDate date];
 
 #ifdef DEBUG
+	NSLog(@"Expiry: %@", [dateFormatter stringFromDate:expiry]);
 	NSLog(@"   Now: %@", [dateFormatter stringFromDate:now]);
 #endif
 
@@ -310,7 +306,7 @@
 
 	if (request)
 	{
-		[self launchConnection:request :kConnectTypeGetToken :nil];
+		[self launchConnection:request :kConnectTypeGetAccessToken :nil];
 	}
 	else
 	{
@@ -2268,7 +2264,7 @@
 
 	// Do we have a valid access token - or are we getting/refreshing the access token?
 
-	if (aConnexion.actionCode == kConnectTypeGetToken || aConnexion.actionCode == kConnectTypeRefreshToken || [self isAccessTokenValid])
+	if (aConnexion.actionCode == kConnectTypeGetAccessToken || aConnexion.actionCode == kConnectTypeRefreshAccessToken || [self isAccessTokenValid])
 	{
 		// Create and begin the task
 
@@ -2290,7 +2286,7 @@
 
 		// Set 'tokenConnexion' if we need to
 
-		if (aConnexion.actionCode == kConnectTypeGetToken || aConnexion.actionCode == kConnectTypeRefreshToken) tokenConnexion = aConnexion;
+		if (aConnexion.actionCode == kConnectTypeGetAccessToken || aConnexion.actionCode == kConnectTypeRefreshAccessToken) tokenConnexion = aConnexion;
 	}
 	else
 	{
@@ -2872,7 +2868,7 @@ didReceiveResponse:(NSURLResponse *)response
 
 			if (statusCode == 400)
 			{
-				if (connexion.actionCode == kConnectTypeGetToken)
+				if (connexion.actionCode == kConnectTypeGetAccessToken)
 				{
 					// We have asked for an access token, so this indicates a login credentials failure -
 					// we can proceed no further at this time. Report the error back to the host app
@@ -3145,7 +3141,7 @@ didReceiveResponse:(NSURLResponse *)response
 			{
 				// Are we logging in?
 
-				if (connexion.actionCode == kConnectTypeGetToken)
+				if (connexion.actionCode == kConnectTypeGetAccessToken)
 				{
 					isLoggedIn = NO;
 
@@ -4057,7 +4053,7 @@ didReceiveResponse:(NSURLResponse *)response
 		}
 
 
-		case kConnectTypeGetToken:
+		case kConnectTypeGetAccessToken:
 		{
 			// The server returns the requested access token directly
 
@@ -4107,7 +4103,7 @@ didReceiveResponse:(NSURLResponse *)response
 			break;
 		}
 
-		case kConnectTypeRefreshToken:
+		case kConnectTypeRefreshAccessToken:
 		{
 			// The server returns the requested access token directly
 
