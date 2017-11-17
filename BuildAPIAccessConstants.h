@@ -114,15 +114,19 @@
 
 // Event types
 
-#define kLogStreamEventStateChange			1
-#define kLogStreamEventConnectionOpen			2
-#define kLogStreamEventMessage				3
-#define	kLogStreamEventError					4
+#define kLogStreamEventTypeNone				0
+#define kLogStreamEventTypeStateChange			1
+#define kLogStreamEventTypeMessage			2
+#define kLogStreamEventTypeError				3
 
 // Event States
 
-#define kLogStreamEventStateConnecting			0
-#define kLogStreamEventStateOpen				1
-#define kLogStreamEventStateClosed			2
+#define kLogStreamEventStateUnknown			0
+#define kLogStreamEventStateConnecting			1
+#define kLogStreamEventStateOpen				2
+#define kLogStreamEventStateClosed			3
+#define kLogStreamEventStateSubscribed			4
+#define kLogStreamEventStateUnsubscribed		5
+
 
 #endif
