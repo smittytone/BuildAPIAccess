@@ -41,7 +41,7 @@
 
 		// Message-handling Operation Queue
 
-		messageQueue = nil;
+		eventQueue = nil;
 		sessionQueue = nil;
 
 		// Account
@@ -2479,7 +2479,7 @@
 	}
 
 	NSDictionary *dict = @{ @"id" : deviceID,
-							@"type" : @"device" };
+						   @"type" : @"device" };
 
 	NSMutableURLRequest *request = [self makePUTrequest:[NSString stringWithFormat:@"logstream/%@/%@", logStreamID, deviceID] :dict];
 
@@ -2511,7 +2511,7 @@
 	// { id: ‘d9f6f253-d203-487f-bdb0-70ea1529ee1b’, type: ‘device’ }
 
 	NSDictionary *dict = @{ @"id" : deviceID,
-							@"type" : @"device" };
+						   @"type" : @"device" };
 
 	NSMutableURLRequest *request = [self makeRequest:@"DELETE" :[NSString stringWithFormat:@"logstream/%@/%@", logStreamID, deviceID] :NO :NO];
 	NSError *error;
@@ -2540,20 +2540,43 @@
 
 
 
+- (void)restartLogging
+{
+	// We need to first get the stream ID and stream URL
+	// POST-ing to /logstream will return a stream ID by way of a 302, which we will trap later
+
+	NSMutableURLRequest *request = [self makePOSTrequest:@"logstream?format=json" :nil];
+
+	if (request)
+	{
+		// Pass in the first device's ID so we have it to use after the stream has been established
+
+		restartingLog = YES;
+		[self launchConnection:request :kConnectTypeGetLogStreamID :nil];
+	}
+	else
+	{
+		errorMessage = @"Could not create a request to stream the specified device logs.";
+		[self reportError];
+	}
+}
+
+
+
 - (void)startStream:(NSURL *)url
 {
 	// This method sets up the log stream which will recieve and handle server-sent events (SSE)
-	// from the impCentral API
+	// from the impCentral API. At this point we have no connection to pipe the SSEs
 
 	logStreamURL = url;
 	logIsClosed = YES;
 
-	if (messageQueue == nil)
+	if (eventQueue == nil)
 	{
-		// Establish an single-tier operation to handle incoming messages in order
+		// Establish an single-tier operation to handle incoming log messages in order
 
-		messageQueue = [[NSOperationQueue alloc] init];
-		messageQueue.maxConcurrentOperationCount = 1;
+		eventQueue = [[NSOperationQueue alloc] init];
+		eventQueue.maxConcurrentOperationCount = 1;
 	}
 
 	// Create the only connexion for streaming
@@ -2572,7 +2595,8 @@
 		[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStart" object:nil];
 	}
 
-	// Open the SSE onnection
+	// Open the SSE connection
+	// NOTE openStream: is a separate method so it can be called elsewhere too
 
 	[self openStream];
 }
@@ -2581,15 +2605,9 @@
 
 - (void)openStream
 {
-	// Here we actually open the connection through which messages from the server will pass
+	// Here we actually open the connection through which events from the server will pass
 
 	logIsClosed = NO;
-
-	if (sessionQueue == nil)
-	{
-		sessionQueue = [[NSOperationQueue alloc] init];
-		sessionQueue.maxConcurrentOperationCount = 1;
-	}
 
 	if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
 																	  delegate:self
@@ -2607,12 +2625,18 @@
 
 	[logConnexion.task resume];
 
-	// Create a new event to record the state change and issue it
+	// Create a new event to record the state change (connecting) and issue it
+	// TODO Do we need to do this??
 
 	LogStreamEvent *event = [[LogStreamEvent alloc] init];
-	event.readyState = kLogStreamEventStateConnecting;
+	event.state = kLogStreamEventStateConnecting;
+	event.type = kLogStreamEventTypeStateChange;
 
-	[self dispatchEvent:event :kLogStreamEventStateChange];
+	// Place the event in the the event queue to guarantee displayed order = received order
+
+	[eventQueue addOperationWithBlock:^{
+		[self dispatchEvent:event];
+	}];
 }
 
 
@@ -2647,45 +2671,38 @@
 
 
 
-- (void)processMessage:(LogStreamEvent *)event
-{
-	[self dispatchEvent:event :kLogStreamEventMessage];
-}
-
-
-
 - (void)dispatchEvent:(LogStreamEvent *)event
 {
-	// Processes an event in the message queue: pass it to the main thread for processing
+	// Processes an event from the event queue: pass it to the main thread for processing in processEvent:
 
-	[self performSelectorOnMainThread:@selector(processMessage:) withObject:event waitUntilDone:NO];
+	[self performSelectorOnMainThread:@selector(processEvent:) withObject:event waitUntilDone:NO];
 }
 
 
 
-- (void)dispatchEvent:(LogStreamEvent *)event :(NSInteger)eventType
+- (void)processEvent:(LogStreamEvent *)event
 {
 	// Processes the supplied event when it is called from the connection queue
 
 	NSDictionary *dict = nil;
 
-	switch (eventType)
+	switch (event.type)
 	{
-		case kLogStreamEventStateChange:
+		case kLogStreamEventTypeStateChange:
 
-			// The stream has signalled a state change
+			// A stream state change has been signalled (by us or by the stream)
 
-			switch (event.readyState)
+			switch (event.state)
 			{
 				case kLogStreamEventStateConnecting:
 #ifdef DEBUG
-	NSLog(@"%@", @"State: Connecting");
+	NSLog(@"%@", @"Log State: Connecting");
 #endif
 					break;
 
 				case kLogStreamEventStateOpen:
 #ifdef DEBUG
-	NSLog(@"%@", @"State: Connection open");
+	NSLog(@"%@", @"Log State: Connection open");
 #endif
 					// The log stream signals that it is open, so we can now add the first device,
 					// whose ID has been retained through the stream set-up process. Calling logOpened: does this
@@ -2693,25 +2710,34 @@
 					[self performSelectorOnMainThread:@selector(logOpened) withObject:nil waitUntilDone:NO];
 					break;
 
+				case kLogStreamEventStateSubscribed:
 #ifdef DEBUG
-				default:
-					NSLog(@"%@", @"State: Connection closed");
+	NSLog(@"%@", @"Log State: Device added");
 #endif
+					break;
+
+				case kLogStreamEventStateUnsubscribed:
+#ifdef DEBUG
+	NSLog(@"%@", @"Log State: Device removed");
+#endif
+					break;
+
+				case kLogStreamEventStateClosed:
+#ifdef DEBUG
+	NSLog(@"%@", @"Log State: Connection closed");
+#endif
+					// Log stream has signalled closure for some reason, so we need to re-open it
+					[self closeStream];
+					[self restartLogging];
 			}
 
 			break;
 
-		case kLogStreamEventConnectionOpen:
-			break;
-
-		case kLogStreamEventMessage:
-#ifdef DEBUG
-    //NSLog(@"Message received: %@", event.data);
-#endif
+		case kLogStreamEventTypeMessage:
 
 			// A mesage has been received from the server. Relay it to the host app via relayLogEntry:
 
-			if (event.data != nil && [event.event compare:@"message"] == NSOrderedSame)
+			if (event.data != nil)
 			{
 				dict = @{ @"message" : event.data };
 
@@ -2720,11 +2746,11 @@
 
 			break;
 
-		case kLogStreamEventError:
+		case kLogStreamEventTypeError:
 			// An error has broken the stream. Relay the error to the host app via logClosed:
 
 			dict = @{ @"message" : event.error,
-					  @"code" : [NSNumber numberWithInteger:event.readyState] };
+					  @"code" : [NSNumber numberWithInteger:event.state] };
 
 			[self performSelectorOnMainThread:@selector(logClosed:) withObject:dict waitUntilDone:NO];
 			break;
@@ -2748,6 +2774,19 @@
 
 	if (deviceToStream != nil) [self addDeviceToLogStream:deviceToStream :nil];
 	deviceToStream = nil;
+
+	if (restartingLog)
+	{
+		if (loggingDevices.count > 0)
+		{
+			for (NSString *deviceId in loggingDevices)
+			{
+				[self addDeviceToLogStream:deviceId :nil];
+			}
+		}
+
+		restartingLog = NO;
+	}
 }
 
 
@@ -2828,101 +2867,42 @@ didReceiveResponse:(NSURLResponse *)response
 	NSHTTPURLResponse *resp = (NSHTTPURLResponse *)response;
 	NSInteger statusCode = resp.statusCode;
 
-	if (connexion == logConnexion)
+	if (statusCode > 399 || statusCode == 302)
 	{
-		// Is this the live log streaming connection?
+		// The API has responded with a status code that indicates an error.
+		// Examine the status code to deal with specific errors
 
-		if (statusCode == 200)
+		if (statusCode == 302)
 		{
-			// The stream is open, so signal this with a state-change event
-
-			LogStreamEvent *event = [[LogStreamEvent alloc] init];
-			event.readyState = kLogStreamEventStateOpen;
-
-			[self dispatchEvent:event :kLogStreamEventStateChange];
-		}
-	}
-	else
-	{
-		// This is a non-log stream connection
-
-		if (statusCode > 399 || statusCode == 302)
-		{
-			// The API has responded with a status code that indicates an error.
-			// Examine the status code to deal with specific errors
-
-			if (statusCode == 302)
+			if (connexion.actionCode == kConnectTypeGetLogStreamID)
 			{
-				if (connexion.actionCode == kConnectTypeGetLogStreamID)
-				{
-					// We have asked for a log stream ID; this is returned as a 302, which we trap here
+				// We have asked for a log stream ID; this is returned as a 302, which we trap here
 
-					logStreamID = [resp.allHeaderFields objectForKey:@"location"];
+				logStreamID = [resp.allHeaderFields objectForKey:@"location"];
 
 #ifdef DEBUG
-	NSLog(@"Log Stream ID received: %@", logStreamID);
+    NSLog(@"Log Stream ID received: %@", logStreamID);
 #endif
-					
-				}
 			}
+		}
 
-			if (statusCode == 400)
+		if (statusCode == 400)
+		{
+			if (connexion.actionCode == kConnectTypeGetAccessToken)
 			{
-				if (connexion.actionCode == kConnectTypeGetAccessToken)
-				{
-					// We have asked for an access token, so this indicates a login credentials failure -
-					// we can proceed no further at this time. Report the error back to the host app
-					// and end the connection
+				// We have asked for an access token, so this indicates a login credentials failure -
+				// we can proceed no further at this time. Report the error back to the host app
+				// and end the connection
 
-					isLoggedIn = NO;
+				isLoggedIn = NO;
 
-					errorMessage = @"Your impCloud access credentials have been rejected.";
-					[self reportError:kErrorLoginRejectCredentials];
+				errorMessage = @"Your impCloud access credentials have been rejected.";
+				[self reportError:kErrorLoginRejectCredentials];
 
-					[connexions removeObject:connexion];
-					numberOfConnections = connexions.count;
+				[connexions removeObject:connexion];
+				numberOfConnections = connexions.count;
 
-					if (connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-
-					// Run the completion handler with a 'cancel' response becuase we are killing this connection
-
-					if (completionHandler != nil) completionHandler(NSURLSessionResponseCancel);
-
-					return;
-				}
-			}
-
-			if (statusCode == 429)
-			{
-				// impCentral API rate limit has been exceeded, which we neeed to deal with here
-				// Bundle up connection data and pass it to 'relauchConnection:' in 'limit' * 1000 seconds' time
-				// 'limit' is the milliseconds time to wait before reconnecting that has been submitted by
-				// the server
-
-				NSDictionary *dict = connexion.representedObject != nil
-				? @{ @"request" : [dataTask.originalRequest copy],
-					 @"actioncode" : [NSNumber numberWithInteger:connexion.actionCode],
-					 @"object" : connexion.representedObject }
-				: @{ @"request" : [dataTask.originalRequest copy],
-					 @"actioncode" : [NSNumber numberWithInteger:connexion.actionCode] };
-
-				NSInteger limit = [[resp.allHeaderFields valueForKey:@"X-RateLimit-Reset"] integerValue];
-
-				// Wait ('limit' * 1000) seconds and re-access the impCloud
-
-				[NSTimer scheduledTimerWithTimeInterval:(limit * 1000)
-												 target:self
-											   selector:@selector(relaunchConnection:)
-											   userInfo:dict
-												repeats:NO];
-
-				if (connexion != nil)
-				{
-					[connexions removeObject:connexion];
-					numberOfConnections = connexions.count;
-				}
-
-				if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+				if (connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
 				// Run the completion handler with a 'cancel' response becuase we are killing this connection
 
@@ -2930,11 +2910,50 @@ didReceiveResponse:(NSURLResponse *)response
 
 				return;
 			}
-
-			// Record the error code for all other status codes
-
-			connexion.errorCode = statusCode;
 		}
+
+		if (statusCode == 429)
+		{
+			// impCentral API rate limit has been exceeded, which we neeed to deal with here
+			// Bundle up connection data and pass it to 'relauchConnection:' in 'limit' * 1000 seconds' time
+			// 'limit' is the milliseconds time to wait before reconnecting that has been submitted by
+			// the server
+
+			NSDictionary *dict = connexion.representedObject != nil
+			? @{ @"request" : [dataTask.originalRequest copy],
+				 @"actioncode" : [NSNumber numberWithInteger:connexion.actionCode],
+				 @"object" : connexion.representedObject }
+			: @{ @"request" : [dataTask.originalRequest copy],
+				 @"actioncode" : [NSNumber numberWithInteger:connexion.actionCode] };
+
+			NSInteger limit = [[resp.allHeaderFields valueForKey:@"X-RateLimit-Reset"] integerValue];
+
+			// Wait ('limit' * 1000) seconds and re-access the impCloud
+
+			[NSTimer scheduledTimerWithTimeInterval:(limit * 1000)
+											 target:self
+										   selector:@selector(relaunchConnection:)
+										   userInfo:dict
+											repeats:NO];
+
+			if (connexion != nil)
+			{
+				[connexions removeObject:connexion];
+				numberOfConnections = connexions.count;
+			}
+
+			if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+
+			// Run the completion handler with a 'cancel' response becuase we are killing this connection
+
+			if (completionHandler != nil) completionHandler(NSURLSessionResponseCancel);
+
+			return;
+		}
+
+		// Record the error code for all other status codes
+
+		connexion.errorCode = statusCode;
 	}
 
 	// Allow the connection to complete so we can analyze the error later, in 'didCompleteWithError:'
@@ -2964,87 +2983,6 @@ didReceiveResponse:(NSURLResponse *)response
 	if (connexion == logConnexion)
 	{
 		[self parseStreamData:data :connexion];
-		return;
-
-#ifdef DEBUG
-		NSDate *date = [NSDate date];
-#endif
-
-		// This the live log streaming connection, so we need to extract the message information
-
-		NSString *eventString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-		NSArray *lines = [eventString componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]];
-
-#ifdef DEBUG
-    NSLog(@"%@", (eventString.length > 2 ? [eventString substringToIndex:eventString.length - 2] : eventString));
-#endif
-
-		LogStreamEvent *event = [[LogStreamEvent alloc] init];
-		event.readyState = kLogStreamEventStateOpen;
-
-		for (NSString *line in lines)
-		{
-			// Ignore lines starting with ':'
-
-			if ([line hasPrefix:kLogStreamKeyValueDelimiter]) continue;
-
-			if (line == nil || line.length == 0)
-			{
-				if (event.data != nil)
-				{
-					// Dispatch message to the message queue to guarantee ordering of dispatch
-
-					[messageQueue addOperationWithBlock:^{
-						[self dispatchEvent:event];
-					}];
-				}
-
-				// Create a new event and continue processing recieved data
-
-				event = [[LogStreamEvent alloc] init];
-				event.readyState = kLogStreamEventStateOpen;
-				continue;
-			}
-
-			@autoreleasepool
-			{
-				NSScanner *scanner = [NSScanner scannerWithString:line];
-				scanner.charactersToBeSkipped = [NSCharacterSet whitespaceCharacterSet];
-
-				// Separate out keys and values
-
-				NSString *key, *value;
-				[scanner scanUpToString:kLogStreamKeyValueDelimiter intoString:&key];
-				[scanner scanString:kLogStreamKeyValueDelimiter intoString:nil];
-				[scanner scanUpToCharactersFromSet:[NSCharacterSet newlineCharacterSet] intoString:&value];
-
-				if (key != nil && value != nil)
-				{
-					if ([key isEqualToString:kLogStreamEventEventKey])
-					{
-						event.event = value;
-					}
-					else if ([key isEqualToString:kLogStreamEventDataKey])
-					{
-						event.data = event.data != nil ? [event.data stringByAppendingFormat:@"\n%@", value] : value;
-					}
-					else if ([key isEqualToString:kLogStreamEventIDKey])
-					{
-						logLastEventID = value;
-					}
-					else if ([key isEqualToString:kLogStreamEventRetryKey])
-					{
-						logRetryInterval = [value doubleValue];
-					}
-				}
-			}
-		}
-
-#ifdef DEBUG
-		double timePassed_ms = [date timeIntervalSinceNow] * -1000.0;
-		NSLog(@"parseStreamLog duration: %f", timePassed_ms);
-#endif
-
 	}
 	else
     {
@@ -3053,7 +2991,6 @@ didReceiveResponse:(NSURLResponse *)response
 
 		[connexion.data appendData:data];
     }
-
 }
 
 
@@ -3076,7 +3013,6 @@ didReceiveResponse:(NSURLResponse *)response
 			connexion = aConnexion;
 			break;
 		}
-
 	}
 
 	// Complete the finished NSURLSessionTask - this may be redundant, but just in case...
@@ -3097,18 +3033,23 @@ didReceiveResponse:(NSURLResponse *)response
 		// Create an error event
 
 		LogStreamEvent *event = [[LogStreamEvent alloc] init];
-		event.readyState = kLogStreamEventStateClosed;
-		event.error = error != nil ? error : [NSError errorWithDomain:@""
-																 code:event.readyState
-															 userInfo:@{ NSLocalizedDescriptionKey: @"Connection with the event source was closed." } ];
+		event.type = kLogStreamEventTypeStateChange;
+		event.state = kLogStreamEventStateClosed;
+		event.error = error != nil ? error : [NSError errorWithDomain:@"" code:event.state userInfo:@{ NSLocalizedDescriptionKey: @"Connection with the event source was closed." } ];
 
-		// Dipatch a state-change event to the event queue
+		// Add a state-change event to the event queue
 
-		[self dispatchEvent:event :kLogStreamEventStateChange];
+		[eventQueue addOperationWithBlock:^{
+			[self dispatchEvent:event];
+		}];
 
-		// Dispatch an error event to the event queue
+		// Add an error event to the event queue
 
-		[self dispatchEvent:event :kLogStreamEventError];
+		event.type = kLogStreamEventTypeError;
+
+		[eventQueue addOperationWithBlock:^{
+			[self dispatchEvent:event];
+		}];
 
 		// Attempt to re-open the connection in 'retryInterval' seconds
 
@@ -3218,7 +3159,7 @@ didReceiveResponse:(NSURLResponse *)response
 	// the data from them (and defer incomplete events until the rest of them arrives)
 
 #ifdef DEBUG
-	NSDate *date = [NSDate date];
+	//NSDate *date = [NSDate date];
 #endif
 
 	NSString *eventString;
@@ -3246,6 +3187,7 @@ didReceiveResponse:(NSURLResponse *)response
 	BOOL lastMessageTruncated = ([lastTwoChars compare:kLogStreamEventSeparatorLFLF] == NSOrderedSame) ? NO : YES;
 
 	// Separate the string into individual events (separated by newline pairs)
+	// If there are no newlines, events.count == 1, which we trap quickly
 
 	NSArray *events = [eventString componentsSeparatedByString:kLogStreamEventSeparatorLFLF];
 
@@ -3264,7 +3206,7 @@ didReceiveResponse:(NSURLResponse *)response
 				connexion.data = [NSMutableData dataWithData:[event dataUsingEncoding:NSUTF8StringEncoding]];
 
 #ifdef DEBUG
-				NSLog(@"Holding data for next stream chunk: %@", event);
+     NSLog(@"Holding data for next stream chunk\nEvent -> %@", event);
 #endif
 
 			}
@@ -3274,19 +3216,22 @@ didReceiveResponse:(NSURLResponse *)response
 				// ie. it is complete and can be processed
 
 				LogStreamEvent *logStreamEvent = [[LogStreamEvent alloc] init];
-				logStreamEvent.readyState = kLogStreamEventStateOpen;
+				logStreamEvent.type = kLogStreamEventTypeMessage;
 
 				// Separate the key-value pairs (separated by newlines)
 
 				NSArray *lines = [event componentsSeparatedByString:kLogStreamEventKeyValuePairSeparator];
 #ifdef DEBUG
-				NSLog(@"Lines: %lu", (long)lines.count);
+    NSLog(@"Lines -> %lu", (long)lines.count);
 #endif
+
+				// Run through each of the event's lines and extract the information into the
+				// relevant logStreamEvent object properties
 
 				for (NSString *line in lines)
 				{
 #ifdef DEBUG
-					NSLog(@"Line: %@", line);
+    NSLog(@"Line  -> %@ (%li)", line, (long)line.length);
 #endif
 
 					if ([line hasPrefix:@":"]) continue;
@@ -3303,35 +3248,59 @@ didReceiveResponse:(NSURLResponse *)response
 						{
 							if ([key isEqualToString:kLogStreamEventEventKey])
 							{
+								// 'event' - value will be 'message' or 'state_change'
+
 								logStreamEvent.event = value;
 							}
 							else if ([key isEqualToString:kLogStreamEventDataKey])
 							{
+								// 'data' - value will be, eg. 'opened', 'closed', '40000c2a69109f08 subscribed', or '<log entry>'
+
 								logStreamEvent.data = logStreamEvent.data != nil ? [logStreamEvent.data stringByAppendingFormat:@"\n%@", value] : value;
 							}
 							else if ([key isEqualToString:kLogStreamEventIDKey])
 							{
+								// 'id'
+
 								logLastEventID = value;
 							}
 							else if ([key isEqualToString:kLogStreamEventRetryKey])
 							{
+								// 'retry'
+
 								logRetryInterval = [value doubleValue];
 							}
 						}
 					}
 					else
 					{
-						// No field separator????
-						NSLog(@"Incoming event malformed");
-						NSLog(@"Line: %@", line);
+#ifdef DEBUG
+	// No field separator????
+	NSLog(@"Incoming event malformed");
+#endif
 					}
 				}
 
 				if (logStreamEvent.data != nil)
 				{
-					// Dispatch message to the message queue
+					// Change the logStreamEvent's 'state' according to type
+					// NOTE 'type' is set to kLogStreamEventTypeMessage above; 'state' doesn't matter for messages
 
-					[messageQueue addOperationWithBlock:^{
+					if ([logStreamEvent.event compare:@"state_change"] == NSOrderedSame)
+					{
+						logStreamEvent.type = kLogStreamEventTypeStateChange;
+						if ([logStreamEvent.data compare:@"opened"] == NSOrderedSame)
+						{
+							logStreamEvent.state = kLogStreamEventStateOpen;
+						}
+						if ([logStreamEvent.data compare:@"closed"] == NSOrderedSame) logStreamEvent.state = kLogStreamEventStateClosed;
+						if ([logStreamEvent.data hasSuffix:@"subscribed"]) logStreamEvent.state = kLogStreamEventStateSubscribed;
+						if ([logStreamEvent.data hasSuffix:@"unsubscribed"]) logStreamEvent.state = kLogStreamEventStateUnsubscribed;
+					}
+
+					// Place the event in the the event queue to guarantee displayed order = received order
+
+					[eventQueue addOperationWithBlock:^{
 						[self dispatchEvent:logStreamEvent];
 					}];
 				}
@@ -3347,8 +3316,8 @@ didReceiveResponse:(NSURLResponse *)response
 	}
 
 #ifdef DEBUG
-	double timePassed_ms = [date timeIntervalSinceNow] * -1000.0;
-	NSLog(@"parseStreamLog duration: %f milliseconds", timePassed_ms);
+	//double timePassed_ms = [date timeIntervalSinceNow] * -1000.0;
+	//NSLog(@"parseStreamLog duration: %f milliseconds", timePassed_ms);
 #endif
 
 }

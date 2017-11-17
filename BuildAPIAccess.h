@@ -22,7 +22,7 @@
 
 	NSDictionary *me;
 
-	NSOperationQueue *sessionQueue, *messageQueue;
+	NSOperationQueue *sessionQueue, *eventQueue;
 
 	NSString *baseURL, *userAgent, *username, *password, *logStreamID, *deviceToStream;
 
@@ -34,7 +34,7 @@
 
 	NSInteger pageSize;
 
-	BOOL pageSizeChangeFlag, logIsClosed, useTwoFactor;
+	BOOL pageSizeChangeFlag, logIsClosed, restartingLog, useTwoFactor;
 
 	id logLastEventID;
 
@@ -170,13 +170,14 @@
 - (void)startLogging:(NSString *)deviceID :(id)someObject;
 - (void)stopLogging:(NSString *)deviceID;
 - (void)stopLogging:(NSString *)deviceID :(id)someObject;
+- (void)restartLogging;
 
 - (void)startStream:(NSURL *)url;
 - (void)openStream;
 - (void)closeStream;
 
 - (void)dispatchEvent:(LogStreamEvent *)event;
-- (void)dispatchEvent:(LogStreamEvent *)event :(NSInteger)eventType;
+- (void)processEvent:(LogStreamEvent *)event;
 
 - (void)relayLogEntry:(NSDictionary *)entry;
 - (void)logOpened;
