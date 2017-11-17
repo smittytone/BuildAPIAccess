@@ -2727,6 +2727,7 @@
 	NSLog(@"%@", @"Log State: Connection closed");
 #endif
 					// Log stream has signalled closure for some reason, so we need to re-open it
+
 					[self closeStream];
 					[self restartLogging];
 			}
@@ -2795,7 +2796,20 @@
 {
 	// Called on the main thread to notify the host that the log stream is closed - possibly because of an error
 
-	[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPILogStreamClosed" object:error];
+	errorMessage = @"Log stream closed due to a connection error";
+	[self reportError];
+
+	NSMutableArray *lgds = [loggingDevices copy];
+	[loggingDevices removeAllObjects];
+	[self closeStream];
+
+	numberOfLogStreams = 0;
+
+	// ...and notify the host for each device
+
+	NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+
+	for (NSString *loggingDevice in lgds) [nc postNotificationName:@"BuildAPILogStreamEnd" object:loggingDevice];
 }
 
 
@@ -2886,7 +2900,7 @@ didReceiveResponse:(NSURLResponse *)response
 			}
 		}
 
-		if (statusCode == 400)
+		if (statusCode == 401)
 		{
 			if (connexion.actionCode == kConnectTypeGetAccessToken)
 			{
@@ -3021,106 +3035,62 @@ didReceiveResponse:(NSURLResponse *)response
 
 	connexion.task = nil;
 
-	if (connexion.actionCode == kConnectTypeLogStream)
+	if (error)
 	{
-		// Are we logging? Yes we are, so handle this type of connection here
-		// NOTE 'connexion' should equal 'logConnection'
+		// React to a passed client-side error - most likely a timeout or inability to resolve the URL
+		// eg. the client is not connected to the Internet
 
-		// Is the connection already closed? If so, just bail
+		// NOTE 'error.code' will equal NSURLErrorCancelled when we cancel a live connection task, eg. kill all connections
+		// so just return from this
 
-		if (logIsClosed) return;
+		if (error.code == NSURLErrorCancelled) return;
 
-		// Create an error event
-
-		LogStreamEvent *event = [[LogStreamEvent alloc] init];
-		event.type = kLogStreamEventTypeStateChange;
-		event.state = kLogStreamEventStateClosed;
-		event.error = error != nil ? error : [NSError errorWithDomain:@"" code:event.state userInfo:@{ NSLocalizedDescriptionKey: @"Connection with the event source was closed." } ];
-
-		// Add a state-change event to the event queue
-
-		[eventQueue addOperationWithBlock:^{
-			[self dispatchEvent:event];
-		}];
-
-		// Add an error event to the event queue
-
-		event.type = kLogStreamEventTypeError;
-
-		[eventQueue addOperationWithBlock:^{
-			[self dispatchEvent:event];
-		}];
-
-		// Attempt to re-open the connection in 'retryInterval' seconds
-
-		[NSTimer timerWithTimeInterval:logRetryInterval
-							   repeats:NO
-								 block:^(NSTimer * _Nonnull timer) {
-										 [self openStream];
-		}];
-
-		return;
-	}
-	else
-	{
-		// Process completed non-logging connections
-
-		if (error)
-		{
-			// React to a passed client-side error - most likely a timeout or inability to resolve the URL
-			// ie. the client is not connected to the Internet
-
-			// NOTE 'error.code' will equal NSURLErrorCancelled when we cancel a live connection task, eg. kill all connections
-
-			if (error.code == NSURLErrorCancelled) return;
-
-			errorMessage = @"Could not connect to the Electric Imp impCloud.";
-
-			// Remove the connection from the list of current connections
-
-			if (connexion != nil)
-			{
-				// Are we logging in?
-
-				if (connexion.actionCode == kConnectTypeGetAccessToken)
-				{
-					isLoggedIn = NO;
-
-					[self reportError:kErrorLoginRejectCredentials];
-				}
-				else
-				{
-					[self reportError:kErrorNetworkError];
-				}
-
-				[connexions removeObject:connexion];
-
-				numberOfConnections = connexions.count;
-			}
-
-			// Check if there are any active connections - signal the host app if not
-
-			if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-
-			return;
-		}
-	}
-
-	// The connection has come to a conclusion without error, so if we have a valid action code,
-	// proceed to process the received data
-
-	if (connexion.actionCode != kConnectTypeNone)
-	{
-		// Handle the returned data
-
-		[self processResult:connexion :[self processConnection:connexion]];
-	}
-	else
-	{
-		// This might be redundant - can a connexion ever have a kConnectTypeNone 'actionCode' at this point?
+		// Now process other errors
 
 		if (connexion != nil)
 		{
+			if (connexion.actionCode == kConnectTypeLogStream)
+			{
+				// Are we logging? Yes we are, so handle this type of connection here
+				// Is the connection already closed? If so, just bail
+
+				if (logIsClosed) return;
+
+				logIsClosed = YES;
+
+				// Create an error event
+
+				LogStreamEvent *event = [[LogStreamEvent alloc] init];
+				event.type = kLogStreamEventTypeError;
+				event.error = error != nil ? error : [NSError errorWithDomain:@"NSURLErrorDomain" code:event.state userInfo:@{ NSLocalizedDescriptionKey: @"Connection with the event source was closed." } ];
+
+				// Add an error event to the event queue
+
+				[eventQueue addOperationWithBlock:^{
+					[self dispatchEvent:event];
+				}];
+
+				/*
+				 // Attempt to re-open the connection in 'retryInterval' seconds
+
+				 [NSTimer timerWithTimeInterval:logRetryInterval
+				 repeats:NO
+				 block:^(NSTimer * _Nonnull timer) {
+				 [self openStream];
+				 }];
+				 */
+
+				// Bail because we will handle connection clear up later
+
+				return;
+			}
+
+			if (connexion.actionCode == kConnectTypeGetAccessToken) isLoggedIn = NO;
+
+			errorMessage = @"Could not connect to the Electric Imp impCloud.";
+			
+			[self reportError:kErrorNetworkError];
+
 			[connexions removeObject:connexion];
 
 			numberOfConnections = connexions.count;
@@ -3129,6 +3099,33 @@ didReceiveResponse:(NSURLResponse *)response
 		// Check if there are any active connections - signal the host app if not
 
 		if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+
+		return;
+	}
+
+	// The connection has come to a conclusion without error, so if we have a valid action code,
+	// proceed to process the received data
+
+	if (connexion != nil)
+	{
+		if (connexion.actionCode != kConnectTypeNone)
+		{
+			// Handle the returned data
+
+			[self processResult:connexion :[self processConnection:connexion]];
+		}
+		else
+		{
+			// This might be redundant - can a connexion ever have a kConnectTypeNone 'actionCode' at this point?
+
+			[connexions removeObject:connexion];
+
+			numberOfConnections = connexions.count;
+
+			// Check if there are any active connections - signal the host app if not
+
+			if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+		}
 	}
 }
 
@@ -3141,6 +3138,8 @@ didReceiveResponse:(NSURLResponse *)response
 	// Clear all the connexions from the list
 
 	[connexions removeAllObjects];
+
+	[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
 	// Zero the connection-related properties
 
