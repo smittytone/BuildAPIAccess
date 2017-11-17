@@ -10,7 +10,7 @@
 @implementation LogStreamEvent
 
 
-@synthesize eid, event, data, readyState, error;
+@synthesize eid, event, data, type, state, error;
 
 
 - (instancetype)init
@@ -18,7 +18,8 @@
 	if (self = [super init])
 	{
 		eid = nil;
-		readyState = -1;
+		type = kLogStreamEventTypeNone;
+		state = kLogStreamEventStateUnknown;
 		event = nil;
 		error = nil;
 		data = nil;
