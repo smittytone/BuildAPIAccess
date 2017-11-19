@@ -16,74 +16,76 @@
 
 #define kConnectTypeNone					0
 
-#define kConnectTypeGetProducts			10
+#define kConnectTypeGetProducts				10
 #define kConnectTypeCreateProduct			11
 #define kConnectTypeUpdateProduct			12
 #define kConnectTypeDeleteProduct			13
-#define kConnectTypeGetProduct			14
+#define kConnectTypeGetProduct				14
 
-#define kConnectTypeGetDeviceGroups		20
+#define kConnectTypeGetDeviceGroups			20
 #define kConnectTypeCreateDeviceGroup		21
 #define kConnectTypeUpdateDeviceGroup		22
 #define kConnectTypeDeleteDeviceGroup		23
-#define kConnectTypeGetDeviceGroup		24
-#define kConnectTypeRestartDevices		25
+#define kConnectTypeGetDeviceGroup			24
+#define kConnectTypeRestartDevices			25
 
-#define kConnectTypeGetDeployments		30
+#define kConnectTypeGetDeployments			30
 #define kConnectTypeCreateDeployment		31
 #define kConnectTypeUpdateDeployment		32
 #define kConnectTypeDeleteDeployment		33
 #define kConnectTypeGetDeployment			34
 #define kConnectTypeSetMinDeployment		35
 
-#define kConnectTypeGetDevices			40
+#define kConnectTypeGetDevices				40
 #define kConnectTypeUpdateDevice			41
 #define kConnectTypeDeleteDevice			42
 #define kConnectTypeAssignDevice			43
 #define kConnectTypeAssignDevices			44
-#define kConnectTypeUnassignDevice		45
-#define kConnectTypeUnassignDevices		46
+#define kConnectTypeUnassignDevice			45
+#define kConnectTypeUnassignDevices			46
 #define kConnectTypeRestartDevice			47
 #define kConnectTypeGetDevice				48
 #define kConnectTypeGetDeviceLogs			49
 #define kConnectTypeGetDeviceHistory		50
 
-#define kConnectTypeGetWebhooks			60
+#define kConnectTypeGetWebhooks				60
 #define kConnectTypeCreateWebhook			61
 #define kConnectTypeUpdateWebhook			62
 #define kConnectTypeDeleteWebhook			63
-#define kConnectTypeGetWebhook			64
+#define kConnectTypeGetWebhook				64
 
-#define kConnectTypeGetAccessToken		80
+#define kConnectTypeGetAccessToken			80
 #define kConnectTypeRefreshAccessToken		81
 #define kConnectTypeGetMyAccount			82
-#define kConnectTypeGetLogStreamID		83
+#define kConnectTypeGetLogStreamID			83
 #define kConnectTypeStreamActive			84
 #define kConnectTypeAddLogStream			85
 #define kConnectTypeEndLogStream			86
 
+#define kConnectTypeGetLoginToken			90
+
 // impCentral URL, version
 
-#define kBaseAPIURL						@"https://api.electricimp.com"
-#define kAPIVersion						@"/v5/"
+#define kBaseAPIURL							@"https://api.electricimp.com"
+#define kAPIVersion							@"/v5/"
 
 // Logging
 
 #define kConnectTypeLogStream				99
-#define kMaxHistoricalLogs				1000
-#define kLogTimeout						300.0
+#define kMaxHistoricalLogs					1000
+#define kLogTimeout							300.0
 #define klogRetryInterval					10.0
 
 // Pagination
 
-#define kPaginationDefault				20
+#define kPaginationDefault					20
 
 // Errors
 
 #define kErrorNoError						0
-#define kErrorNetworkError				1
+#define kErrorNetworkError					1
 
-#define kErrorLoginSuccess				10
+#define kErrorLoginSuccess					10
 #define kErrorLoginNoUsername				11
 #define kErrorLoginNoPassword				12
 #define kErrorLoginNoCredentials			13
@@ -99,7 +101,7 @@
 
 // Data delimiters
 
-#define kLogStreamKeyValueDelimiter			@": "
+#define kLogStreamKeyValueDelimiter				@": "
 #define kLogStreamEventSeparatorLFLF			@"\n\n"
 #define kLogStreamEventSeparatorCRCR			@"\r\r"
 #define kLogStreamEventSeparatorCRLFCRLF		@"\r\n\r\n"
@@ -108,25 +110,25 @@
 // Event keys
 
 #define kLogStreamEventDataKey				@"data"
-#define kLogStreamEventIDKey					@"id"
+#define kLogStreamEventIDKey				@"id"
 #define kLogStreamEventEventKey				@"event"
 #define kLogStreamEventRetryKey				@"retry"
 
 // Event types
 
 #define kLogStreamEventTypeNone				0
-#define kLogStreamEventTypeStateChange			1
+#define kLogStreamEventTypeStateChange		1
 #define kLogStreamEventTypeMessage			2
-#define kLogStreamEventTypeError				3
+#define kLogStreamEventTypeError			3
 
 // Event States
 
 #define kLogStreamEventStateUnknown			0
-#define kLogStreamEventStateConnecting			1
-#define kLogStreamEventStateOpen				2
+#define kLogStreamEventStateConnecting		1
+#define kLogStreamEventStateOpen			2
 #define kLogStreamEventStateClosed			3
-#define kLogStreamEventStateSubscribed			4
-#define kLogStreamEventStateUnsubscribed		5
+#define kLogStreamEventStateSubscribed		4
+#define kLogStreamEventStateUnsubscribed	5
 
 
 #endif

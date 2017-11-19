@@ -22,7 +22,7 @@
 
 	NSDictionary *me;
 
-	NSOperationQueue *sessionQueue, *eventQueue;
+	NSOperationQueue *eventQueue;
 
 	NSString *baseURL, *userAgent, *username, *password, *logStreamID, *deviceToStream;
 
