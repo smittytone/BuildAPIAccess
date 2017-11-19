@@ -42,7 +42,6 @@
 		// Message-handling Operation Queue
 
 		eventQueue = nil;
-		sessionQueue = nil;
 
 		// Account
 
@@ -2183,7 +2182,7 @@
 	NSError *error = nil;
 	NSMutableURLRequest *request = [self makeRequest:@"PUT" :path :YES :NO];
 
-	if (body) [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:body options:0 error:&error]];
+	if (body != nil) [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:body options:0 error:&error]];
 	if (error != nil) return nil;
 	return request;
 }
@@ -2192,9 +2191,9 @@
 
 - (NSMutableURLRequest *)makeRequest:(NSString *)verb :(NSString *)path :(BOOL)addContentType :(BOOL)getMultipleItems
 {
-	if (token == nil)
+	if (token == nil || !isLoggedIn)
 	{
-		// We have no session token, so we can't get any data
+		// We have no access token, so we can't get any data
 
 		errorMessage = @"You must be logged in to access the Electric Imp impCloud™";
 		[self reportError];
@@ -2207,7 +2206,7 @@
 		// NOTE make sure this is not called when we do a request for the user's account
 		// and that it's not duplicating the encoded string
 
-		if ([path containsString:@"?"] == NO && getMultipleItems == YES) path = [path stringByAppendingFormat:@"?page[size]=%li", pageSize];
+		if (![path containsString:@"?"] && getMultipleItems) path = [path stringByAppendingFormat:@"?page[size]=%li", pageSize];
 	}
 
 	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:path]]];
@@ -2228,8 +2227,7 @@
 	// Applies the stored access token data to the request
 	// NOTE the validity of the accessToken should already have been checked
 
-	NSString *tk = [@"Bearer " stringByAppendingString:token.accessToken];
-	[request setValue:tk forHTTPHeaderField:@"Authorization"];
+	[request setValue:[@"Bearer " stringByAppendingString:token.accessToken] forHTTPHeaderField:@"Authorization"];
 	[request setTimeoutInterval:30.0];
 }
 
@@ -2251,12 +2249,6 @@
 	if (someObject) aConnexion.representedObject = someObject;
 
     // Use NSURLSession for the connection. Compatible with iOS, tvOS and Mac OS X
-
-	if (sessionQueue == nil)
-	{
-		sessionQueue = [[NSOperationQueue alloc] init];
-		sessionQueue.maxConcurrentOperationCount = 1;
-	}
 
 	if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
 														  delegate:self
@@ -2342,12 +2334,6 @@
 		{
 			[self setRequestAuthorization:conn.originalRequest];
 
-			if (sessionQueue == nil)
-			{
-				sessionQueue = [[NSOperationQueue alloc] init];
-				sessionQueue.maxConcurrentOperationCount = 1;
-			}
-
 			if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
 																  delegate:self
 															 delegateQueue:[NSOperationQueue mainQueue]];
@@ -2357,11 +2343,10 @@
 			[conn.task resume];
 			[connexions addObject:conn];
 
-			if (connexions.count == 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStart" object:nil];
-
 			numberOfConnections = connexions.count;
 		}
 
+		[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStart" object:nil];
 		[pendingConnections removeAllObjects];
 	}
 }
@@ -2382,27 +2367,25 @@
 
 			NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
 			NSMutableArray *lgds = [loggingDevices copy];
+			numberOfLogStreams = 0;
+
 			[loggingDevices removeAllObjects];
 			[self closeStream];
-
-			numberOfLogStreams = 0;
 
 			// ...and notify the host for each device
 
 			for (NSString *loggingDevice in lgds) [nc postNotificationName:@"BuildAPILogStreamEnd" object:loggingDevice];
 		}
 
-		// Kill the remaining connections
+		// Kill the remaining connections.
+		// The triggered delegate method didBecomeInvalid: wiil clear out 'connexions'
 
 		if (apiSession != nil) [apiSession invalidateAndCancel];
 	}
 
-	if (pendingConnections != nil && pendingConnections.count > 0)
-	{
-		// Remove any pending connections
+	// Remove any pending connections
 
-		[pendingConnections removeAllObjects];
-	}
+	if (pendingConnections != nil && pendingConnections.count > 0) [pendingConnections removeAllObjects];
 }
 
 
@@ -2421,7 +2404,7 @@
 {
 	if (deviceID == nil || deviceID.length == 0)
 	{
-		// No ID? Can't proceed
+		// No device ID? Can't proceed
 
 		errorMessage = @"Could not create a request to stream the device logs: no device specified.";
 		[self reportError];
@@ -2435,7 +2418,6 @@
 	if (logStreamID == nil || logStreamID.length == 0)
 	{
 		// This is the first device, so we need to first get the stream ID and stream URL
-		// POST-ing to /logstream will return a stream ID by way of a 302, which we will trap later
 
 		NSMutableURLRequest *request = [self makePOSTrequest:@"logstream?format=json" :nil];
 
@@ -2443,7 +2425,9 @@
 		{
 			// Pass in the first device's ID so we have it to use after the stream has been established
 
-			NSDictionary *dict = (someObject != nil) ? @{ @"device" : deviceID, @"object" : someObject } : @{ @"device" : deviceID };
+			NSDictionary *dict = someObject != nil
+			? @{ @"device" : deviceID, @"object" : someObject }
+			: @{ @"device" : deviceID };
 
 			[self launchConnection:request :kConnectTypeGetLogStreamID :dict];
 		}
@@ -2479,13 +2463,15 @@
 	}
 
 	NSDictionary *dict = @{ @"id" : deviceID,
-						   @"type" : @"device" };
+						    @"type" : @"device" };
 
-	NSMutableURLRequest *request = [self makePUTrequest:[NSString stringWithFormat:@"logstream/%@/%@", logStreamID, deviceID] :dict];
+	NSMutableURLRequest *request = [self makePUTrequest:[NSString stringWithFormat:@"%@/%@", logStreamURL.path, deviceID] :dict];
 
 	if (request)
 	{
-		dict = (someObject != nil) ? @{ @"device" : deviceID, @"object" : someObject } : @{ @"device" : deviceID };
+		dict = (someObject != nil)
+		? @{ @"device" : deviceID, @"object" : someObject }
+		: @{ @"device" : deviceID };
 
 		[self launchConnection:request :kConnectTypeAddLogStream :dict];
 	}
@@ -2511,9 +2497,9 @@
 	// { id: ‘d9f6f253-d203-487f-bdb0-70ea1529ee1b’, type: ‘device’ }
 
 	NSDictionary *dict = @{ @"id" : deviceID,
-						   @"type" : @"device" };
+						    @"type" : @"device" };
 
-	NSMutableURLRequest *request = [self makeRequest:@"DELETE" :[NSString stringWithFormat:@"logstream/%@/%@", logStreamID, deviceID] :NO :NO];
+	NSMutableURLRequest *request = [self makeRequest:@"DELETE" :[NSString stringWithFormat:@"%@/%@", logStreamURL, deviceID] :NO :NO];
 	NSError *error;
 
 	[request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
@@ -2527,7 +2513,9 @@
 
 	if (request)
 	{
-		dict = (someObject != nil) ? @{ @"device" : deviceID, @"object" : someObject } : @{ @"device" : deviceID };
+		dict = (someObject != nil)
+		? @{ @"device" : deviceID, @"object" : someObject }
+		: @{ @"device" : deviceID };
 
 		[self launchConnection:request :kConnectTypeEndLogStream :dict];
 	}
@@ -2542,7 +2530,7 @@
 
 - (void)restartLogging
 {
-	// We need to first get the stream ID and stream URL
+	// This is called if a log connection breaks for some reason, so enable logging to auto-restart
 	// POST-ing to /logstream will return a stream ID by way of a 302, which we will trap later
 
 	NSMutableURLRequest *request = [self makePOSTrequest:@"logstream?format=json" :nil];
@@ -2656,12 +2644,9 @@
 		[logConnexion.task cancel];
 		[connexions removeObject:logConnexion];
 
-		if (connexions.count == 0)
-		{
-			// Notify the main app to stop the progress indicator
+		// Notify the main app to stop the progress indicator
 
-			[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-		}
+		if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
 		logConnexion = nil;
 		logStreamURL = nil;
@@ -2888,6 +2873,8 @@ didReceiveResponse:(NSURLResponse *)response
 
 		if (statusCode == 302)
 		{
+			// TODO Is this ever called now?
+
 			if (connexion.actionCode == kConnectTypeGetLogStreamID)
 			{
 				// We have asked for a log stream ID; this is returned as a 302, which we trap here
@@ -2916,7 +2903,7 @@ didReceiveResponse:(NSURLResponse *)response
 				[connexions removeObject:connexion];
 				numberOfConnections = connexions.count;
 
-				if (connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+				if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
 				// Run the completion handler with a 'cancel' response becuase we are killing this connection
 
@@ -2964,24 +2951,26 @@ didReceiveResponse:(NSURLResponse *)response
 
 			return;
 		}
-
-		// Record the error code for all other status codes
-
-		connexion.errorCode = statusCode;
 	}
 
-	// Allow the connection to complete so we can analyze the error later, in 'didCompleteWithError:'
+	// For all other server-issued errors, record the error code to deal with later
+
+	connexion.errorCode = statusCode;
+
+	// Allow the connection to complete so we can analyze the error later
 
 	if (completionHandler != nil) completionHandler(NSURLSessionResponseAllow);
 }
 
 
 
-- (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask didReceiveData:(NSData *)data
+- (void)URLSession:(NSURLSession *)session
+		  dataTask:(NSURLSessionDataTask *)dataTask
+	didReceiveData:(NSData *)data
 {
     // This delegate method is called when the server sends some data back
 
-	// Get the connexion instance representing this connection task
+	// Get the connexion instance representing this NSURLSessionDataTask
 
 	Connexion *connexion = nil;
 
@@ -2994,14 +2983,16 @@ didReceiveResponse:(NSURLResponse *)response
 		}
 	}
 
-	if (connexion == logConnexion)
+	if (connexion.actionCode == kConnectTypeLogStream)
 	{
+		// For logging connections, deal with the data immediately
+
 		[self parseStreamData:data :connexion];
 	}
 	else
     {
-		// For non-logging connections, we just append the incoming data chunk to the store in the
-		// appropriate connexion instance
+		// For non-logging connections, append the incoming data chunk to the store
+		// held by the appropriate connexion instance
 
 		[connexion.data appendData:data];
     }
@@ -3009,10 +3000,12 @@ didReceiveResponse:(NSURLResponse *)response
 
 
 
-- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error
+- (void)URLSession:(NSURLSession *)session
+			  task:(NSURLSessionTask *)task
+didCompleteWithError:(NSError *)error
 {
-	// All the data has been supplied by the server in response to a connection - or an error has been encountered
-	// Parse the data and, according to the connection activity - update device, create product, etc. – apply the results
+	// All the data has been supplied by the server in response to a connection - or an error has been encountered.
+	// Deal with the error, or pass the retrieved data on for processing
 
 	// Get the connexion instance representing this connection task
 
@@ -3032,16 +3025,15 @@ didReceiveResponse:(NSURLResponse *)response
 	// Complete the finished NSURLSessionTask - this may be redundant, but just in case...
 
 	[task cancel];
-
 	connexion.task = nil;
+
+	// React to a passed client-side error - most likely a timeout or inability to resolve the URL
+	// eg. the client is not connected to the Internet
 
 	if (error)
 	{
-		// React to a passed client-side error - most likely a timeout or inability to resolve the URL
-		// eg. the client is not connected to the Internet
-
-		// NOTE 'error.code' will equal NSURLErrorCancelled when we cancel a live connection task, eg. kill all connections
-		// so just return from this
+		// NOTE 'error.code' will equal NSURLErrorCancelled when we cancel a live connection task,
+		// eg. by killing all connections, so just return
 
 		if (error.code == NSURLErrorCancelled) return;
 
@@ -3051,7 +3043,7 @@ didReceiveResponse:(NSURLResponse *)response
 		{
 			if (connexion.actionCode == kConnectTypeLogStream)
 			{
-				// Are we logging? Yes we are, so handle this type of connection here
+				// Are we logging? If so, handle this type of connection here
 				// Is the connection already closed? If so, just bail
 
 				if (logIsClosed) return;
@@ -3080,14 +3072,16 @@ didReceiveResponse:(NSURLResponse *)response
 				 }];
 				 */
 
-				// Bail because we will handle connection clear up later
+				// Bail because we will handle connection clear-up later
 
 				return;
 			}
 
-			if (connexion.actionCode == kConnectTypeGetAccessToken) isLoggedIn = NO;
+			// Make sure we're not logged in if we haven't been able to get an access token
 
-			errorMessage = @"Could not connect to the Electric Imp impCloud.";
+			if (connexion.actionCode == kConnectTypeGetAccessToken || connexion.actionCode == kConnectTypeRefreshAccessToken) isLoggedIn = NO;
+
+			errorMessage = @"Unable to connect to the Electric Imp impCloud. Please check your network connection.";
 			
 			[self reportError:kErrorNetworkError];
 
@@ -3096,7 +3090,7 @@ didReceiveResponse:(NSURLResponse *)response
 			numberOfConnections = connexions.count;
 		}
 
-		// Check if there are any active connections - signal the host app if not
+		// If there are no more active connections, tell the host app
 
 		if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
@@ -3104,25 +3098,25 @@ didReceiveResponse:(NSURLResponse *)response
 	}
 
 	// The connection has come to a conclusion without error, so if we have a valid action code,
-	// proceed to process the received data
+	// we can proceed to process the received data
 
 	if (connexion != nil)
 	{
 		if (connexion.actionCode != kConnectTypeNone)
 		{
-			// Handle the returned data
+			// Handle the received data
 
 			[self processResult:connexion :[self processConnection:connexion]];
 		}
 		else
 		{
-			// This might be redundant - can a connexion ever have a kConnectTypeNone 'actionCode' at this point?
+			// This might be redundant - can a connexion ever have 'actionCode == kConnectTypeNone' at this point?
 
 			[connexions removeObject:connexion];
 
 			numberOfConnections = connexions.count;
 
-			// Check if there are any active connections - signal the host app if not
+			// If there are no more active connections, tell the host app
 
 			if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 		}
@@ -3133,15 +3127,17 @@ didReceiveResponse:(NSURLResponse *)response
 
 - (void)URLSession:(NSURLSession *)session didBecomeInvalidWithError:(NSError *)error
 {
-	// Called after we have called invalidateAndCancel on 'session', eg. in 'killAllConnections:'
+	// This method is called after we have called invalidateAndCancel on an NSURLSession, eg. in 'killAllConnections:'
 
 	// Clear all the connexions from the list
 
 	[connexions removeAllObjects];
 
+	// Tell the host app
+
 	[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
-	// Zero the connection-related properties
+	// Zero all the other connection-related properties
 
 	apiSession = nil;
 	numberOfConnections = 0;
@@ -3275,7 +3271,7 @@ didReceiveResponse:(NSURLResponse *)response
 					{
 #ifdef DEBUG
 	// No field separator????
-	NSLog(@"Incoming event malformed");
+						NSLog(@"Incoming event malformed - no field separator (: )");
 #endif
 					}
 				}
@@ -3288,10 +3284,7 @@ didReceiveResponse:(NSURLResponse *)response
 					if ([logStreamEvent.event compare:@"state_change"] == NSOrderedSame)
 					{
 						logStreamEvent.type = kLogStreamEventTypeStateChange;
-						if ([logStreamEvent.data compare:@"opened"] == NSOrderedSame)
-						{
-							logStreamEvent.state = kLogStreamEventStateOpen;
-						}
+						if ([logStreamEvent.data compare:@"opened"] == NSOrderedSame) logStreamEvent.state = kLogStreamEventStateOpen;
 						if ([logStreamEvent.data compare:@"closed"] == NSOrderedSame) logStreamEvent.state = kLogStreamEventStateClosed;
 						if ([logStreamEvent.data hasSuffix:@"subscribed"]) logStreamEvent.state = kLogStreamEventStateSubscribed;
 						if ([logStreamEvent.data hasSuffix:@"unsubscribed"]) logStreamEvent.state = kLogStreamEventStateUnsubscribed;
@@ -3318,7 +3311,6 @@ didReceiveResponse:(NSURLResponse *)response
 	//double timePassed_ms = [date timeIntervalSinceNow] * -1000.0;
 	//NSLog(@"parseStreamLog duration: %f milliseconds", timePassed_ms);
 #endif
-
 }
 
 
@@ -3356,6 +3348,7 @@ didReceiveResponse:(NSURLResponse *)response
 	if (connexion.errorCode > 399)
 	{
 		// Trap and handle impCentral API errors here
+		// NOTE The value of 'errorCode' is the returned HTTP status code
 
 		errorMessage = @"";
 
@@ -3370,7 +3363,7 @@ didReceiveResponse:(NSURLResponse *)response
 
 			NSArray *errors = [parsedData objectForKey:@"errors"];
 
-			// Trap 'old errors and those not related to the API
+			// Trap 'old' errors and those not related to the API
 
 			if (errors == nil)
 			{
@@ -3402,7 +3395,7 @@ didReceiveResponse:(NSURLResponse *)response
 					++count;
 				}
 
-				// First, check if there were any code compilation errors and if so, relay them to the host
+				// Check if there were any code compilation errors and if so, relay them to the host
 
 				if (codeErrors.count > 0)
 				{
@@ -3448,9 +3441,9 @@ didReceiveResponse:(NSURLResponse *)response
 
 	numberOfConnections = connexions.count;
 
-	// Signal the host app if the number of connections is zero or less
+	// Signal the host app if the number of connections is zero
 
-	if (connexions.count < 1) [nc postNotificationName:@"BuildAPIProgressStop" object:nil];
+	if (connexions.count == 0) [nc postNotificationName:@"BuildAPIProgressStop" object:nil];
 
 	// Return the decoded data (or nil)
 
@@ -4202,17 +4195,10 @@ didReceiveResponse:(NSURLResponse *)response
 	NSDictionary *error;
 	NSString *message = errorMessage;
 
-	if (errCode == -1)
-	{
-		error = @{ @"message" : message };
-	}
-	else
-	{
-		NSNumber *ec = [NSNumber numberWithInteger:errCode];
-
-		error = @{ @"message" : message,
-				   @"code" : ec };
-	}
+	error = errCode == -1
+	? @{ @"message" : message }
+	: @{ @"message" : message,
+		 @"code" : [NSNumber numberWithInteger:errCode] };
 
     [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIError" object:error];
 }
@@ -4255,18 +4241,18 @@ didReceiveResponse:(NSURLResponse *)response
 	// passed into 'validFilters', and returns YES or NO according to whether
 	// the filter is on the list. Not on the list? You don't get in
 
-	BOOL filterOK = NO;
+	BOOL filterIsOK = NO;
 
 	for (NSString *aFilter in validFilters)
 	{
 		if ([aFilter compare:filter] == NSOrderedSame)
 		{
-			filterOK = YES;
+			filterIsOK = YES;
 			break;
 		}
 	}
 
-	return filterOK;
+	return filterIsOK;
 }
 
 
