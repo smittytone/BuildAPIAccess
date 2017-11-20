@@ -2209,7 +2209,9 @@
 		if (![path containsString:@"?"] && getMultipleItems) path = [path stringByAppendingFormat:@"?page[size]=%li", pageSize];
 	}
 
-	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:path]]];
+	if (![path hasPrefix:@"https://"]) path = [baseURL stringByAppendingString:path];
+
+	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
 
 	[self setRequestAuthorization:request];
 	[request setHTTPMethod:verb];
@@ -2465,7 +2467,7 @@
 	NSDictionary *dict = @{ @"id" : deviceID,
 						    @"type" : @"device" };
 
-	NSMutableURLRequest *request = [self makePUTrequest:[NSString stringWithFormat:@"%@/%@", logStreamURL.path, deviceID] :dict];
+	NSMutableURLRequest *request = [self makePUTrequest:[NSString stringWithFormat:@"%@/%@", logStreamURL.absoluteString, deviceID] :dict];
 
 	if (request)
 	{
