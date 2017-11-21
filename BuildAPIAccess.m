@@ -3787,6 +3787,20 @@ didCompleteWithError:(NSError *)error
 			break;
 		}
 
+		case kConnectTypeSetMinDeployment:
+		{
+			// The server returns a record of the single deployment
+
+			NSDictionary *dp = [data objectForKey:@"data"];
+
+			returnData = connexion.representedObject != nil
+			?  @{ @"data" : dp, @"object" : connexion.representedObject }
+			: @{ @"data" : dp };
+
+			[nc postNotificationName:@"BuildAPISetMinDeployment" object:returnData];
+			break;
+		}
+
 		case kConnectTypeGetDevices:
 		{
 			// The server returns an array of one or more devices, which we add to an
