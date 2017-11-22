@@ -15,17 +15,17 @@
 
 - (instancetype)init
 {
-	if (self = [super init])
-	{
-		eid = nil;
-		type = kLogStreamEventTypeNone;
-		state = kLogStreamEventStateUnknown;
-		event = nil;
-		error = nil;
-		data = nil;
-	}
+    if (self = [super init])
+    {
+        eid = nil;
+        type = kLogStreamEventTypeNone;
+        state = kLogStreamEventStateUnknown;
+        event = nil;
+        error = nil;
+        data = nil;
+    }
 
-	return self;
+    return self;
 }
 
 

@@ -16,17 +16,17 @@
 
 - (instancetype)init
 {
-	if (self = [super init])
-	{
-		task = nil;
-		data = nil;
-		representedObject = nil;
-		originalRequest = nil;
-		actionCode = -1;
-		errorCode = -1;
-	}
+    if (self = [super init])
+    {
+        task = nil;
+        data = nil;
+        representedObject = nil;
+        originalRequest = nil;
+        actionCode = -1;
+        errorCode = -1;
+    }
 
-	return self;
+    return self;
 }
 
 

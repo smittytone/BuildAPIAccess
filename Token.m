@@ -14,14 +14,14 @@
 
 - (instancetype)init
 {
-	if (self = [super init])
-	{
-		accessToken = @"";
-		refreshToken = @"";
-		expiryDate = @"";
-	}
+    if (self = [super init])
+    {
+        accessToken = @"";
+        refreshToken = @"";
+        expiryDate = @"";
+    }
 
-	return self;
+    return self;
 }
 
 

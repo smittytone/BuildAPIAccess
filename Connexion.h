@@ -25,8 +25,8 @@
 @property (nonatomic, strong)       NSMutableData       *data;
 @property (nonatomic, readwrite)    NSInteger           actionCode;
 @property (nonatomic, readwrite)    NSInteger           errorCode;
-@property (nonatomic, strong)		id					representedObject;
-@property (nonatomic, strong)		NSMutableURLRequest *originalRequest;
+@property (nonatomic, strong)       id                  representedObject;
+@property (nonatomic, strong)       NSMutableURLRequest *originalRequest;
 
 
 @end
