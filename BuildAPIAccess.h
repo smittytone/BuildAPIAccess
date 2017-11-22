@@ -161,8 +161,8 @@
 - (void)deleteDeployment:(NSString *)deploymentID;
 - (void)deleteDeployment:(NSString *)deploymentID :(id)someObject;
 
-- (void)setMinimumDeployment:(NSString *)devicegroupID;
-- (void)setMinimumDeployment:(NSString *)devicegroupID :(id)someObject;
+- (void)setMinimumDeployment:(NSString *)devicegroupID :(NSDictionary *)deployment;
+- (void)setMinimumDeployment:(NSString *)devicegroupID :(NSDictionary *)deployment :(id)someObject;
 
 // Logging Methods
 
