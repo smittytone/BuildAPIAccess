@@ -1225,6 +1225,19 @@
                     @"id" : targetID };
     }
 
+	if ([type compare:@"pre_factoryfixture_devicegroup"] == NSOrderedSame)
+	{
+		if (targetID == nil || targetID.length == 0)
+		{
+			errorMessage = @"Could not create a request to create the new device group: invalid test production target device group.";
+			[self reportError];
+			return;
+		}
+
+		target = @{ @"type" : @"pre_production_devicegroup",
+					@"id" : targetID };
+	}
+
     NSDictionary *attributes = @{ @"name" : name,
                                   @"description" : description };
 
