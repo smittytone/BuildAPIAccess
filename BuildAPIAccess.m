@@ -1334,21 +1334,21 @@
                 }
             }
 
-            break;
+            continue;
         }
 
         if ([key compare:@"description"] == NSOrderedSame)
         {
             name = [values objectAtIndex:i];
             if (name != nil) [attributes setValue:name forKey:@"description"];
-            break;
+            continue;
         }
 
         if ([key compare:@"production_target"] == NSOrderedSame)
         {
             NSDictionary *pt = [values objectAtIndex:i];
             if (pt != nil) [relationships setValue:pt forKey:@"production_target"];
-            break;
+            continue;
         }
 
         if ([key compare:@"type"] == NSOrderedSame)
@@ -1388,14 +1388,13 @@
                 return;
             }
 
-            break;
+            continue;
         }
 
         if ([key compare:@"load_code_after_blessing"] == NSOrderedSame)
         {
             NSNumber *val = [values objectAtIndex:i];
             if (val != nil) [attributes setValue:val forKey:@"load_code_after_blessing"];
-            break;
         }
     }
 
