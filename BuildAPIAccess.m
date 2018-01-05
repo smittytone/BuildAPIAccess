@@ -4138,6 +4138,10 @@ didCompleteWithError:(NSError *)error
 
             data = [data objectForKey:@"data"];
             logStreamID = [data objectForKey:@"id"];
+			
+#ifdef DEBUG
+			NSLog(@"Log Stream ID received: %@", logStreamID);
+#endif
 
             NSDictionary *attributes = [data objectForKey:@"attributes"];
             logStreamURL = [NSURL URLWithString:[attributes objectForKey:@"url"]];
