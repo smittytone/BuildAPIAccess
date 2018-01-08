@@ -10,9 +10,9 @@ Making use of the impCentral API requires an Electric Imp account. You will need
 
 ## Licence and Copyright
 
-BuildAPIAccess is &copy; Tony Smith, 2015-2017 and is offered under the terms of the MIT licence.
+BuildAPIAccess is &copy; Tony Smith, 2015-2018 and is offered under the terms of the MIT licence.
 
-The impCentral API is &copy; Electric Imp, 2017.
+The impCentral API is &copy; Electric Imp, 2017-18.
 
 ## HTTP User Agent
 
@@ -42,31 +42,11 @@ Placeholder for support of two-factor authentication in due course.
 
 ### - (void)logout ###
 
-Remove the instances impCentral API authorization tokens and close any current connections.
-
-## Class Methods: Pagination ##
-
-### - (void)setPageSize:(NSInteger)size ###
-
-Set the maximum number of data items which will be returned by the impCentral API when the instance calls an endpoint that returns data sets. The value of *size* should be between 1 and 100, inclusive.
-
-### - (BOOL)isFirstPage:(NSDictionary *)links ###
-
-Used by the instance to determine whether a page of data is the first of many. This may also be the last page if the number of returned items is less than the page maximum.
-
-*links* is an NSDictionary derived from the JSON data returned by the API.
-
-### - (NSString *)nextPageLink:(NSDictionary *)links ###
-
-Used by the instance to get the URL (as a string) of the next page of data in the sequence.
-
-*links* is an NSDictionary derived from the JSON data returned by the API.
-
-### - (NSString *)getNextURL:(NSString *)url ###
-
-Used by the instance to obtain the query string from the URL pointing to the next page of data in the sequence.
+Remove the instance's impCentral API authorization tokens and close any current connections.
 
 ## Class Methods: Getting Data ##
+
+### Products ###
 
 ### - (void)getProducts ###
 
@@ -82,7 +62,9 @@ This method may result in multiple calls to the API as it retrieves as many page
 
 ### - (void)getProduct:(NSString *)productID ###
 
-Obtains the record of the product with the specified ID.  The instance posts the notification `@"BuildAPIGotProduct"` when the product data has been received. The notification includes an NSDictionary: its *data* key points to the product NSDictionary.
+Obtains the record of the product with the specified ID. The instance posts the notification `@"BuildAPIGotProduct"` when the product data has been received. The notification includes an NSDictionary: its *data* key points to the product NSDictionary.
+
+### Device Groups ###
 
 ### - (void)getDevicegroups ###
 
@@ -98,11 +80,13 @@ The instance posts the notification `@"BuildAPIGotDeviceGroupsList"` when the co
 
 ### - (void)getDevicegroup:(NSString *)devicegroupID ###
 
-Obtains the record of the device group with the specified ID.  The instance posts the notification `@"BuildAPIGotDevicegroup"` when the device group data has been received. The notification includes an NSDictionary: its *data* key points to the device group NSDictionary.
+Obtains the record of the device group with the specified ID. The instance posts the notification `@"BuildAPIGotDevicegroup"` when the device group data has been received. The notification includes an NSDictionary: its *data* key points to the device group NSDictionary.
+
+### Devices ###
 
 ### - (void)getDevices ###
 
-Obtains a list of all the devices associated with the current account (see *login:*). This method may result in multiple calls to the API as it retrieves as many pages as a required.
+Obtains a list of all the (development) devices associated with the current account (see *login:*). This method may result in multiple calls to the API as it retrieves as many pages as a required.
 
 The instance posts the notification `@"BuildAPIGotDevicesList"` when the complete list of devices has been received. The notification includes an NSDictionary: its *data* key points to an array of device NSDictionaries.
 
@@ -118,7 +102,17 @@ Obtains the record of the device with the specified ID. The instance posts the n
 
 ### - (void)getDeviceLogs:(NSString *)deviceID ###
 
+Obtains all of the historical logs posted by the specified device and its agent. This method may result in multiple calls to the API as it retrieves as many pages as a required.
+
+The instance posts the notification `@"BuildAPIGotLogs"` when the complete list of device logs has been received. The notification includes an NSDictionary: its *data* key points to an array of log entry NSDictionaries; its *count* key indicates the number of log items supplied.
+
 ### - (void)getDeviceHistory:(NSString *)deviceID ###
+
+Obtains the enrollment history of the specified device. This method may result in multiple calls to the API as it retrieves as many pages as a required.
+
+The instance posts the notification `@"BuildAPIGotHistory"` when the complete list of device history entries has been received. The notification includes an NSDictionary: its *data* key points to an array of history entry NSDictionaries.
+
+### Deployments ###
 
 ### - (void)getDeployments ###
 
@@ -136,7 +130,9 @@ The instance posts the notification `@"BuildAPIGotDeploymentsList"` when the com
 
 Obtains the record of the deployment with the specified ID. The instance posts the notification `@"BuildAPIGotDeployment"` when the deployment data has been received. The notification includes an NSDictionary: its *data* key points to the deployment NSDictionary.
 
-## Class Methods: Setting Data ###
+## Class Methods: Setting Data ##
+
+### Products ###
 
 ### - (void)createProduct:(NSString *)name :(NSString *)description ###
 
@@ -156,9 +152,11 @@ Deletes the product of the specified ID. Products cannot be deleted if they have
 
 The instance posts the notification `@"BuildAPIProductDeleted"` when the product has been deleted.
 
+### Device Groups ###
+
 ### - (void)createDevicegroup:(NSDictionary *)details ###
 
-Creates a device group with the settings specified as the *details* dictionary’s key-value pairs. Allowed keys are *name*, *description*, *type*, *"targetid* and *productid*. The keys’ values are also strings. The first and last of these are mandatory, and must not be nil or of zero length. See the [impCentral API documentation](https://preview-apidoc.electricimp.com/) for allowed types; BuildAPIAccess defaults to `@"development_devicegroup"` if no type is provided.
+Creates a device group with the settings specified as the *details* dictionary’s key-value pairs. Allowed keys are *name*, *description*, *type*, *"targetid* and *productid*. The keys’ values are also strings. The first and last of these are mandatory, and must not be nil or of zero length. See the [impCentral API documentation](https://apidoc.electricimp.com/) for allowed types; BuildAPIAccess defaults to `@"development_devicegroup"` if no type is provided.
 
 The values of *name* and *description* are limited by the API to 80 and 255 characters, respectively; the method will tail the supplied strings to ensure this limit is adhered to. The name may not be nil and must be at least one character in length. The description may be nil or an empty string.
 
@@ -178,6 +176,8 @@ Deletes the device group of the specified ID. Device groups cannot be deleted if
 
 The instance posts the notification `@"BuildAPIDeviceGroupDeleted"` when the device group has been deleted.
 
+### Devices ###
+
 ### - (void)updateDevice:(NSString *)deviceID :(NSString *)name ###
 
 Updates the specified device group using the supplied name values. Name may be `nil` &mdash; this removes the device’s name, if it has one.
@@ -189,6 +189,8 @@ The instance posts the notification `@"BuildAPIDeviceUpdated"` when the product 
 Removes the specified development device from the account to which it is currently assigned. Production devices cannot be deleted.
 
 The instance posts the notification `@"BuildAPIDeviceDeleted"` when the device has been deleted.
+
+### Deployments ###
 
 ### - (void)createDeployment:(NSDictionary *)deployment ###
 
@@ -218,31 +220,31 @@ Restarts all of the devices that are assigned to the specified device group. The
 
 Restarts the specified device. The instance posts the notification `@"BuildAPIDeviceRestarted"` when the device has been instructed to restart. Note that the device may not restart there and then as this depends upon its connection status.
 
-### - (void)unassignDevice:(NSDictionary *)device ###
-
-Removes a device from its assigned device group and leaves it in an unassigned state. The device is specified using a dictionary which matches the standard impCentral device record (see [the impCentral API reference](https://preview-apidoc.electricimp.com/#tag/Devices)).
-
-The instance posts the notification `@"BuildAPIDeviceUnassigned"` when the device has been unassigned.
-
-### - (void)unassignDevices:(NSArray *)devices ###
-
-Removes a set of devices from their assigned device group (singular) and leaves them in an unassigned state. Each device is specified using a dictionary which matches the standard impCentral device record (see [the impCentral API reference](https://preview-apidoc.electricimp.com/#tag/Devices)), all provided to the method as an array.
-
-Note that the method checks for already unassigned devices based on the information in the impCentral device records passed in. It also notes the first referenced device group &mdash; this is the device group from which all other devices will be unassigned. Any devices included which are not already assigned to this device group will be ignored.
-
-The instance posts the notification `@"BuildAPIDevicesUnassigned"` when the device has been unassigned.
-
 ### - (void)assignDevice:(NSMutableDictionary *)device :(NSString *)devicegroupID ###
 
-Assigns the specified device to the specified device group. The device is specified using a dictionary which matches the standard impCentral device record (see [the impCentral API reference](https://preview-apidoc.electricimp.com/#tag/Devices)).
+Assigns the specified device to the specified device group. The device is specified using a dictionary which matches the standard impCentral device record (see [the impCentral API reference](https://apidoc.electricimp.com/#tag/Devices)).
 
 The instance posts the notification `@"BuildAPIDeviceAssigned"` when the device has been assigned.
 
 ### - (void)assignDevices:(NSArray *)devices :(NSString *)devicegroupID ###
 
-Assigns the specified devices to the specified device group. Each device is specified using a dictionary which matches the standard impCentral device record (see [the impCentral API reference](https://preview-apidoc.electricimp.com/#tag/Devices)); these records are added to an array, which is passed into the method.
+Assigns the specified devices to the specified device group. Each device is specified using a dictionary which matches the standard impCentral device record (see [the impCentral API reference](https://apidoc.electricimp.com/#tag/Devices)); these records are added to an array, which is passed into the method.
 
 The instance posts the notification `@"BuildAPIDevicesAssigned"` when the device has been assigned.
+
+### - (void)unassignDevice:(NSDictionary *)device ###
+
+Removes a device from its assigned device group and leaves it in an unassigned state. The device is specified using a dictionary which matches the standard impCentral device record (see [the impCentral API reference](https://apidoc.electricimp.com/#tag/Devices)).
+
+The instance posts the notification `@"BuildAPIDeviceUnassigned"` when the device has been unassigned.
+
+### - (void)unassignDevices:(NSArray *)devices ###
+
+Removes a set of devices from their assigned device group (singular) and leaves them in an unassigned state. Each device is specified using a dictionary which matches the standard impCentral device record (see [the impCentral API reference](https://apidoc.electricimp.com/#tag/Devices)), all provided to the method as an array.
+
+Note that the method checks for already unassigned devices based on the information in the impCentral device records passed in. It also notes the first referenced device group &mdash; this is the device group from which all other devices will be unassigned. Any devices included which are not already assigned to this device group will be ignored.
+
+The instance posts the notification `@"BuildAPIDevicesUnassigned"` when the device has been unassigned.
 
 ## Class Methods: Logging ##
 
@@ -260,7 +262,7 @@ The *code* key is only present in the case of an error; the value of *message* w
 
 ### - (void)stopLogging:(NSString *)deviceID ###
 
-Removes the specified device (by its ID) from the list of devices for which streamed log entries are being received. The instance posts the notification `@"BuildAPIDeviceRemovedFromStream"` when the device has been added to the stream. The notification's object is a dictionary containing the key *device* &mdash; its value is the added device’s ID.
+Removes the specified device (by its ID) from the list of devices for which streamed log entries are being received. The instance posts the notification `@"BuildAPIDeviceRemovedFromStream"` when the device has been removed from the stream. The notification's object is a dictionary containing the key *device* &mdash; its value is the removed device’s ID.
 
 Relays the notification `@"BuildAPILogStreamClosed"` to the host app if logging is terminated because of a connection error.
 
@@ -271,6 +273,28 @@ Returns `YES` if the supplied device ID is that of a device which is currently l
 ### - (void)killAllConnections ###
 
 Immediately halt all in-flight connections to the impCentral API, including log streams.
+
+## Class Methods: Pagination ##
+
+### - (void)setPageSize:(NSInteger)size ###
+
+Set the maximum number of data items which will be returned by the impCentral API when the instance calls an endpoint that returns data sets. The value of *size* should be between 1 and 100, inclusive.
+
+### - (BOOL)isFirstPage:(NSDictionary *)links ###
+
+Used by the instance to determine whether a page of data is the first of many. This may also be the last page if the number of returned items is less than the page maximum.
+
+*links* is an NSDictionary derived from the JSON data returned by the API.
+
+### - (NSString *)nextPageLink:(NSDictionary *)links ###
+
+Used by the instance to get the URL (as a string) of the next page of data in the sequence.
+
+*links* is an NSDictionary derived from the JSON data returned by the API.
+
+### - (NSString *)getNextURL:(NSString *)url ###
+
+Used by the instance to obtain the query string from the URL pointing to the next page of data in the sequence.
 
 ## Class Methods: Utilities ##
 
