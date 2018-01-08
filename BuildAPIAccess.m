@@ -3065,6 +3065,7 @@ didCompleteWithError:(NSError *)error
                 if (logIsClosed) return;
 
                 logIsClosed = YES;
+				logStreamURL = nil;
 
                 // Create an error event
 
@@ -4039,7 +4040,7 @@ didCompleteWithError:(NSError *)error
             ? @{ @"data" : history, @"object" : connexion.representedObject }
             : @{ @"data" : history };
 
-            [nc postNotificationName:@"BuildAPIGotLogs" object:dict];
+            [nc postNotificationName:@"BuildAPIGotHistory" object:dict];
             break;
         }
 
