@@ -1,20 +1,20 @@
 # BuildAPIAccess 3.0.0 #
 
-BuildAPIAccess is an Objective-C (macOS, iOS and tvOS) wrapper for [Electric Imp’s impCentral API](https://electricimp.com/docs/tools/impcentralapi/). It is called BuildAPIAccess for historical reasons: it was written to the support Electric Imp’s Build API, the predecessor to the impCentral API. BuildAPIAccess 3.0.0 does not support the Build API, which has been deprecated and will soon be removed from service.
+BuildAPIAccess is an Objective-C (macOS, iOS and tvOS) wrapper for [Electric Imp’s impCentral™ API](https://developer.electricimp.com/tools/impcentralapi/). It is called BuildAPIAccess for historical reasons: it was written to the support Electric Imp’s Build API, the predecessor to the impCentral API. BuildAPIAccess 3.0.0 does **not** support the Build API, which has been deprecated and will be removed from service.
 
 BuildAPIAccess requires the (included) classes Connexion, LogStreamEvent and Token. All three are convenience classes for combining properties. Connexion combines an [NSURLSession](https://developer.apple.com/library/prerelease/mac/documentation/Foundation/Reference/NSURLSession_class/index.html) instance and associated impCentral API connection data. Token is used to store impCentral API authorization data. LogStreamEvent is a packaging object for Server-Sent Event (SSE) events issued by the impCentral API's logging system.
 
 ## impCentral API Authorization ##
 
-Making use of the impCentral API requires an Electric Imp account. You will need your account username and password to authorize calls to the API. These are passed into the *login:* method. BuildAPIAccess instances does not maintain a permanent record of the selected account; this is the task of the host application.
+Making use of the impCentral API requires an Electric Imp account. You will need your account username and password to authorize calls to the API. These are passed into the *login:* method. BuildAPIAccess instances do not maintain a permanent record of the selected account; this is the task of the host application.
 
-## Licence and Copyright
+## Licence and Copyright ##
 
 BuildAPIAccess is &copy; Tony Smith, 2015-2018 and is offered under the terms of the MIT licence.
 
 The impCentral API is &copy; Electric Imp, 2017-18.
 
-## HTTP User Agent
+## HTTP User Agent ##
 
 From version 2.0.1, BuildAPIAccess issues HTTPS requests with a custom user agent string of the following form:
 
@@ -34,15 +34,15 @@ BuildAPIAccess *api = [[BuildAPIAccess alloc] init];
 
 ### - (void)login:(NSString *)userName :(NSString *)passWord :(BOOL)is2FA ###
 
-Log in using the supplied credentials. The method uses the credentials to retrieve a new API access token, which is used to authorize all further API accesses during the lifetime of the token.
+Log in using the supplied credentials. The method uses the credentials to retrieve a new API access token, which is used to authorize all further API accesses during the lifetime of the token. Values passed into *is2FA* are currently ignored; this parameter is for future use.
 
 ### - (void)twoFactorLogin:(NSString *)loginToken :(NSString *)otp ###
 
-Placeholder for support of two-factor authentication in due course.
+Placeholder for support of two-factor authentication.
 
 ### - (void)logout ###
 
-Remove the instance's impCentral API authorization tokens and close any current connections.
+Delete the instance's impCentral API authorization tokens and close any current connections.
 
 ## Class Methods: Getting Data ##
 
@@ -50,13 +50,13 @@ Remove the instance's impCentral API authorization tokens and close any current 
 
 ### - (void)getProducts ###
 
-Obtains a list of all the impCentral products associated with the current account (see *login:*). This method may result in multiple calls to the API as it retrieves as many pages as a required.
+Obtains a list of all the impCentral products associated with the account used to sign in to the impCentral API. This method may result in multiple calls to the API as it retrieves as many pages as a required *(see ‘Pagination’, below)*.
 
 The instance posts the notification `@"BuildAPIGotProductsList"` when the complete list of products has been received. The notification includes an NSDictionary: its *data* key points to an array of product NSDictionaries.
 
 ### - (void)getProductsWithFilter:(NSString *)filter :(NSString *)uuid ###
 
-Obtains a list of all the impCentral products associated with the current account (see *login:*) that has been filtered with the named filter and associated resource UUID. Currently the only filter supported is `@"owner.id"` for which the supplied UUID must be an account ID.
+Obtains a list of all the impCentral products associated with the current account that has been filtered with the named filter and associated resource UUID. Currently the only filter supported is `@"owner.id"` for which the supplied UUID must be an account ID.
 
 This method may result in multiple calls to the API as it retrieves as many pages as a required. The instance posts the notification `@"BuildAPIGotProductsList"` when the complete list of products has been received. The notification includes an NSDictionary: its *data* key points to an array of product NSDictionaries.
 
@@ -295,25 +295,3 @@ Used by the instance to get the URL (as a string) of the next page of data in th
 ### - (NSString *)getNextURL:(NSString *)url ###
 
 Used by the instance to obtain the query string from the URL pointing to the next page of data in the sequence.
-
-## Class Methods: Utilities ##
-
-### - (void)reportError ###
-
-Issue the contents of the *errorMessage* property to the host app as a simple error via the notification `@"BuildAPIError"`. The error is passed as a dictionary with the key *message*.
-
-### - (void)reportError:(NSInteger)errCode ###
-
-Issue the contents of the *errorMessage* property with an associated error code to the host app as a simple error via the notification `@"BuildAPIError"`. The error is passed as a dictionary with the keys *message* and *code*. The latter is an NSNumber with the value of *errCode*.
-
-### - (BOOL)checkFilter:(NSString *)filter :(NSArray *)validFilters ###
-
-Returns `YES` if the supplied filter (a string) is included in the array of valid filters (also strings), otherwise `NO`.
-
-### - (NSString *)encodeBase64String:(NSString *)plainString ###
-
-Converts and returns the supplied plain-text string to Base64 encoding.
-
-### - (NSString *)decodeBase64String:(NSString *)base64String ###
-
-Converts and returns the supplied Base64-encoded string to plain text.
