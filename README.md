@@ -44,6 +44,10 @@ Placeholder for support of two-factor authentication.
 
 Delete the instance's impCentral API authorization tokens and close any current connections.
 
+### - (void)setEndpoint:(NSString *)pathWithVersion ###
+
+Changes the URL to which BuildAPIAccess accesses the impCentral API. Use this if you are accessing the API within a Private Cloud. If this is not called, all API accesses are made to `https://api.electricimp.com/v5`.
+
 ## Class Methods: Getting Data ##
 
 ### Products ###
