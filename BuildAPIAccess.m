@@ -335,6 +335,23 @@
 
 
 
+- (void)setEndpoint:(NSString *)pathWithVersion
+{
+	// Change the API's base URL: server address plus version
+	// eg. api.electricimp.com/v5/
+	
+	baseURL = pathWithVersion;
+	
+	// Append a slash to the base URL if there isn't one
+	
+	if (![baseURL hasSuffix:@"/"]) baseURL = [baseURL stringByAppendingString:@"/"];
+	
+	// Log the user out if they are logged in
+	
+	if (isLoggedIn) [self logout];
+}
+
+
 #pragma mark - Pagination Methods
 
 
