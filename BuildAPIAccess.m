@@ -3091,6 +3091,10 @@ didCompleteWithError:(NSError *)error
 
         // Now process other errors
 
+#ifdef DEBUG
+	NSLog(@"%@", error.localizedDescription);
+#endif
+
         if (connexion != nil)
         {
             if (connexion.actionCode == kConnectTypeLogStream)
@@ -3485,7 +3489,14 @@ didCompleteWithError:(NSError *)error
 
         // Report the error to the host if we have one (code compilation errors clear 'errorMessage')
 
-        if (errorMessage) [self reportError];
+        if (connexion.representedObject != nil)
+		{
+			NSDictionary *dict = connexion.representedObject;
+			NSString *action = [dict objectForKey:@"action"];
+			if (action != nil && action.length > 0) errorMessage = [errorMessage stringByAppendingFormat:@" (%@)", action];
+		}
+
+		if (errorMessage) [self reportError];
     }
 
     // Tidy up the connection list by removing the current connexion from the list of connexions
