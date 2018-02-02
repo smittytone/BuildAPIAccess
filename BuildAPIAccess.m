@@ -2983,7 +2983,7 @@ didReceiveResponse:(NSURLResponse *)response
 
 			if (connexion.actionCode == kConnectTypeRefreshAccessToken)
 			{
-				NSLog("401 encountered refreshing access token");
+				NSLog(@"401 encountered refreshing access token");
 			}
         }
 
