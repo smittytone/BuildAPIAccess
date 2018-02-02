@@ -266,10 +266,10 @@
         return NO;
     }
 
-	NSInteger epochNow = [now timeIntervalSince1970];
-	NSInteger epochExpiry = [expiry timeIntervalSince1970];
+	NSDate *deltaExpiry = [NSDate dateWithTimeInterval:-5 sinceDate:expiry];
+	latest = [now laterDate:deltaExpiry];
 
-	if (epochNow >= epochExpiry - 5)
+	if (now == latest)
 	{
 #ifdef DEBUG
 		NSLog(@"Token ABOUT TO EXPIRE - ASSUME EXPIRY");
