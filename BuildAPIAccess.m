@@ -266,9 +266,26 @@
         return NO;
     }
 
+	NSInteger epochNow = [now timeIntervalSince1970];
+	NSInteger epochExpiry = [expiry timeIntervalSince1970];
+
+	if (epochNow >= epochExpiry - 5)
+	{
+#ifdef DEBUG
+		NSLog(@"Token ABOUT TO EXPIRE - ASSUME EXPIRY");
+#endif
+
+		// Return BAD TOKEN
+
+		return NO;
+	}
+
+
 #ifdef DEBUG
     NSLog(@"Token NOT EXPIRED");
 #endif
+
+	//
 
     // Return GOOD TOKEN
 
@@ -2963,6 +2980,11 @@ didReceiveResponse:(NSURLResponse *)response
 
                 return;
             }
+
+			if (connexion.actionCode == kConnectTypeRefreshAccessToken)
+			{
+				NSLog("401 encountered refreshing access token");
+			}
         }
 
         if (statusCode == 429)
@@ -4115,7 +4137,9 @@ didCompleteWithError:(NSError *)error
             token.accessToken = [data valueForKey:@"access_token"];
             token.expiryDate = [data valueForKey:@"expires_at"];
             token.refreshToken = [data valueForKey:@"refresh_token"];
-            isLoggedIn = YES;
+			NSNumber *n = [data valueForKey:@"expires_in"];
+			token.lifetime = n.integerValue;
+			isLoggedIn = YES;
             tokenConnexion = nil;
 
             // TODO check that we actually have the data we require
@@ -4123,6 +4147,7 @@ didCompleteWithError:(NSError *)error
 #ifdef DEBUG
     NSLog(@"Initial Token: %@", token.accessToken);
     NSLog(@"      Expires: %@", token.expiryDate);
+    NSLog(@"   Expires in: %li", (long)token.lifetime);
 #endif
 
             // Get user's account information before we do anything else
@@ -4148,11 +4173,14 @@ didCompleteWithError:(NSError *)error
 
             token.accessToken = [data valueForKey:@"access_token"];
             token.expiryDate = [data valueForKey:@"expires_at"];
+			NSNumber *n = [data valueForKey:@"expires_in"];
+			token.lifetime = n.integerValue;
             tokenConnexion = nil;
 
 #ifdef DEBUG
     NSLog(@"Refreshed Token: %@", token.accessToken);
     NSLog(@"        Expires: %@", token.expiryDate);
+NSLog(@"   Expires in: %li", (long)token.lifetime);
 #endif
 
             // Do we have any pending connections we need to process?

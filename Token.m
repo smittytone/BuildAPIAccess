@@ -29,7 +29,7 @@
 @implementation Token
 
 
-@synthesize accessToken, refreshToken, expiryDate;
+@synthesize accessToken, refreshToken, expiryDate, lifetime;
 
 
 - (instancetype)init
@@ -39,6 +39,7 @@
         accessToken = @"";
         refreshToken = @"";
         expiryDate = @"";
+		lifetime = 0;
     }
 
     return self;
