@@ -246,11 +246,13 @@
     }
 
     NSDate *expiry = [dateFormatter dateFromString:token.expiryDate];
+	NSDate *deltaExpiry = [NSDate dateWithTimeInterval:-240 sinceDate:expiry];
     NSDate *now = [NSDate date];
 
 #ifdef DEBUG
-    NSLog(@"Expiry: %@", [dateFormatter stringFromDate:expiry]);
-    NSLog(@"   Now: %@", [dateFormatter stringFromDate:now]);
+    NSLog(@"      Expiry: %@", [dateFormatter stringFromDate:expiry]);
+	NSLog(@"Expiry Delta: %@", [dateFormatter stringFromDate:deltaExpiry]);
+	NSLog(@"         Now: %@", [dateFormatter stringFromDate:now]);
 #endif
 
     NSDate *latest = [now laterDate:expiry];
@@ -258,7 +260,7 @@
     if (now == latest)
     {
 #ifdef DEBUG
-    NSLog(@"Token EXPIRED");
+    NSLog(@"              EXPIRED");
 #endif
 
         // Return BAD TOKEN
@@ -266,13 +268,12 @@
         return NO;
     }
 
-	NSDate *deltaExpiry = [NSDate dateWithTimeInterval:-5 sinceDate:expiry];
 	latest = [now laterDate:deltaExpiry];
 
 	if (now == latest)
 	{
 #ifdef DEBUG
-		NSLog(@"Token ABOUT TO EXPIRE - ASSUME EXPIRY");
+	NSLog(@"              ABOUT TO EXPIRE");
 #endif
 
 		// Return BAD TOKEN
@@ -282,12 +283,11 @@
 
 
 #ifdef DEBUG
-    NSLog(@"Token NOT EXPIRED");
+    NSLog(@"              NOT EXPIRED");
 #endif
 
-	//
-
-    // Return GOOD TOKEN
+	
+	// Return GOOD TOKEN
 
     return YES;
 }
@@ -3466,9 +3466,25 @@ didCompleteWithError:(NSError *)error
                     }
                     else
                     {
-                        errorMessage = errors.count > 1
-                        ? [errorMessage stringByAppendingFormat:@"%li. %@\n", (count + 1), [self processAPIError:error]]
-                        : [self processAPIError:error];
+						// Process other API errors
+						
+						NSDictionary *errorPlus;
+						NSMutableDictionary *ed = [NSMutableDictionary dictionaryWithDictionary:error];
+						NSString *action = @"N/A";
+						
+						if (connexion.representedObject != nil)
+						{
+							NSString *act = [connexion.representedObject objectForKey:@"action"];
+							
+							if (act != nil) action = act;
+						}
+						
+						[ed setObject:action forKey:@"action"];
+						errorPlus = [NSDictionary dictionaryWithObjects:[ed allValues] forKeys:[ed allKeys]];
+						
+						errorMessage = errors.count > 1
+                        ? [errorMessage stringByAppendingFormat:@"%li. %@\n", (count + 1), [self processAPIError:errorPlus]]
+                        : [self processAPIError:errorPlus];
                     }
 
                     ++count;
@@ -4325,6 +4341,7 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
     NSString *code = [error valueForKey:@"code"];
     NSString *status = [error valueForKey:@"status"];
     NSString *message = [error valueForKey:@"detail"];
+	NSString *action = [error valueForKey:@"action"];
     NSString *prefix = [code substringToIndex:2];
     NSUInteger index = 99;
 
@@ -4340,7 +4357,7 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
     }
 
     prefix = index != 99 ? [types objectAtIndex:index] : @"Unknown";
-    return [NSString stringWithFormat:@"[API %@] %@ (%@)", prefix, message, status];
+	return [NSString stringWithFormat:@"[API %@] %@ (%@) Action: %@", prefix, message, status, action];
 }
 
 
