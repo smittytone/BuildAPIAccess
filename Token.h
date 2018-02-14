@@ -37,6 +37,8 @@
 @property (nonatomic, strong) NSString *accessToken;
 @property (nonatomic, strong) NSString *expiryDate;
 @property (nonatomic, strong) NSString *refreshToken;
+@property (nonatomic, strong) NSString *loginKey;
+@property (nonatomic, strong) NSString *account;
 @property (nonatomic, readwrite) NSInteger lifetime;
 
 

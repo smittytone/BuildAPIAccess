@@ -76,6 +76,9 @@
 - (void)clearCredentials;
 - (void)logout;
 - (void)twoFactorLogin:(NSString *)loginToken :(NSString *)otp;
+- (void)setEndpoint:(NSString *)pathWithVersion;
+- (void)getLoginKey:(NSString *)password;
+- (void)loginWithKey:(NSString *)loginKey;
 
 // Pagination Methods
 

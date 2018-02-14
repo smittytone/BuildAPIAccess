@@ -111,9 +111,8 @@
 - (void)login:(NSString *)userName :(NSString *)passWord :(BOOL)is2FA
 {
     // Login is the process of sending the user's username/email address and password to the API
-    // in return for a new access token. We retain the credentials in case the token
-    // expires during the host application's runtime, but we don't save them -
-    // this is the job of the host application.
+    // in return for a new access token. We retain the credentials in case the token expires during
+    // the host application's runtime, but we don't save them - this is the job of the host application.
 
     if ((userName == nil || userName.length == 0) && (passWord == nil || passWord.length == 0))
     {
@@ -145,15 +144,15 @@
 
     // Get a new token using the credentials provided
 
-    [self getNewAccessToken];
+	[self getNewAccessToken];
 }
 
 
 
 - (void)getNewAccessToken
 {
-    // Request a new access token using the stored credentials,
-    // failing if neither has been provided (by 'login:')
+    // Request a new access token using the stored credentials
+	// This will fail if neither has been provided (by 'login:')
 
     if (!username || !password)
     {
@@ -162,7 +161,7 @@
         return;
     }
 
-    // Set up a POST request to the /auth URL to get a session token
+    // Set up a POST request to the /auth URL to get an access token
     // Need unique code here as we do not use the Content-Type used by the API
 
     NSError *error = nil;
@@ -191,19 +190,43 @@
 
 
 
-- (void)refreshAccessToken
+- (void)refreshAccessToken:(NSString *)loginKey
 {
-    // Getting a new session token using the refresh_token does not require the account username and pw
+	// Get a new access token using a supplied login key.
+	// If 'loginKey' is nil, then we use a stored refresh token if we have one.
+	// Each account has only five co-existent refresh tokens, so we will
+	// eventually prefer login keys over refresh tokens, but we need to work with
+	// refresh tokens for now
+	
+	NSDictionary *dict = nil;
+	
+	if (loginKey == nil)
+	{
+		// Use the stored refresh token if we have one
+		
+		if (token == nil)
+		{
+			// We don't have a stored refresh token, so just get a new one
+			// NOTE This will crap out if we don't have stored credentials,
+			//      which we should NOT have - TODO fix this
 
-    if (token == nil)
-    {
-        // We don't have a token, so just get a new one
+			[self getNewAccessToken];
+			return;
+		}
 
-        [self getNewAccessToken];
-        return;
-    }
-
-    NSDictionary *dict = @{ @"token" : token.refreshToken };
+		dict = @{ @"token" : token.refreshToken };
+	}
+	else
+	{
+		dict = @{ @"key" : loginKey };
+		
+		if (token == nil)
+		{
+			token = [[Token alloc] init];
+			token.loginKey = loginKey;
+		}
+	}
+	
     NSError *error = nil;
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"auth/token"]]];
 
@@ -214,7 +237,7 @@
 
     if (error)
     {
-        errorMessage = @"Could not create a request to refresh your impCloud session token.";
+        errorMessage = @"Could not create a request to refresh your impCloud access token.";
         [self reportError];
         return;
     }
@@ -281,12 +304,10 @@
 		return NO;
 	}
 
-
 #ifdef DEBUG
     NSLog(@"              NOT EXPIRED");
 #endif
 
-	
 	// Return GOOD TOKEN
 
     return YES;
@@ -366,6 +387,42 @@
 	// Log the user out if they are logged in
 	
 	if (isLoggedIn) [self logout];
+}
+
+
+
+- (void)getLoginKey:(NSString *)password
+{
+	// Set up a POST request to the /auth URL to get a session token
+	// Need unique code here as we do not use the Content-Type used by the API
+	
+	NSError *error = nil;
+	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"accounts/me/login_keys"]]];
+	
+	[request setHTTPMethod:@"POST"];
+	[request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
+	[request setValue:password forHTTPHeaderField:@"X-Electricimp-Password"];
+	
+	NSDictionary *dict = @{ @"type" : @"login_key" };
+	
+	[request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
+	
+	if (request && !error)
+	{
+		[self launchConnection:request :kConnectTypeGetLoginToken :nil];
+	}
+	else
+	{
+		errorMessage = @"Could not create a request to get an impCloud login token.";
+		[self reportError];
+	}
+}
+
+
+
+- (void)loginWithKey:(NSString *)loginKey
+{
+	[self refreshAccessToken:loginKey];
 }
 
 
@@ -2351,8 +2408,8 @@
     }
     else
     {
-        // We do not have a valid token, so we must now acquire one. In the meantime, we
-        // cache all new connexions in 'pendingConnections' so they can be actioned when
+        // We do not have a valid access token, so we must now acquire one. In the meantime,
+        // we cache all new connexions in 'pendingConnections' so they can be actioned when
         // we finally get the token
 
         // Q: do we want to put a limit on 'pendingConnections' size?
@@ -2361,10 +2418,11 @@
 
         if (tokenConnexion == nil)
         {
-            // We have no queued connections yet, so get a new token
+            // We have no queued attempt to get a new access token yet, so get one now, either
+			// with a stored login key (pass in the key) or a stored refresh token (pass in nil)
             // NOTE we need to ensure this is called only once per refresh
 
-            [self refreshAccessToken];
+			[self refreshAccessToken:(token != nil && token.loginKey.length > 0 ? token.loginKey : nil)];
         }
 
         // Add the current request to the pending queue while the new token is retrieved
@@ -4215,6 +4273,8 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
 
             me = @{ @"type" : @"account",
                     @"id" : [data objectForKey:@"id"] };
+			
+			token.account = [data objectForKey:@"id"];
 
 #ifdef DEBUG
     NSLog(@"My Account ID: %@", [me objectForKey:@"id"]);
@@ -4299,6 +4359,24 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
 
             break;
         }
+			
+		case kConnectTypeGetLoginToken:
+		{
+			// The server returns the requested access token directly
+			
+			data = [data objectForKey:@"data"];
+			token.loginKey = [data valueForKey:@"id"];
+			
+#ifdef DEBUG
+			NSLog(@"Login Key: %@", token.loginKey);
+#endif
+			
+			// Pass the loginKey to the host app
+			
+			[nc postNotificationName:@"BuildAPILoginKey" object:data];
+			
+			break;
+		}
     }
 }
 
