@@ -71,7 +71,7 @@
 
 - (void)login:(NSString *)userName :(NSString *)passWord :(BOOL)is2FA;
 - (void)getNewAccessToken;
-- (void)refreshAccessToken;
+- (void)refreshAccessToken:(NSString *)loginKey;
 - (BOOL)isAccessTokenValid;
 - (void)clearCredentials;
 - (void)logout;
