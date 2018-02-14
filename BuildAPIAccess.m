@@ -31,7 +31,7 @@
 
 
 
-@synthesize errorMessage, statusMessage, isLoggedIn, pageSize;
+@synthesize errorMessage, statusMessage, isLoggedIn, pageSize, currentAccount;
 @synthesize numberOfConnections, numberOfLogStreams, maxListCount;
 
 
@@ -4275,6 +4275,7 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
                     @"id" : [data objectForKey:@"id"] };
 			
 			token.account = [data objectForKey:@"id"];
+			currentAccount = [data objectForKey:@"id"];
 
 #ifdef DEBUG
     NSLog(@"My Account ID: %@", [me objectForKey:@"id"]);
