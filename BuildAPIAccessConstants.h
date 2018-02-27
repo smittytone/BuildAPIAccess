@@ -86,7 +86,11 @@
 // impCentral URL, version
 
 #define kBaseAPIURL                         @"https://api.electricimp.com"
+#define kAzureAPIURL						@"https://api.az.electricimp.io"
 #define kAPIVersion                         @"/v5/"
+
+#define kImpCloudTypeAWS					0
+#define kImpCloudTypeAzure					1
 
 // Logging
 

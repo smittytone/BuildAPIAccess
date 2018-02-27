@@ -51,7 +51,7 @@
 
 	NSTimeInterval logTimeout, logRetryInterval;
 
-	NSInteger pageSize;
+	NSInteger pageSize, cloudCode;
 
 	BOOL pageSizeChangeFlag, logIsClosed, restartingLog, useTwoFactor;
 
@@ -69,7 +69,7 @@
 
 // Login Methods
 
-- (void)login:(NSString *)userName :(NSString *)passWord :(BOOL)is2FA;
+- (void)login:(NSString *)userName :(NSString *)passWord :(NSUInteger)impCloudCode :(BOOL)is2FA;
 - (void)getNewAccessToken;
 - (void)refreshAccessToken:(NSString *)loginKey;
 - (BOOL)isAccessTokenValid;

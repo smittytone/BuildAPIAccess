@@ -108,7 +108,7 @@
 #pragma mark - Login Methods
 
 
-- (void)login:(NSString *)userName :(NSString *)passWord :(BOOL)is2FA
+- (void)login:(NSString *)userName :(NSString *)passWord :(NSUInteger)impCloudCode :(BOOL)is2FA
 {
     // Login is the process of sending the user's username/email address and password to the API
     // in return for a new access token. We retain the credentials in case the token expires during
@@ -137,6 +137,17 @@
 
     username = userName;
     password = passWord;
+	cloudCode = impCloudCode;
+	
+	switch (cloudCode)
+	{
+		case kImpCloudTypeAzure:
+			baseURL = [kAzureAPIURL stringByAppendingString:kAPIVersion];
+			break;
+			
+		default:
+			baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
+	}
 
     // This is not currently used but will be in future
 
