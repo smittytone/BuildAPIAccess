@@ -4292,6 +4292,11 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
     NSLog(@"My Account ID: %@", [me objectForKey:@"id"]);
 #endif
 
+			NSDictionary *dict = @{ @"type" : @"account",
+								   @"id" : [data objectForKey:@"id"] };
+
+			[nc postNotificationName:@"BuildAPIGotAccountID" object:dict];
+
             break;
         }
 
