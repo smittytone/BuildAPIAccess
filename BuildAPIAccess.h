@@ -51,7 +51,7 @@
 
 	NSTimeInterval logTimeout, logRetryInterval;
 
-	NSInteger pageSize, cloudCode;
+	NSInteger pageSize;
 
 	BOOL pageSizeChangeFlag, logIsClosed, restartingLog, useTwoFactor;
 
@@ -249,6 +249,7 @@
 @property (nonatomic, strong) NSString *statusMessage;
 @property (nonatomic, readonly) NSUInteger	 numberOfConnections;
 @property (nonatomic, readonly) NSUInteger numberOfLogStreams;
+@property (nonatomic, readonly) NSInteger impCloudCode;
 @property (nonatomic, readwrite) NSUInteger maxListCount;
 @property (nonatomic, readonly) BOOL isLoggedIn;
 @property (nonatomic, readwrite, setter=setPageSize:) NSInteger pageSize;

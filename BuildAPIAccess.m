@@ -32,7 +32,7 @@
 
 
 @synthesize errorMessage, statusMessage, isLoggedIn, pageSize, currentAccount;
-@synthesize numberOfConnections, numberOfLogStreams, maxListCount;
+@synthesize numberOfConnections, numberOfLogStreams, maxListCount, impCloudCode;
 
 
 
@@ -108,7 +108,7 @@
 #pragma mark - Login Methods
 
 
-- (void)login:(NSString *)userName :(NSString *)passWord :(NSUInteger)impCloudCode :(BOOL)is2FA
+- (void)login:(NSString *)userName :(NSString *)passWord :(NSUInteger)cloudCode :(BOOL)is2FA
 {
     // Login is the process of sending the user's username/email address and password to the API
     // in return for a new access token. We retain the credentials in case the token expires during
@@ -137,7 +137,7 @@
 
     username = userName;
     password = passWord;
-	cloudCode = impCloudCode;
+	impCloudCode = cloudCode;
 	
 	switch (cloudCode)
 	{
