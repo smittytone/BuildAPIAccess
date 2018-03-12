@@ -510,7 +510,7 @@
     // returned is added to a full URL by the calling method
 
     if (url == nil || url.length == 0) return @"";
-    return [url substringFromIndex:31];
+	return [url substringFromIndex:(impCloudCode == 0 ? 31 : 33)];
 }
 
 
