@@ -81,6 +81,7 @@
         errorMessage = @"";
         isLoggedIn = NO;
         useTwoFactor = NO;
+        impCloudCode = -1;
 
         // Pagination
 
@@ -137,17 +138,17 @@
 
     username = userName;
     password = passWord;
-	impCloudCode = cloudCode;
-	
-	switch (cloudCode)
-	{
-		case kImpCloudTypeAzure:
-			baseURL = [kAzureAPIURL stringByAppendingString:kAPIVersion];
-			break;
-			
-		default:
-			baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
-	}
+    tempImpCloudCode = cloudCode;
+    
+    switch (cloudCode)
+    {
+        case kImpCloudTypeAzure:
+            baseURL = [kAzureAPIURL stringByAppendingString:kAPIVersion];
+            break;
+            
+        default:
+            baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
+    }
 
     // This is not currently used but will be in future
 
@@ -155,7 +156,7 @@
 
     // Get a new token using the credentials provided
 
-	[self getNewAccessToken];
+    [self getNewAccessToken];
 }
 
 
@@ -163,7 +164,7 @@
 - (void)getNewAccessToken
 {
     // Request a new access token using the stored credentials
-	// This will fail if neither has been provided (by 'login:')
+    // This will fail if neither has been provided (by 'login:')
 
     if (!username || !password)
     {
@@ -203,41 +204,41 @@
 
 - (void)refreshAccessToken:(NSString *)loginKey
 {
-	// Get a new access token using a supplied login key.
-	// If 'loginKey' is nil, then we use a stored refresh token if we have one.
-	// Each account has only five co-existent refresh tokens, so we will
-	// eventually prefer login keys over refresh tokens, but we need to work with
-	// refresh tokens for now
-	
-	NSDictionary *dict = nil;
-	
-	if (loginKey == nil)
-	{
-		// Use the stored refresh token if we have one
-		
-		if (token == nil)
-		{
-			// We don't have a stored refresh token, so just get a new one
-			// NOTE This will crap out if we don't have stored credentials,
-			//      which we should NOT have - TODO fix this
+    // Get a new access token using a supplied login key.
+    // If 'loginKey' is nil, then we use a stored refresh token if we have one.
+    // Each account has only five co-existent refresh tokens, so we will
+    // eventually prefer login keys over refresh tokens, but we need to work with
+    // refresh tokens for now
+    
+    NSDictionary *dict = nil;
+    
+    if (loginKey == nil)
+    {
+        // Use the stored refresh token if we have one
+        
+        if (token == nil)
+        {
+            // We don't have a stored refresh token, so just get a new one
+            // NOTE This will crap out if we don't have stored credentials,
+            //      which we should NOT have - TODO fix this
 
-			[self getNewAccessToken];
-			return;
-		}
+            [self getNewAccessToken];
+            return;
+        }
 
-		dict = @{ @"token" : token.refreshToken };
-	}
-	else
-	{
-		dict = @{ @"key" : loginKey };
-		
-		if (token == nil)
-		{
-			token = [[Token alloc] init];
-			token.loginKey = loginKey;
-		}
-	}
-	
+        dict = @{ @"token" : token.refreshToken };
+    }
+    else
+    {
+        dict = @{ @"key" : loginKey };
+        
+        if (token == nil)
+        {
+            token = [[Token alloc] init];
+            token.loginKey = loginKey;
+        }
+    }
+    
     NSError *error = nil;
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"auth/token"]]];
 
@@ -280,13 +281,13 @@
     }
 
     NSDate *expiry = [dateFormatter dateFromString:token.expiryDate];
-	NSDate *deltaExpiry = [NSDate dateWithTimeInterval:-240 sinceDate:expiry];
+    NSDate *deltaExpiry = [NSDate dateWithTimeInterval:-240 sinceDate:expiry];
     NSDate *now = [NSDate date];
 
 #ifdef DEBUG
     NSLog(@"      Expiry: %@", [dateFormatter stringFromDate:expiry]);
-	NSLog(@"Expiry Delta: %@", [dateFormatter stringFromDate:deltaExpiry]);
-	NSLog(@"         Now: %@", [dateFormatter stringFromDate:now]);
+    NSLog(@"Expiry Delta: %@", [dateFormatter stringFromDate:deltaExpiry]);
+    NSLog(@"         Now: %@", [dateFormatter stringFromDate:now]);
 #endif
 
     NSDate *latest = [now laterDate:expiry];
@@ -302,24 +303,24 @@
         return NO;
     }
 
-	latest = [now laterDate:deltaExpiry];
+    latest = [now laterDate:deltaExpiry];
 
-	if (now == latest)
-	{
+    if (now == latest)
+    {
 #ifdef DEBUG
-	NSLog(@"              ABOUT TO EXPIRE");
+    NSLog(@"              ABOUT TO EXPIRE");
 #endif
 
-		// Return BAD TOKEN
+        // Return BAD TOKEN
 
-		return NO;
-	}
+        return NO;
+    }
 
 #ifdef DEBUG
     NSLog(@"              NOT EXPIRED");
 #endif
 
-	// Return GOOD TOKEN
+    // Return GOOD TOKEN
 
     return YES;
 }
@@ -386,54 +387,54 @@
 
 - (void)setEndpoint:(NSString *)pathWithVersion
 {
-	// Change the API's base URL: server address plus version
-	// eg. api.electricimp.com/v5/
-	
-	baseURL = pathWithVersion;
-	
-	// Append a slash to the base URL if there isn't one
-	
-	if (![baseURL hasSuffix:@"/"]) baseURL = [baseURL stringByAppendingString:@"/"];
-	
-	// Log the user out if they are logged in
-	
-	if (isLoggedIn) [self logout];
+    // Change the API's base URL: server address plus version
+    // eg. api.electricimp.com/v5/
+    
+    baseURL = pathWithVersion;
+    
+    // Append a slash to the base URL if there isn't one
+    
+    if (![baseURL hasSuffix:@"/"]) baseURL = [baseURL stringByAppendingString:@"/"];
+    
+    // Log the user out if they are logged in
+    
+    if (isLoggedIn) [self logout];
 }
 
 
 
 - (void)getLoginKey:(NSString *)password
 {
-	// Set up a POST request to the /auth URL to get a session token
-	// Need unique code here as we do not use the Content-Type used by the API
-	
-	NSError *error = nil;
-	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"accounts/me/login_keys"]]];
-	
-	[request setHTTPMethod:@"POST"];
-	[request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
-	[request setValue:password forHTTPHeaderField:@"X-Electricimp-Password"];
-	
-	NSDictionary *dict = @{ @"type" : @"login_key" };
-	
-	[request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
-	
-	if (request && !error)
-	{
-		[self launchConnection:request :kConnectTypeGetLoginToken :nil];
-	}
-	else
-	{
-		errorMessage = @"Could not create a request to get an impCloud login token.";
-		[self reportError];
-	}
+    // Set up a POST request to the /auth URL to get a session token
+    // Need unique code here as we do not use the Content-Type used by the API
+    
+    NSError *error = nil;
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"accounts/me/login_keys"]]];
+    
+    [request setHTTPMethod:@"POST"];
+    [request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
+    [request setValue:password forHTTPHeaderField:@"X-Electricimp-Password"];
+    
+    NSDictionary *dict = @{ @"type" : @"login_key" };
+    
+    [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
+    
+    if (request && !error)
+    {
+        [self launchConnection:request :kConnectTypeGetLoginToken :nil];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to get an impCloud login token.";
+        [self reportError];
+    }
 }
 
 
 
 - (void)loginWithKey:(NSString *)loginKey
 {
-	[self refreshAccessToken:loginKey];
+    [self refreshAccessToken:loginKey];
 }
 
 
@@ -510,7 +511,7 @@
     // returned is added to a full URL by the calling method
 
     if (url == nil || url.length == 0) return @"";
-	return [url substringFromIndex:(impCloudCode == 0 ? 31 : 33)];
+    return [url substringFromIndex:(impCloudCode == 0 ? 31 : 33)];
 }
 
 
@@ -1346,18 +1347,18 @@
                     @"id" : targetID };
     }
 
-	if ([type compare:@"pre_factoryfixture_devicegroup"] == NSOrderedSame)
-	{
-		if (targetID == nil || targetID.length == 0)
-		{
-			errorMessage = @"Could not create a request to create the new device group: invalid test production target device group.";
-			[self reportError];
-			return;
-		}
+    if ([type compare:@"pre_factoryfixture_devicegroup"] == NSOrderedSame)
+    {
+        if (targetID == nil || targetID.length == 0)
+        {
+            errorMessage = @"Could not create a request to create the new device group: invalid test production target device group.";
+            [self reportError];
+            return;
+        }
 
-		target = @{ @"type" : @"pre_production_devicegroup",
-					@"id" : targetID };
-	}
+        target = @{ @"type" : @"pre_production_devicegroup",
+                    @"id" : targetID };
+    }
 
     NSDictionary *attributes = @{ @"name" : name,
                                   @"description" : description };
@@ -2430,10 +2431,10 @@
         if (tokenConnexion == nil)
         {
             // We have no queued attempt to get a new access token yet, so get one now, either
-			// with a stored login key (pass in the key) or a stored refresh token (pass in nil)
+            // with a stored login key (pass in the key) or a stored refresh token (pass in nil)
             // NOTE we need to ensure this is called only once per refresh
 
-			[self refreshAccessToken:(token != nil && token.loginKey.length > 0 ? token.loginKey : nil)];
+            [self refreshAccessToken:(token != nil && token.loginKey.length > 0 ? token.loginKey : nil)];
         }
 
         // Add the current request to the pending queue while the new token is retrieved
@@ -3050,10 +3051,10 @@ didReceiveResponse:(NSURLResponse *)response
                 return;
             }
 
-			if (connexion.actionCode == kConnectTypeRefreshAccessToken)
-			{
-				NSLog(@"401 encountered refreshing access token");
-			}
+            if (connexion.actionCode == kConnectTypeRefreshAccessToken)
+            {
+                NSLog(@"401 encountered refreshing access token");
+            }
         }
 
         if (statusCode == 429)
@@ -3183,7 +3184,7 @@ didCompleteWithError:(NSError *)error
         // Now process other errors
 
 #ifdef DEBUG
-	NSLog(@"%@", error.localizedDescription);
+    NSLog(@"%@", error.localizedDescription);
 #endif
 
         if (connexion != nil)
@@ -3196,7 +3197,7 @@ didCompleteWithError:(NSError *)error
                 if (logIsClosed) return;
 
                 logIsClosed = YES;
-				logStreamURL = nil;
+                logStreamURL = nil;
 
                 // Create an error event
 
@@ -3535,23 +3536,23 @@ didCompleteWithError:(NSError *)error
                     }
                     else
                     {
-						// Process other API errors
-						
-						NSDictionary *errorPlus;
-						NSMutableDictionary *ed = [NSMutableDictionary dictionaryWithDictionary:error];
-						NSString *action = @"N/A";
-						
-						if (connexion.representedObject != nil)
-						{
-							NSString *act = [connexion.representedObject objectForKey:@"action"];
-							
-							if (act != nil) action = act;
-						}
-						
-						[ed setObject:action forKey:@"action"];
-						errorPlus = [NSDictionary dictionaryWithObjects:[ed allValues] forKeys:[ed allKeys]];
-						
-						errorMessage = errors.count > 1
+                        // Process other API errors
+                        
+                        NSDictionary *errorPlus;
+                        NSMutableDictionary *ed = [NSMutableDictionary dictionaryWithDictionary:error];
+                        NSString *action = @"N/A";
+                        
+                        if (connexion.representedObject != nil)
+                        {
+                            NSString *act = [connexion.representedObject objectForKey:@"action"];
+                            
+                            if (act != nil) action = act;
+                        }
+                        
+                        [ed setObject:action forKey:@"action"];
+                        errorPlus = [NSDictionary dictionaryWithObjects:[ed allValues] forKeys:[ed allKeys]];
+                        
+                        errorMessage = errors.count > 1
                         ? [errorMessage stringByAppendingFormat:@"%li. %@\n", (count + 1), [self processAPIError:errorPlus]]
                         : [self processAPIError:errorPlus];
                     }
@@ -3597,13 +3598,13 @@ didCompleteWithError:(NSError *)error
         // Report the error to the host if we have one (code compilation errors clear 'errorMessage')
 
         if (connexion.representedObject != nil)
-		{
-			NSDictionary *dict = connexion.representedObject;
-			NSString *action = [dict objectForKey:@"action"];
-			if (action != nil && action.length > 0) errorMessage = [errorMessage stringByAppendingFormat:@" (%@)", action];
-		}
+        {
+            NSDictionary *dict = connexion.representedObject;
+            NSString *action = [dict objectForKey:@"action"];
+            if (action != nil && action.length > 0) errorMessage = [errorMessage stringByAppendingFormat:@" (%@)", action];
+        }
 
-		if (errorMessage) [self reportError];
+        if (errorMessage) [self reportError];
     }
 
     // Tidy up the connection list by removing the current connexion from the list of connexions
@@ -4222,9 +4223,9 @@ didCompleteWithError:(NSError *)error
             token.accessToken = [data valueForKey:@"access_token"];
             token.expiryDate = [data valueForKey:@"expires_at"];
             token.refreshToken = [data valueForKey:@"refresh_token"];
-			NSNumber *n = [data valueForKey:@"expires_in"];
-			token.lifetime = n.integerValue;
-			isLoggedIn = YES;
+            NSNumber *n = [data valueForKey:@"expires_in"];
+            token.lifetime = n.integerValue;
+            isLoggedIn = YES;
             tokenConnexion = nil;
 
             // TODO check that we actually have the data we require
@@ -4234,6 +4235,9 @@ didCompleteWithError:(NSError *)error
     NSLog(@"      Expires: %@", token.expiryDate);
     NSLog(@"   Expires in: %li", (long)token.lifetime);
 #endif
+
+            // Record the cloud type
+            impCloudCode = tempImpCloudCode;
 
             // Get user's account information before we do anything else
 
@@ -4258,8 +4262,8 @@ didCompleteWithError:(NSError *)error
 
             token.accessToken = [data valueForKey:@"access_token"];
             token.expiryDate = [data valueForKey:@"expires_at"];
-			NSNumber *n = [data valueForKey:@"expires_in"];
-			token.lifetime = n.integerValue;
+            NSNumber *n = [data valueForKey:@"expires_in"];
+            token.lifetime = n.integerValue;
             tokenConnexion = nil;
 
 #ifdef DEBUG
@@ -4284,18 +4288,18 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
 
             me = @{ @"type" : @"account",
                     @"id" : [data objectForKey:@"id"] };
-			
-			token.account = [data objectForKey:@"id"];
-			currentAccount = [data objectForKey:@"id"];
+            
+            token.account = [data objectForKey:@"id"];
+            currentAccount = [data objectForKey:@"id"];
 
 #ifdef DEBUG
     NSLog(@"My Account ID: %@", [me objectForKey:@"id"]);
 #endif
 
-			NSDictionary *dict = @{ @"type" : @"account",
-								   @"id" : [data objectForKey:@"id"] };
+            NSDictionary *dict = @{ @"type" : @"account",
+                                   @"id" : [data objectForKey:@"id"] };
 
-			[nc postNotificationName:@"BuildAPIGotAccountID" object:dict];
+            [nc postNotificationName:@"BuildAPIGotAccountID" object:dict];
 
             break;
         }
@@ -4307,9 +4311,9 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
 
             data = [data objectForKey:@"data"];
             logStreamID = [data objectForKey:@"id"];
-			
+            
 #ifdef DEBUG
-			NSLog(@"Log Stream ID received: %@", logStreamID);
+            NSLog(@"Log Stream ID received: %@", logStreamID);
 #endif
 
             NSDictionary *attributes = [data objectForKey:@"attributes"];
@@ -4376,24 +4380,24 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
 
             break;
         }
-			
-		case kConnectTypeGetLoginToken:
-		{
-			// The server returns the requested access token directly
-			
-			data = [data objectForKey:@"data"];
-			token.loginKey = [data valueForKey:@"id"];
-			
+            
+        case kConnectTypeGetLoginToken:
+        {
+            // The server returns the requested access token directly
+            
+            data = [data objectForKey:@"data"];
+            token.loginKey = [data valueForKey:@"id"];
+            
 #ifdef DEBUG
-			NSLog(@"Login Key: %@", token.loginKey);
+            NSLog(@"Login Key: %@", token.loginKey);
 #endif
-			
-			// Pass the loginKey to the host app
-			
-			[nc postNotificationName:@"BuildAPILoginKey" object:data];
-			
-			break;
-		}
+            
+            // Pass the loginKey to the host app
+            
+            [nc postNotificationName:@"BuildAPILoginKey" object:data];
+            
+            break;
+        }
     }
 }
 
@@ -4436,7 +4440,7 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
     NSString *code = [error valueForKey:@"code"];
     NSString *status = [error valueForKey:@"status"];
     NSString *message = [error valueForKey:@"detail"];
-	NSString *action = [error valueForKey:@"action"];
+    NSString *action = [error valueForKey:@"action"];
     NSString *prefix = [code substringToIndex:2];
     NSUInteger index = 99;
 
@@ -4452,7 +4456,7 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
     }
 
     prefix = index != 99 ? [types objectAtIndex:index] : @"Unknown";
-	return [NSString stringWithFormat:@"[API %@] %@ (%@) Action: %@", prefix, message, status, action];
+    return [NSString stringWithFormat:@"[API %@] %@ (%@) Action: %@", prefix, message, status, action];
 }
 
 

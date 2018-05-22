@@ -34,32 +34,32 @@
 @interface BuildAPIAccess : NSObject <NSURLSessionDataDelegate, NSURLSessionTaskDelegate>
 
 {
-	NSURLSession *apiSession;
+    NSURLSession *apiSession;
 
-	NSMutableArray *connexions, *pendingConnections, *loggingDevices, *products, *devices;
-	NSMutableArray *devicegroups, *deployments, *history, *logs;
+    NSMutableArray *connexions, *pendingConnections, *loggingDevices, *products, *devices;
+    NSMutableArray *devicegroups, *deployments, *history, *logs;
 
-	NSDictionary *me;
+    NSDictionary *me;
 
-	NSOperationQueue *eventQueue;
+    NSOperationQueue *eventQueue;
 
-	NSString *baseURL, *userAgent, *username, *password, *logStreamID, *deviceToStream;
+    NSString *baseURL, *userAgent, *username, *password, *logStreamID, *deviceToStream;
 
-	NSDateFormatter *dateFormatter;
+    NSDateFormatter *dateFormatter;
 
-	NSURL *logStreamURL;
+    NSURL *logStreamURL;
 
-	NSTimeInterval logTimeout, logRetryInterval;
+    NSTimeInterval logTimeout, logRetryInterval;
 
-	NSInteger pageSize;
+    NSInteger pageSize, tempImpCloudCode;
 
-	BOOL pageSizeChangeFlag, logIsClosed, restartingLog, useTwoFactor;
+    BOOL pageSizeChangeFlag, logIsClosed, restartingLog, useTwoFactor;
 
-	id logLastEventID;
+    id logLastEventID;
 
-	Connexion *logConnexion, *tokenConnexion;
+    Connexion *logConnexion, *tokenConnexion;
 
-	Token *token;
+    Token *token;
 }
 
 
@@ -247,7 +247,7 @@
 @property (nonatomic, strong) NSString *currentAccount;
 @property (nonatomic, strong) NSString *errorMessage;
 @property (nonatomic, strong) NSString *statusMessage;
-@property (nonatomic, readonly) NSUInteger	 numberOfConnections;
+@property (nonatomic, readonly) NSUInteger     numberOfConnections;
 @property (nonatomic, readonly) NSUInteger numberOfLogStreams;
 @property (nonatomic, readonly) NSInteger impCloudCode;
 @property (nonatomic, readwrite) NSUInteger maxListCount;
