@@ -247,7 +247,7 @@
 @property (nonatomic, strong) NSString *currentAccount;
 @property (nonatomic, strong) NSString *errorMessage;
 @property (nonatomic, strong) NSString *statusMessage;
-@property (nonatomic, readonly) NSUInteger     numberOfConnections;
+@property (nonatomic, readonly) NSUInteger numberOfConnections;
 @property (nonatomic, readonly) NSUInteger numberOfLogStreams;
 @property (nonatomic, readonly) NSInteger impCloudCode;
 @property (nonatomic, readwrite) NSUInteger maxListCount;
