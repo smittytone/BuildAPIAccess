@@ -39,9 +39,9 @@
         accessToken = @"";
         refreshToken = @"";
         expiryDate = @"";
-		lifetime = 0;
-		loginKey = @"";
-		account = @"";
+        lifetime = 0;
+        loginKey = @"";
+        account = @"";
     }
 
     return self;
