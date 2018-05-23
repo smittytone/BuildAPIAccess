@@ -1,4 +1,4 @@
-# BuildAPIAccess 3.0.0 #
+# BuildAPIAccess 3.0.1 #
 
 *BuildAPIAccess* is an Objective-C (macOS, iOS and tvOS) wrapper for [Electric Imp’s impCentral™ API](https://developer.electricimp.com/tools/impcentralapi). It is called BuildAPIAccess for historical reasons: it was written to the support Electric Imp’s Build API, the predecessor to the impCentral API. **BuildAPIAccess 3.0.0 does not support the Build API**, which has been deprecated and will shortly be removed from service.
 
@@ -25,6 +25,14 @@ From version 2.0.1, BuildAPIAccess issues HTTPS requests with a custom user agen
 ```
 BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 ```
+
+## Release Notes ##
+
+- 3.0.1
+    - *In Development*
+- 3.0.0
+    - Major revision to support the impCentral API
+    - End support for the (deprecated) Build API
 
 ## Class Usage ##
 
