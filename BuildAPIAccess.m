@@ -350,6 +350,7 @@
 
     token = nil;
     isLoggedIn = NO;
+    impCloudCode = -1;
 }
 
 
