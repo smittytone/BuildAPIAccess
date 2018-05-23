@@ -114,6 +114,15 @@
     // Login is the process of sending the user's username/email address and password to the API
     // in return for a new access token. We retain the credentials in case the token expires during
     // the host application's runtime, but we don't save them - this is the job of the host application.
+    // PARAMETERS:
+    //   'userName' is the login user name
+    //   'passWord' is the login password
+    //   'cloudCode' indicates which impCloud we're logging in to:
+    //               0 - AWS
+    //               1 - Azure
+    //   'is2FA' is a flag set to make use of two-factor authentication (CURRENTLY UNSUPPORTED)
+    // RETURNS:
+    //   Nothing
 
     if ((userName == nil || userName.length == 0) && (passWord == nil || passWord.length == 0))
     {
@@ -138,6 +147,10 @@
 
     username = userName;
     password = passWord;
+
+    // Record the cloud code, but don't keep it until we've logged in
+    // ie. confirmed that we're logging in to the correct cloud
+
     tempImpCloudCode = cloudCode;
     
     switch (cloudCode)
@@ -166,7 +179,7 @@
     // Request a new access token using the stored credentials
     // This will fail if neither has been provided (by 'login:')
 
-    if (!username || !password)
+    if (username == nil || username.length == 0 || password == nil || password.length == 0)
     {
         errorMessage = @"Missing Electric Imp credentials — cannot log in without username/email address and password.";
         [self reportError:kErrorLoginNoCredentials];
@@ -219,8 +232,6 @@
         if (token == nil)
         {
             // We don't have a stored refresh token, so just get a new one
-            // NOTE This will crap out if we don't have stored credentials,
-            //      which we should NOT have - TODO fix this
 
             [self getNewAccessToken];
             return;
@@ -232,35 +243,28 @@
     {
         dict = @{ @"key" : loginKey };
         
-        if (token == nil)
-        {
-            token = [[Token alloc] init];
-            token.loginKey = loginKey;
-        }
+        if (token == nil) token = [[Token alloc] init];
+        token.loginKey = loginKey;
     }
     
     NSError *error = nil;
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"auth/token"]]];
+
+    // Set up a POST request to the auth/token URL to get an access token
+    // Need unique code here as we do not use the Content-Type used by the API
 
     [request setHTTPMethod:@"POST"];
     [request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
     [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
     [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
 
-    if (error)
-    {
-        errorMessage = @"Could not create a request to refresh your impCloud access token.";
-        [self reportError];
-        return;
-    }
-
-    if (request)
+    if (request && !error)
     {
         [self launchConnection:request :kConnectTypeRefreshAccessToken :nil];
     }
     else
     {
-        errorMessage = @"Could not create a request to retrieve a new impCloud session token.";
+        errorMessage = @"Could not create a request to retrieve a new impCloud access token.";
         [self reportError];
     }
 }
@@ -360,19 +364,15 @@
     NSError *error = nil;
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"auth"]]];
 
+    // Set up a POST request to the auth URL to get an access token
+    // Need unique code here as we do not use the Content-Type used by the API
+
     [request setHTTPMethod:@"POST"];
     [request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
     [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
     [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
 
-    if (error)
-    {
-        errorMessage = @"Could not create a request to submit your impCloud OTP token.";
-        [self reportError];
-        return;
-    }
-
-    if (request)
+    if (request && !error)
     {
         [self launchConnection:request :kConnectTypeGetAccessToken :nil];
     }
@@ -405,8 +405,8 @@
 
 - (void)getLoginKey:(NSString *)password
 {
-    // Set up a POST request to the /auth URL to get a session token
-    // Need unique code here as we do not use the Content-Type used by the API
+    // Set up a POST request to the accounts/me/login_keys URL to get a login key
+    // Need unique code here as we do not use the Content-Type and headers used by the API
     
     NSError *error = nil;
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"accounts/me/login_keys"]]];
@@ -438,6 +438,7 @@
 }
 
 
+
 #pragma mark - Pagination Methods
 
 
@@ -445,11 +446,15 @@
 {
     // Sets a flag which will be tested when we next request data and, if set,
     // will add a URL query code specifying the required page size
+    // Default is 20
 
     if (size < 1) size = 1;
     if (size > 100) size = 100;
-    pageSize = size;
-    pageSizeChangeFlag = YES;
+    if (pageSize != size)
+    {
+        pageSizeChangeFlag = YES;
+        pageSize = size;
+    }
 }
 
 
@@ -492,7 +497,7 @@
     {
         if ([key compare:@"next"] == NSOrderedSame)
         {
-            // We have at least one more page to recover before we have the full list
+            // We have at least one more page to recover before we have the full list of data
 
             nextURLString = [links objectForKey:@"next"];
             break;
@@ -509,6 +514,7 @@
     // Strips the non-query content out of the supplied URL, or
     // returns an empty string if 'url' is nil or empty - what's
     // returned is added to a full URL by the calling method
+    // NOTE AWS and Azure URLs have different length, hence the 31 and 33
 
     if (url == nil || url.length == 0) return @"";
     return [url substringFromIndex:(impCloudCode == 0 ? 31 : 33)];
@@ -1088,21 +1094,24 @@
     }
 
     if (description == nil) description = @"";
+
+    // Impose API length limits: they'll be rejected otherwise
+
     if (description.length > 255) description = [description substringToIndex:255];
     if (name.length > 80) name = [name substringToIndex:80];
 
     NSDictionary *attributes = @{ @"name" : name,
                                   @"description" : description };
 
-    NSDictionary *dict = @{ @"type" : @"product",
+    NSDictionary *data = @{ @"type" : @"product",
                             @"attributes" : attributes };
 
-    NSDictionary *data = @{ @"data" : dict };
+    NSDictionary *dict = @{ @"data" : data };
 
     // NOTE we don't add a relationships dictionary, so the product will be assigned
     // to the account the user is logged in as
 
-    NSMutableURLRequest *request = [self makePOSTrequest:@"products" :data];
+    NSMutableURLRequest *request = [self makePOSTrequest:@"products" :dict];
 
     if (request)
     {
@@ -1143,7 +1152,7 @@
         return;
     }
 
-    if (values.count == 0 || values.count != keys.count)
+    if (keys == nil || values.count == 0 || values.count != keys.count)
     {
         errorMessage = @"Could not create a request to update the product: insufficient or extraneous data supplied.";
         [self reportError];
@@ -1191,13 +1200,13 @@
     {
         // Only proceed with if valid changes have been made
 
-        NSDictionary *dict = @{ @"type" : @"product",
+        NSDictionary *data = @{ @"type" : @"product",
                                 @"id" : productID,
                                 @"attributes" : [NSDictionary dictionaryWithDictionary:attributes] };
 
-        NSDictionary *data = @{ @"data" : dict };
+        NSDictionary *dict = @{ @"data" : data };
 
-        NSMutableURLRequest *request = [self makePATCHrequest:[NSString stringWithFormat:@"products/%@", productID] :data];
+        NSMutableURLRequest *request = [self makePATCHrequest:[NSString stringWithFormat:@"products/%@", productID] :dict];
 
         if (request)
         {
@@ -1265,7 +1274,7 @@
 {
     // Set up a POST request to /devicegroups
 
-    // The dictionary 'details' contains all the data we may need:
+    // The dictionary 'details' should contain all of the data we may need:
     // 'name', 'description', 'type', 'productid', 'targetid'
     // First get the mandatory items - method will fail without these
 
@@ -1297,7 +1306,9 @@
 
     BOOL flag = NO;
 
-    if (type.length == 0) type = @"development_devicegroup";
+    // Check a legal type of device group has been specified
+
+    if (type == nil || type.length == 0) type = @"development_devicegroup";
 
     NSArray *allowedTypes = @[ @"pre_production_devicegroup",
                                @"pre_factoryfixture_devicegroup",
@@ -1329,7 +1340,7 @@
         return;
     }
 
-    // Factory Fixture Device Groups must have a target
+    // (Pre) Factory Fixture Device Groups must have a target - check that we have it
 
     NSDictionary *target = nil;
     NSString *targetID = [details valueForKey:@"targetid"];
@@ -1370,13 +1381,13 @@
     ? @{ @"product" : product, @"production_target" : target }
     : @{ @"product" : product };
 
-    NSDictionary *dict = @{ @"type" : type,
+    NSDictionary *data = @{ @"type" : type,
                             @"attributes" : attributes,
                             @"relationships" : relationships};
 
-    NSDictionary *data = @{ @"data" : dict };
+    NSDictionary *dict = @{ @"data" : data };
 
-    NSMutableURLRequest *request = [self makePOSTrequest:@"devicegroups" :data];
+    NSMutableURLRequest *request = [self makePOSTrequest:@"devicegroups" :dict];
 
     if (request)
     {
@@ -1418,7 +1429,7 @@
         return;
     }
 
-    if (values.count == 0 || values.count != keys.count)
+    if (keys == nil || values.count == 0 || values.count != keys.count)
     {
         errorMessage = @"Could not create a request to update the device group: insufficient or extraneous data supplied.";
         [self reportError];
@@ -1520,7 +1531,7 @@
         }
     }
 
-    NSDictionary *dict;
+    NSDictionary *data;
 
     if (devicegroupType == nil) devicegroupType = @"development_devicegroup";
 
@@ -1528,14 +1539,14 @@
     {
         if (relationships.count > 0)
         {
-            dict = @{ @"id" : devicegroupID,
+            data = @{ @"id" : devicegroupID,
                         @"type" : devicegroupType,
                         @"attributes" : [NSDictionary dictionaryWithDictionary:attributes],
                         @"relationships" : [NSDictionary dictionaryWithDictionary:relationships] };
         }
         else
         {
-            dict = @{ @"id" : devicegroupID,
+            data = @{ @"id" : devicegroupID,
                       @"type" : devicegroupType,
                       @"attributes" : [NSDictionary dictionaryWithDictionary:attributes] };
         }
@@ -1544,7 +1555,7 @@
     {
         if (relationships.count > 0)
         {
-            dict = @{ @"id" : devicegroupID,
+            data = @{ @"id" : devicegroupID,
                       @"type" : devicegroupType,
                       @"relationships" : [NSDictionary dictionaryWithDictionary:relationships] };
         }
@@ -1556,9 +1567,9 @@
         }
     }
 
-    NSDictionary *data = @{ @"data" : dict };
+    NSDictionary *dict = @{ @"data" : data };
 
-    NSMutableURLRequest *request = [self makePATCHrequest:[NSString stringWithFormat:@"devicegroups/%@", devicegroupID] :data];
+    NSMutableURLRequest *request = [self makePATCHrequest:[NSString stringWithFormat:@"devicegroups/%@", devicegroupID] :dict];
 
     if (request)
     {
@@ -1728,13 +1739,13 @@
 
     NSDictionary *attributes = @{ @"name" : name };
 
-    NSDictionary *dict = @{ @"type" : @"device",
+    NSDictionary *data = @{ @"type" : @"device",
                             @"id" : deviceID,
                             @"attributes" : attributes };
 
-    NSDictionary *data = @{ @"data" : dict };
+    NSDictionary *dict = @{ @"data" : data };
 
-    NSMutableURLRequest *request = [self makePATCHrequest:[NSString stringWithFormat:@"devices/%@", deviceID] :data];
+    NSMutableURLRequest *request = [self makePATCHrequest:[NSString stringWithFormat:@"devices/%@", deviceID] :dict];
 
     if (request)
     {
@@ -1759,6 +1770,7 @@
 - (void)unassignDevice:(NSDictionary *)device :(id)someObject
 {
     // Set up a DELETE to /devicegroups/{id}/relationships/devices
+    // 'device' is an standard device record
 
     if (device == nil)
     {
@@ -1773,7 +1785,7 @@
     if (dg == nil)
     {
         // If there is no devicegroup set for the device, it is unassigned
-        // This is not an error, so we replicate the post-uhassignment process
+        // This is not an error, so we replicate the post-unassignment process
         // to inform the host app
 
         NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
@@ -1790,16 +1802,16 @@
 
     NSMutableURLRequest *request = [self makeRequest:@"DELETE" :[NSString stringWithFormat:@"/devicegroups/%@/relationships/devices", dgid] :YES :NO];
 
-    NSDictionary *dict = @{ @"type" : @"device",
+    NSDictionary *data = @{ @"type" : @"device",
                             @"id" : [device objectForKey:@"id"] };
 
-    NSArray *array = @[ dict ];
+    NSArray *array = @[ data ];
 
-    NSDictionary *data = @{ @"data" : array };
+    NSDictionary *dict = @{ @"data" : array };
 
     NSError *error;
 
-    [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:data options:0 error:&error]];
+    [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
 
     if (error)
     {
@@ -1830,6 +1842,9 @@
 
 - (void)unassignDevices:(NSArray *)devices :(id)someObject
 {
+    // Set up a DELETE to /devicegroups/{id}/relationships/devices
+    // 'devices' is an array of standard device records
+
     if (devices == nil || devices.count == 0)
     {
         errorMessage = @"Could not create a request to unassign devices: no devices specified.";
@@ -1848,8 +1863,7 @@
         if (dg == nil)
         {
             // If there is no devicegroup set for the device, it is unassigned
-            // This is not an error, so we replicate the post-uhassignment process
-            // to inform the host app
+            // This is not an error, so we replicate the post-unassignment process to inform the host app
 
             NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
 
@@ -1868,8 +1882,8 @@
 
             if (groupid == nil)
             {
-                // Store the first device group ID on the list - this will be used for all
-                // further devices on the list
+                // Store the first device group ID on the list
+                // This will be used for all further devices on the list
 
                 groupid = dgid;
 
@@ -1884,11 +1898,11 @@
         }
     }
 
-    NSDictionary *data = @{ @"data" : [NSArray arrayWithArray:array] };
+    NSDictionary *dict = @{ @"data" : [NSArray arrayWithArray:array] };
     NSError *error;
     NSMutableURLRequest *request = [self makeRequest:@"DELETE" :[NSString stringWithFormat:@"/devicegroups/%@/relationships/devices", groupid] :YES :NO];
 
-    [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:data options:0 error:&error]];
+    [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
 
     if (error)
     {
@@ -1920,6 +1934,7 @@
 - (void)assignDevice:(NSDictionary *)device :(NSString *)devicegroupID :(id)someObject
 {
     // Set up a POST to /devicegroups/{id}/relationships/devices
+    // 'device' is a standard device record
 
     if (device == nil)
     {
@@ -1940,6 +1955,7 @@
     if ([devicegroupID compare:did] == NSOrderedSame)
     {
         // Device is already assigned to this device group
+        // This is not an error, so we replicate the post-assignment process to inform the host app
 
         NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
 
@@ -1951,14 +1967,14 @@
         return;
     }
 
-    NSDictionary *dict = @{ @"type" : @"device",
+    NSDictionary *data = @{ @"type" : @"device",
                             @"id" : did};
 
-    NSArray *array = @[ dict ];
+    NSArray *array = @[ data ];
 
-    NSDictionary *data = @{ @"data" : array };
+    NSDictionary *dict = @{ @"data" : array };
 
-    NSMutableURLRequest *request = [self makePOSTrequest:[NSString stringWithFormat:@"/devicegroups/%@/relationships/devices", devicegroupID] :data];
+    NSMutableURLRequest *request = [self makePOSTrequest:[NSString stringWithFormat:@"/devicegroups/%@/relationships/devices", devicegroupID] :dict];
 
     if (request)
     {
@@ -2003,37 +2019,28 @@
             if ([dgid compare:devicegroupID] == NSOrderedSame)
             {
                 // Device is already assigned to this device group
+                // This is not an error, so we replicate the post-assignment process to inform the host app
 
                 NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
 
-                NSDictionary *dict = someObject != nil
+                NSDictionary *data = someObject != nil
                 ? @{ @"data" : @"already assigned", @"object" : someObject }
                 : @{ @"data" : @"already assigned" };
 
-                [nc postNotificationName:@"BuildAPIDeviceAssigned" object:dict];
+                [nc postNotificationName:@"BuildAPIDeviceAssigned" object:data];
             }
             else
             {
-                NSDictionary *dict = @{ @"type" : @"device",
+                NSDictionary *data = @{ @"type" : @"device",
                                         @"id" : [device objectForKey:@"id"] };
 
-                [array addObject:dict];
+                [array addObject:data];
             }
         }
     }
 
-    NSDictionary *data = @{ @"data" : [NSArray arrayWithArray:array] };
-    NSError *error;
-    NSMutableURLRequest *request = [self makePOSTrequest:[NSString stringWithFormat:@"/devicegroups/%@/relationships/devices", devicegroupID] :data];
-
-    [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:data options:0 error:&error]];
-
-    if (error)
-    {
-        errorMessage = @"Could not create a request to unassign the devices: bad JSON data.";
-        [self reportError];
-        return;
-    }
+    NSDictionary *dict = @{ @"data" : [NSArray arrayWithArray:array] };
+    NSMutableURLRequest *request = [self makePOSTrequest:[NSString stringWithFormat:@"/devicegroups/%@/relationships/devices", devicegroupID] :dict];
 
     if (request)
     {
@@ -2144,7 +2151,7 @@
         return;
     }
 
-    if (values.count == 0 || values.count != keys.count)
+    if (values == nil || values.count == 0 || values.count != keys.count)
     {
         errorMessage = @"Could not create a request to update the deployment: insufficient or extraneous data supplied.";
         [self reportError];
@@ -2176,13 +2183,13 @@
     {
         // Only proceed if valid changes have actually been made
 
-        NSDictionary *dict= @{ @"id" : deploymentID,
+        NSDictionary *data = @{ @"id" : deploymentID,
                                 @"type" : @"deployment",
                                 @"attributes" : [NSDictionary dictionaryWithDictionary:attributes] };
 
-        NSDictionary *data = @{ @"data" : dict };
+        NSDictionary *dict = @{ @"data" : data };
 
-        NSMutableURLRequest *request = [self makePATCHrequest:[NSString stringWithFormat:@"deployments/%@", deploymentID] :data];
+        NSMutableURLRequest *request = [self makePATCHrequest:[NSString stringWithFormat:@"deployments/%@", deploymentID] :dict];
 
         if (request)
         {
@@ -2246,6 +2253,7 @@
 - (void)setMinimumDeployment:(NSString *)devicegroupID :(NSDictionary *)deployment :(id)someObject
 {
     // Set up a PUT to /devicegroups/{ID}/relationships/min_supported_deployment
+    // 'deployment' is a standard deployment record
 
     if (devicegroupID == nil || devicegroupID.length == 0)
     {
@@ -2255,9 +2263,9 @@
     }
 
     NSDictionary *data = @{ @"type" : @"deployment", @"id" : [deployment objectForKey:@"id"] };
-    NSDictionary *body = @{ @"data" : data };
+    NSDictionary *dict = @{ @"data" : data };
 
-    NSMutableURLRequest *request = [self makePUTrequest:[NSString stringWithFormat:@"/devicegroups/%@/relationships/min_supported_deployment", devicegroupID] :body];
+    NSMutableURLRequest *request = [self makePUTrequest:[NSString stringWithFormat:@"/devicegroups/%@/relationships/min_supported_deployment", devicegroupID] :dict];
 
     if (request)
     {
@@ -2327,6 +2335,8 @@
 
 - (NSMutableURLRequest *)makeRequest:(NSString *)verb :(NSString *)path :(BOOL)addContentType :(BOOL)getMultipleItems
 {
+    // Generic HTTP request constructor used by the specific-verb methods, and separately
+
     if (token == nil || !isLoggedIn)
     {
         // We have no access token, so we can't get any data
@@ -2345,7 +2355,11 @@
         if (![path containsString:@"?"] && getMultipleItems) path = [path stringByAppendingFormat:@"?page[size]=%li", pageSize];
     }
 
+    // Deal with paths that already contain an HTTP mode and domain
+
     if (![path hasPrefix:@"https://"]) path = [baseURL stringByAppendingString:path];
+
+    // Prepare the request
 
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
 
@@ -2376,8 +2390,14 @@
 
 - (Connexion *)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode :(id)someObject
 {
-    // Create a default connexion object to store the details of the connection
-    // we're about to initiate
+    // Create a default connexion object to store the details of the connection we're about to initiate
+    // PARAMETERS:
+    //   'request' is the HTTP request we're making to the API
+    //   'actionCode' is an internal ID indicating what the API is being asked to do
+    //   'someObject' is an optional object, supplied by the host app, that is bound to this request
+    //                and follows it through sending and processing the response from the server
+    // RETURNS:
+    //   A BuildAPIAccess Connexion instance
 
     Connexion *aConnexion = [[Connexion alloc] init];
     aConnexion.actionCode = actionCode;
@@ -2451,6 +2471,7 @@
 {
     // This method is called in response to the receipt of a status code 429 from the server,
     // ie. we have been rate-limited. A timer will bring us here 1.0 seconds after receipt of the error
+    // 'userInfo' is user data from the previous request
 
     NSDictionary *dict = (NSDictionary *)userInfo;
     NSMutableURLRequest *request = [dict objectForKey:@"request"];
@@ -2517,7 +2538,7 @@
         }
 
         // Kill the remaining connections.
-        // The triggered delegate method didBecomeInvalid: wiil clear out 'connexions'
+        // The triggered delegate method didBecomeInvalid: will clear out 'connexions'
 
         if (apiSession != nil) [apiSession invalidateAndCancel];
     }
@@ -2541,6 +2562,14 @@
 
 - (void)startLogging:(NSString *)deviceID :(id)someObject
 {
+    // Begin logging for the specified device ID
+    // PARAMETERS:
+    //   'deviceID' is the device's ID
+    //   'someObject' is an optional object, supplied by the host app, that is bound to this request
+    //                and follows it through sending and processing the response from the server
+    // RETURNS:
+    //   Nothing
+
     if (deviceID == nil || deviceID.length == 0)
     {
         // No device ID? Can't proceed
@@ -2588,8 +2617,15 @@
 
 - (void)addDeviceToLogStream:(NSString *)deviceID :(id)someObject
 {
-    // PUT { device identifier } to /logstream/<stream_id>
-    // { device identifier } eg. { id: ‘d9f6f253-d203-487f-bdb0-70ea1529ee1b’, type: ‘device’ }
+    // Add a new device to an existing stream (already checked for in 'startLogging:'
+    // Make a PUT request with {device identifier} to /logstream/{stream_id}
+    // {device identifier} eg. { id: ‘d9f6f253-d203-487f-bdb0-70ea1529ee1b’, type: ‘device’ }
+    // PARAMETERS:
+    //   'deviceID' is the device's ID
+    //   'someObject' is an optional object, supplied by the host app, that is bound to this request
+    //                and follows it through sending and processing the response from the server
+    // RETURNS:
+    //   Nothing
 
     if (loggingDevices.count > 0)
     {
@@ -2632,8 +2668,15 @@
 
 - (void)stopLogging:(NSString *)deviceID :(id)someObject
 {
-    // DELETE /logstream/<stream_id>/<device_identifier>
-    // { id: ‘d9f6f253-d203-487f-bdb0-70ea1529ee1b’, type: ‘device’ }
+    // Remove the specified device from an existing log stream
+    // ie. make a DELETE reqyest to /logstream/{stream_id}/{device_identifier}
+    // {device_identifier} eg. {id: ‘d9f6f253-d203-487f-bdb0-70ea1529ee1b’, type: ‘device’}
+    // PARAMETERS:
+    //   'deviceID' is the device's ID
+    //   'someObject' is an optional object, supplied by the host app, that is bound to this request
+    //                and follows it through sending and processing the response from the server
+    // RETURNS:
+    //   Nothing
 
     NSDictionary *dict = @{ @"id" : deviceID,
                             @"type" : @"device" };
@@ -2692,8 +2735,8 @@
 
 - (void)startStream:(NSURL *)url
 {
-    // This method sets up the log stream which will recieve and handle server-sent events (SSE)
-    // from the impCentral API. At this point we have no connection to pipe the SSEs
+    // This method sets up the log stream which will receive and handle server-sent events (SSE) from the API
+    // At this point we have no connection to pipe the SSEs, just the URL for the stream (sent by the server)
 
     logStreamURL = url;
     logIsClosed = YES;
@@ -2770,7 +2813,8 @@
 
 - (void)closeStream
 {
-    // Flag the closure (prevents an error report from the 'didComplete:' delegate method
+    // Flag the closure (prevents an error report from the 'didComplete:' delegate method)
+    // and perform a clean-up of the stream connection
 
     logIsClosed = YES;
 
@@ -2778,8 +2822,6 @@
 
     if (logConnexion != nil)
     {
-        // logConnexion.actionCode = kConnectTypeNone;
-
         [logConnexion.task cancel];
         [connexions removeObject:logConnexion];
 
@@ -2797,7 +2839,7 @@
 
 - (void)dispatchEvent:(LogStreamEvent *)event
 {
-    // Processes an event from the event queue: pass it to the main thread for processing in processEvent:
+    // Dispactches an event from the event queue by passing it to the main thread for processing in 'processEvent:'
 
     [self performSelectorOnMainThread:@selector(processEvent:) withObject:event waitUntilDone:NO];
 }
@@ -3302,10 +3344,6 @@ didCompleteWithError:(NSError *)error
     // Wrangle an incoming batch of streamed data to pull out server-sent events and extract
     // the data from them (and defer incomplete events until the rest of them arrives)
 
-#ifdef DEBUG
-    //NSDate *date = [NSDate date];
-#endif
-
     NSString *eventString;
 
     if (connexion.data != nil)
@@ -3451,15 +3489,10 @@ didCompleteWithError:(NSError *)error
     else
     {
         // Partial event (no \n\n in received data) so preserve it in the connexion
-        // so it's ready to be added to the next chunk of data
+        // so it's ready to be added to the next chunk of data received from the server
 
         [connexion.data appendData:data];
     }
-
-#ifdef DEBUG
-    //double timePassed_ms = [date timeIntervalSinceNow] * -1000.0;
-    //NSLog(@"parseStreamLog duration: %f milliseconds", timePassed_ms);
-#endif
 }
 
 
@@ -4415,7 +4448,7 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
 
 - (void)reportError:(NSInteger)errCode
 {
-    // Signal the host app that we have an error message for it to display (in 'errorMessage')
+    // Signal the host app that we have an error message for it to display (in the property 'errorMessage')
 
     NSDictionary *error;
     NSString *message = errorMessage;
