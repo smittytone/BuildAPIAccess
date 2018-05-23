@@ -1,8 +1,27 @@
 
-//  Copyright (c) 2015-16 Tony Smith. All rights reserved.
-//  Issued under the MIT licence
-
-//  BuildAPIAccess 2.0.1
+//  BuildAPIAccess
+//  Copyright (c) 2015-18 Tony Smith. All rights reserved.
+//  Issued under the MIT licence:
+//
+//  Permission is hereby granted, free of charge, to any person obtaining a copy
+//  of this software and associated documentation files (the "Software"), to deal
+//  in the Software without restriction, including without limitation the rights
+//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+//  copies of the Software, and to permit persons to whom the Software is
+//  furnished to do so, subject to the following conditions:
+//
+//  The above copyright notice and this permission notice shall be included in all
+//  copies or substantial portions of the Software.
+//
+//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+//  SOFTWARE.
+//
+//  BuildAPIAccess 3.0.0
 
 
 #import "BuildAPIAccess.h"
@@ -11,8 +30,10 @@
 @implementation BuildAPIAccess
 
 
-@synthesize devices, models, errorMessage, statusMessage, deviceCode, agentCode;
-@synthesize codeErrors, numberOfConnections;
+
+@synthesize errorMessage, statusMessage, isLoggedIn, pageSize, currentAccount;
+@synthesize numberOfConnections, numberOfLogStreams, maxListCount, impCloudCode;
+
 
 
 #pragma mark - Initialization Methods
@@ -20,77 +41,483 @@
 
 - (instancetype)init
 {
-    // Generic initializer - should not be called directly
-
     if (self = [super init])
     {
-        // Public entities
+        // The list of connections should be instantiated immediately...
 
-        devices = [[NSMutableArray alloc] init];
-        models = [[NSMutableArray alloc] init];
+        connexions = [[NSMutableArray alloc] init];
+        pendingConnections = nil;
+
+        // impCentral API returned data lists
+
+        products = nil;
+        devices = nil;
+        loggingDevices = nil;
+        deployments = nil;
+        devicegroups = nil;
+        history = nil;
+        logs = nil;
+
+        // Message-handling Operation Queue
+
+        eventQueue = nil;
+
+        // Account
+
+        username = nil;
+        password = nil;
+
+        // Logging
+
+        logStreamID = nil;
+        logStreamURL = nil;
+        logTimeout = kLogTimeout;
+        logRetryInterval = klogRetryInterval;
+        logIsClosed = YES;
+        maxListCount = kMaxHistoricalLogs;
+
+        // Misc
 
         errorMessage = @"";
+        isLoggedIn = NO;
+        useTwoFactor = NO;
+        impCloudCode = -1;
 
-        // Private entities
+        // Pagination
 
-        _connexions = [[NSMutableArray alloc] init];
-		_loggingDevices = [[NSMutableArray alloc] init];
-        _lastStamp = nil;
-        _logURL = nil;
-        _harvey = nil;
-        _useSessionFlag = YES;
+        pageSize = kPaginationDefault;
+        pageSizeChangeFlag = YES;
+        baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
 
-		_baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
+        // User Agent for impCentral API requests
 
-		NSOperatingSystemVersion sysVer = [[NSProcessInfo processInfo] operatingSystemVersion];
-		_userAgent = [NSString stringWithFormat:@"BuildAPIAccess/%@ %@/%@.%@ (macOS %li.%li.%li)", kBuildAPIAccessVersion, [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleExecutable"], [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"],
-					  [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"], (long)sysVer.majorVersion, (long)sysVer.minorVersion, (long)sysVer.patchVersion];
+        NSOperatingSystemVersion sysVer = [[NSProcessInfo processInfo] operatingSystemVersion];
+        userAgent = [NSString stringWithFormat:@"BuildAPIAccess/%@ %@/%@.%@ (macOS %li.%li.%li)", kBuildAPIAccessVersion, [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleExecutable"], [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"],
+                      [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"], (long)sysVer.majorVersion, (long)sysVer.minorVersion, (long)sysVer.patchVersion];
+
+#ifdef DEBUG
+    NSLog(@"User Agent: %@", userAgent);
+#endif
+
     }
 
     return self;
 }
 
 
-- (instancetype)initForNSURLSession
+
+#pragma mark - Login Methods
+
+
+- (void)login:(NSString *)userName :(NSString *)passWord :(NSUInteger)cloudCode :(BOOL)is2FA
 {
-    return [self init];
+    // Login is the process of sending the user's username/email address and password to the API
+    // in return for a new access token. We retain the credentials in case the token expires during
+    // the host application's runtime, but we don't save them - this is the job of the host application.
+    // PARAMETERS:
+    //   'userName' is the login user name
+    //   'passWord' is the login password
+    //   'cloudCode' indicates which impCloud we're logging in to:
+    //               0 - AWS
+    //               1 - Azure
+    //   'is2FA' is a flag set to make use of two-factor authentication (CURRENTLY UNSUPPORTED)
+    // RETURNS:
+    //   Nothing
+
+    if ((userName == nil || userName.length == 0) && (passWord == nil || passWord.length == 0))
+    {
+        errorMessage = @"Could not log in to the Electric Imp impCloud — no username/email address and password.";
+        [self reportError:kErrorLoginNoCredentials];
+        return;
+    }
+
+    if (userName == nil || userName.length == 0)
+    {
+        errorMessage = @"Could not log in to the Electric Imp impCloud — no username or email address.";
+        [self reportError:kErrorLoginNoUsername];
+        return;
+    }
+
+    if (passWord == nil || passWord.length == 0)
+    {
+        errorMessage = @"Could not log in to the Electric Imp impCloud — no password.";
+        [self reportError:kErrorLoginNoPassword];
+        return;
+    }
+
+    username = userName;
+    password = passWord;
+
+    // Record the cloud code, but don't keep it until we've logged in
+    // ie. confirmed that we're logging in to the correct cloud
+
+    tempImpCloudCode = cloudCode;
+    
+    switch (cloudCode)
+    {
+        case kImpCloudTypeAzure:
+            baseURL = [kAzureAPIURL stringByAppendingString:kAPIVersion];
+            break;
+            
+        default:
+            baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
+    }
+
+    // This is not currently used but will be in future
+
+    useTwoFactor = is2FA;
+
+    // Get a new token using the credentials provided
+
+    [self getNewAccessToken];
 }
 
 
-- (instancetype)initForNSURLConnection
+
+- (void)getNewAccessToken
 {
-    self = [self init];
-    _useSessionFlag = NO;
-    return self;
+    // Request a new access token using the stored credentials
+    // This will fail if neither has been provided (by 'login:')
+
+    if (username == nil || username.length == 0 || password == nil || password.length == 0)
+    {
+        errorMessage = @"Missing Electric Imp credentials — cannot log in without username/email address and password.";
+        [self reportError:kErrorLoginNoCredentials];
+        return;
+    }
+
+    // Set up a POST request to the /auth URL to get an access token
+    // Need unique code here as we do not use the Content-Type used by the API
+
+    NSError *error = nil;
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"auth"]]];
+
+    [request setHTTPMethod:@"POST"];
+    [request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
+    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+
+    NSDictionary *dict = @{ @"id" : username,
+                            @"password" : password };
+
+    [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
+    [self clearCredentials];
+
+    if (request && !error)
+    {
+        [self launchConnection:request :kConnectTypeGetAccessToken :nil];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to get an impCloud access token.";
+        [self reportError];
+    }
 }
 
 
-- (void)clearAPIKey
+
+- (void)refreshAccessToken:(NSString *)loginKey
 {
-    [self clrk];
+    // Get a new access token using a supplied login key.
+    // If 'loginKey' is nil, then we use a stored refresh token if we have one.
+    // Each account has only five co-existent refresh tokens, so we will
+    // eventually prefer login keys over refresh tokens, but we need to work with
+    // refresh tokens for now
+    
+    NSDictionary *dict = nil;
+    
+    if (loginKey == nil)
+    {
+        // Use the stored refresh token if we have one
+        
+        if (token == nil)
+        {
+            // We don't have a stored refresh token, so just get a new one
+
+            [self getNewAccessToken];
+            return;
+        }
+
+        dict = @{ @"token" : token.refreshToken };
+    }
+    else
+    {
+        dict = @{ @"key" : loginKey };
+        
+        if (token == nil) token = [[Token alloc] init];
+        token.loginKey = loginKey;
+    }
+    
+    NSError *error = nil;
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"auth/token"]]];
+
+    // Set up a POST request to the auth/token URL to get an access token
+    // Need unique code here as we do not use the Content-Type used by the API
+
+    [request setHTTPMethod:@"POST"];
+    [request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
+    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
+
+    if (request && !error)
+    {
+        [self launchConnection:request :kConnectTypeRefreshAccessToken :nil];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to retrieve a new impCloud access token.";
+        [self reportError];
+    }
 }
 
 
-- (void)clrk
-{
-    // Clear the saved API k
 
-    _harvey = nil;
+- (BOOL)isAccessTokenValid
+{
+    // No token available; return BAD TOKEN
+
+    if (token == nil) return NO;
+
+    if (dateFormatter == nil)
+    {
+        dateFormatter = [[NSDateFormatter alloc] init];
+        dateFormatter.dateFormat = @"yyyy-MM-dd'T'HH:mm:ss.SSSZZZZZZ"; // @"yyyy'-'MM'-'dd'T'HH':'mm':'ss.SSS'Z'";
+        dateFormatter.timeZone = [NSTimeZone timeZoneWithAbbreviation:@"UTC"];
+    }
+
+    NSDate *expiry = [dateFormatter dateFromString:token.expiryDate];
+    NSDate *deltaExpiry = [NSDate dateWithTimeInterval:-240 sinceDate:expiry];
+    NSDate *now = [NSDate date];
+
+#ifdef DEBUG
+    NSLog(@"      Expiry: %@", [dateFormatter stringFromDate:expiry]);
+    NSLog(@"Expiry Delta: %@", [dateFormatter stringFromDate:deltaExpiry]);
+    NSLog(@"         Now: %@", [dateFormatter stringFromDate:now]);
+#endif
+
+    NSDate *latest = [now laterDate:expiry];
+
+    if (now == latest)
+    {
+#ifdef DEBUG
+    NSLog(@"              EXPIRED");
+#endif
+
+        // Return BAD TOKEN
+
+        return NO;
+    }
+
+    latest = [now laterDate:deltaExpiry];
+
+    if (now == latest)
+    {
+#ifdef DEBUG
+    NSLog(@"              ABOUT TO EXPIRE");
+#endif
+
+        // Return BAD TOKEN
+
+        return NO;
+    }
+
+#ifdef DEBUG
+    NSLog(@"              NOT EXPIRED");
+#endif
+
+    // Return GOOD TOKEN
+
+    return YES;
 }
 
 
 
-- (void)setAPIKey:(NSString *)key
+- (void)clearCredentials
 {
-    [self setk:key];
+    // Just clear the stored credentials once they've been used
+    // If the user needs to login again, they will be resubmitted (might have changed)
+
+    username = @"";
+    password = @"";
 }
 
 
-- (void)setk:(NSString *)harvey
-{
-    // Set the API k used by the BuildAPIAccess instance
 
-    if (harvey.length > 0) _harvey = harvey;
+- (void)logout
+{
+    // To logout just clear the stored session data and cancel any remaining connections
+
+    [self killAllConnections];
+
+    token = nil;
+    isLoggedIn = NO;
+}
+
+
+
+- (void)twoFactorLogin:(NSString *)loginToken :(NSString *)otp
+{
+    // This is essentially a placeholder for whe 2FA is introduced for impCentral API logins
+
+    NSDictionary *dict = @{ @"otp" : otp,
+                            @"login_token" : loginToken };
+
+    NSError *error = nil;
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"auth"]]];
+
+    // Set up a POST request to the auth URL to get an access token
+    // Need unique code here as we do not use the Content-Type used by the API
+
+    [request setHTTPMethod:@"POST"];
+    [request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
+    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
+
+    if (request && !error)
+    {
+        [self launchConnection:request :kConnectTypeGetAccessToken :nil];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to submit your impCloud OTP token.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)setEndpoint:(NSString *)pathWithVersion
+{
+    // Change the API's base URL: server address plus version
+    // eg. api.electricimp.com/v5/
+    
+    baseURL = pathWithVersion;
+    
+    // Append a slash to the base URL if there isn't one
+    
+    if (![baseURL hasSuffix:@"/"]) baseURL = [baseURL stringByAppendingString:@"/"];
+    
+    // Log the user out if they are logged in
+    
+    if (isLoggedIn) [self logout];
+}
+
+
+
+- (void)getLoginKey:(NSString *)password
+{
+    // Set up a POST request to the accounts/me/login_keys URL to get a login key
+    // Need unique code here as we do not use the Content-Type and headers used by the API
+    
+    NSError *error = nil;
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"accounts/me/login_keys"]]];
+    
+    [request setHTTPMethod:@"POST"];
+    [request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
+    [request setValue:password forHTTPHeaderField:@"X-Electricimp-Password"];
+    
+    NSDictionary *dict = @{ @"type" : @"login_key" };
+    
+    [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
+    
+    if (request && !error)
+    {
+        [self launchConnection:request :kConnectTypeGetLoginToken :nil];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to get an impCloud login token.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)loginWithKey:(NSString *)loginKey
+{
+    [self refreshAccessToken:loginKey];
+}
+
+
+
+#pragma mark - Pagination Methods
+
+
+- (void)setPageSize:(NSInteger)size
+{
+    // Sets a flag which will be tested when we next request data and, if set,
+    // will add a URL query code specifying the required page size
+    // Default is 20
+
+    if (size < 1) size = 1;
+    if (size > 100) size = 100;
+    if (pageSize != size)
+    {
+        pageSizeChangeFlag = YES;
+        pageSize = size;
+    }
+}
+
+
+
+- (BOOL)isFirstPage:(NSDictionary *)links
+{
+    // Checks the 'links' dictionary returned by the server and responds YES or NO
+    // if the received data is the first page of several
+
+    BOOL isFirstPage = NO;
+
+    for (NSString *key in links.allKeys)
+    {
+        if ([key compare:@"first"] == NSOrderedSame)
+        {
+            NSString *currentPageLink = [links objectForKey:@"self"];
+            NSString *firstPageLink = [links objectForKey:@"first"];
+
+            if ([currentPageLink compare:firstPageLink] == NSOrderedSame)
+            {
+                isFirstPage = YES;
+                break;
+            }
+        }
+    }
+
+    return isFirstPage;
+}
+
+
+
+- (NSString *)nextPageLink:(NSDictionary *)links
+{
+    // Checks the 'links' dictionary returned by the server and responds with
+    // the provided URL of the next page of data
+
+    NSString *nextURLString = @"";
+
+    for (NSString *key in links.allKeys)
+    {
+        if ([key compare:@"next"] == NSOrderedSame)
+        {
+            // We have at least one more page to recover before we have the full list of data
+
+            nextURLString = [links objectForKey:@"next"];
+            break;
+        }
+    }
+
+    return nextURLString;
+}
+
+
+
+- (NSString *)getNextURL:(NSString *)url
+{
+    // Strips the non-query content out of the supplied URL, or
+    // returns an empty string if 'url' is nil or empty - what's
+    // returned is added to a full URL by the calling method
+    // NOTE AWS and Azure URLs have different length, hence the 31 and 33
+
+    if (url == nil || url.length == 0) return @"";
+    return [url substringFromIndex:(impCloudCode == 0 ? 31 : 33)];
 }
 
 
@@ -98,431 +525,1530 @@
 #pragma mark - Data Request Methods
 
 
-- (void)getModels
+- (void)getMyAccount
 {
-    // Set up a GET request to the /models URL - gets all models
+    // Set up a GET request to /accounts/me
 
-    NSMutableURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"models"]];
+    NSMutableURLRequest *request = [self makeGETrequest:@"accounts/me" :NO];
 
     if (request)
     {
-        [self launchConnection:request :kConnectTypeGetModels];
+        [self launchConnection:request :kConnectTypeGetMyAccount :nil];
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to list your models.";
+        errorMessage = @"Could not create a request to list your account information.";
         [self reportError];
     }
 }
 
 
 
-- (void)getModels:(BOOL)withDevices
+#pragma mark Products
+
+
+- (void)getProducts
 {
-	_followOnFlag = withDevices;
-	[self getModels];
+    [self getProducts:nil];
 }
 
+
+
+- (void)getProducts:(id)someObject
+{
+    // Set up a GET request to /products
+
+    NSMutableURLRequest *request = [self makeGETrequest:@"products" :YES];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeGetProducts :someObject];
+    }
+    else
+    {
+        errorMessage = @" Could not create a request to list your products.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)getProductsWithFilter:(NSString *)filter :(NSString *)uuid
+{
+    [self getProductsWithFilter:filter :uuid :nil];
+}
+
+
+
+- (void)getProductsWithFilter:(NSString *)filter :(NSString *)uuid :(id)someObject
+{
+    // Set up a GET request to /products to get products by filter
+
+    if (uuid == nil || uuid.length == 0)
+    {
+        // If no filterable UUID is passed, just get all the products
+
+        [self getProducts :someObject];
+        return;
+    }
+
+    if (filter == nil || filter.length == 0)
+    {
+        // No filter? Can't proceed - is the ID a product ID or what?
+
+        errorMessage = @"Could not create a request to list your products: no filter specified.";
+        [self reportError];
+        return;
+    }
+
+    if (![self checkFilter:filter :@[@"owner.id"]])
+    {
+        // Wrong type of filter?
+
+        errorMessage = @"Could not create a request to list your products: unrecognized filter specified.";
+        [self reportError];
+        return;
+    }
+
+    NSMutableURLRequest *request = [self makeGETrequest:[NSString stringWithFormat:@"products?filter[%@]=%@", filter, uuid] :NO];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeGetProducts :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to list your products.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)getProduct:(NSString *)productID
+{
+    [self getProduct:productID :nil];
+}
+
+
+
+- (void)getProduct:(NSString *)productID :(id)someObject
+{
+    // Set up a GET request to /products/productID
+
+    if (productID == nil || productID.length == 0)
+    {
+        // No ID? Can't proceed
+
+        errorMessage = @"Could not create a request to get the product: no ID specified.";
+        [self reportError];
+        return;
+    }
+
+    NSMutableURLRequest *request = [self makeGETrequest:[NSString stringWithFormat:@"products/%@", productID] :YES];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeGetProduct :nil];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to get the specified product.";
+        [self reportError];
+    }
+}
+
+
+
+#pragma mark Device Groups
+
+
+- (void)getDevicegroups
+{
+    [self getDevicegroups:nil];
+}
+
+
+
+- (void)getDevicegroups:(id)someObject
+{
+    // Set up a GET request to /devicegroups
+
+    NSMutableURLRequest *request = [self makeGETrequest:@"devicegroups" :YES];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeGetDeviceGroups :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to list your device groups.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)getDevicegroupsWithFilter:(NSString *)filter :(NSString *)uuid
+{
+    [self getDevicegroupsWithFilter:filter :uuid :nil];
+}
+
+
+
+- (void)getDevicegroupsWithFilter:(NSString *)filter :(NSString *)uuid :(id)someObject
+{
+    // Set up a GET request to /devicegroups to get device groups by filter
+
+    if (uuid == nil || uuid.length == 0)
+    {
+        [self getDevicegroups :someObject];
+        return;
+    }
+
+    if (filter == nil || filter.length == 0)
+    {
+        // No filter? Can't proceed - is the ID a product ID or what?
+
+        errorMessage = @"Could not create a request to list your device groups: no filter specified.";
+        [self reportError];
+        return;
+    }
+
+    if (![self checkFilter:filter :@[@"product.id", @"type", @"owner.id"]])
+    {
+        // Wrong type of filter?
+
+        errorMessage = @"Could not create a request to list your device groups: unrecognized filter specified.";
+        [self reportError];
+        return;
+    }
+
+    NSMutableURLRequest *request = [self makeGETrequest:[NSString stringWithFormat:@"devicegroups?filter[%@]=%@", filter, uuid] :YES];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeGetDeviceGroups :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to list your device groups.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)getDevicegroup:(NSString *)devicegroupID
+{
+    [self getDevicegroup:devicegroupID :nil];
+}
+
+
+
+- (void)getDevicegroup:(NSString *)devicegroupID :(id)someObject
+{
+    // Set up a GET request to /devicegroups/devicegroupID
+
+    if (devicegroupID == nil || devicegroupID.length == 0)
+    {
+        // No ID? Can't proceed
+
+        errorMessage = @"Could not create a request to get the device group: no ID specified.";
+        [self reportError];
+        return;
+    }
+
+    NSMutableURLRequest *request = [self makeGETrequest:[NSString stringWithFormat:@"/devicegroups/%@", devicegroupID] :NO];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeGetDeviceGroup :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to get the specified device group.";
+        [self reportError];
+    }
+}
+
+
+
+#pragma mark Devices
 
 
 - (void)getDevices
 {
-    // Set up a GET request to the /devices URL - gets all devices
+    [self getDevices:nil];
+}
 
-    NSMutableURLRequest *request = [self makeGETrequest:[_baseURL stringByAppendingString:@"devices"]];
+
+
+- (void)getDevices:(id)someObject
+{
+    // Set up a GET request to /devices
+
+    NSMutableURLRequest *request = [self makeGETrequest:@"devices" :YES];
 
     if (request)
     {
-        [self launchConnection:request :kConnectTypeGetDevices];
+        [self launchConnection:request :kConnectTypeGetDevices :someObject];
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to list your devices.";
+        errorMessage = @"Could not create a request to list your devices.";
         [self reportError];
     }
 }
 
 
 
-- (void)getCode:(NSString *)modelID
+- (void)getDevicesWithFilter:(NSString *)filter :(NSString *)uuid
 {
-    // Set up a GET request to the /models/[id]/revisions URL
+    [self getDevicesWithFilter:filter :uuid :nil];
+}
 
-    if (modelID == nil || modelID.length == 0)
+
+
+- (void)getDevicesWithFilter:(NSString *)filter :(NSString *)uuid :(id)someObject
+{
+    // Set up a GET request to /devices to get devices by filter
+
+    if (uuid == nil || uuid.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to get the model's current code build: invalid model ID.";
+        [self getDevices :nil];
+        return;
+    }
+
+    if (filter == nil || filter.length == 0)
+    {
+        // No filter? Can't proceed - is the ID a product ID or what?
+
+        errorMessage = @"Could not create a request to list your devices: no filter specified.";
         [self reportError];
         return;
     }
 
-    NSString *urlString = [_baseURL stringByAppendingFormat:@"models/%@/revisions", modelID];
-    NSMutableURLRequest *request = [self makeGETrequest:urlString];
+    if (![self checkFilter:filter :@[@"owner.id", @"product.id", @"devicegroup.id", @"devicegroup.owner.id", @"devicegroup.type"]])
+    {
+        // Wrong type of filter?
+
+        errorMessage = @"Could not create a request to list your devicess: unrecognized filter specified.";
+        [self reportError];
+        return;
+    }
+
+    NSMutableURLRequest *request = [self makeGETrequest:[NSString stringWithFormat:@"devices?filter[%@]=%@", filter, uuid] :YES];
 
     if (request)
     {
-        [self launchConnection:request :kConnectTypeGetCodeLatestBuild];
-        _currentModelID = modelID;
+        [self launchConnection:request :kConnectTypeGetDevices :someObject];
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to get the model's current code build.";
+        errorMessage = @"Could not create a request to list your devices.";
         [self reportError];
     }
 }
 
 
 
-- (void)getCodeRev:(NSString *)modelID :(NSInteger)build
+- (void)getDevice:(NSString *)deviceID
 {
-    // Set up a GET request to the /models/[id]/revisions/[build] URL
-
-    if (modelID == nil || modelID.length == 0)
-    {
-        errorMessage = @"[ERROR] Could not create a request to get the required code build: invalid model ID.";
-        [self reportError];
-        return;
-    }
-
-    if (build < 1)
-    {
-        errorMessage = @"[ERROR] Could not create a request to get the required code build: invalid build number.";
-        [self reportError];
-        return;
-    }
-
-    NSString *urlString = [_baseURL stringByAppendingFormat:@"models/%@/revisions/%li", modelID, (long)build];
-    NSMutableURLRequest *request = [self makeGETrequest:urlString];
-
-    if (request)
-    {
-        [self launchConnection:request :kConnectTypeGetCodeRev];
-    }
-    else
-    {
-        errorMessage = @"[ERROR] Could not create a request to get the required code build.";
-        [self reportError];
-    }
+    [self getDevice:deviceID :nil];
 }
 
 
 
-- (void)getLogsForDevice:(NSString *)deviceID :(NSString *)since :(BOOL)isStream
+- (void)getDevice:(NSString *)deviceID :(id)someObject
 {
-    // Set up a GET request to the /device/[id]/logs URL
+    // Set up a GET request to /devices/deviceID
 
     if (deviceID == nil || deviceID.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to get logs from the device: invalid device ID.";
+        // No ID? Can't proceed
+
+        errorMessage = @"Could not create a request to get the device: no ID specified.";
         [self reportError];
         return;
     }
 
-	NSMutableDictionary *logDevice;
-    NSString *urlString = [_baseURL stringByAppendingFormat:@"devices/%@/logs", deviceID];
-    NSInteger action = kConnectTypeNone;
+    NSMutableURLRequest *request = [self makeGETrequest:[NSString stringWithFormat:@"devices/%@", deviceID] :NO];
 
-    if (isStream)
+    if (request)
     {
-		BOOL match = NO;
-		action = kConnectTypeGetLogEntriesRanged;
-
-		if (_loggingDevices.count > 0)
-		{
-			for (NSMutableDictionary *aLogDevice in _loggingDevices)
-			{
-				NSString *devID = [aLogDevice objectForKey:@"id"];
-
-				if ([devID compare:deviceID] == NSOrderedSame)
-				{
-					// Device ID is already on the list, so note that
-					match = YES;
-					break;
-				}
-			}
-		}
-
-		if (!match)
-		{
-			// DeviceID is not already on the list of logging devices, so add it
-
-			NSArray *keys = [NSArray arrayWithObjects:@"id", @"url", nil];
-			NSArray *values = [NSArray arrayWithObjects:deviceID, @"*", nil];
-			logDevice = [NSMutableDictionary dictionaryWithObjects:values forKeys:keys];
-		}
-		else
-		{
-			// Requested streaming device is already present so bail
-
-			for (NSMutableDictionary *device in devices)
-			{
-				NSString *devID = [device objectForKey:@"id"];
-
-				if ([devID compare:deviceID] == NSOrderedSame)
-				{
-					errorMessage = [NSString stringWithFormat:@"[ERROR] You are already logging device \"%@\".", [device objectForKey:@"name"]];
-					[self reportError];
-					break;
-				}
-			}
-
-			return;
-		}
+        [self launchConnection:request :kConnectTypeGetDevice :someObject];
     }
     else
     {
-        action = kConnectTypeGetLogEntries;
-        if ([since compare:@""] != NSOrderedSame) urlString = [urlString stringByAppendingFormat:@"?since=%@", since];
+        errorMessage = @"Could not create a request to get the specified device.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)getDeviceLogs:(NSString *)deviceID
+{
+    [self getDeviceLogs:deviceID :nil];
+}
+
+
+
+- (void)getDeviceLogs:(NSString *)deviceID :(id)someObject
+{
+    // Send a GET request to /devices/{id}/logs
+
+    if (deviceID == nil || deviceID.length == 0)
+    {
+        errorMessage = @"Can't get logs for a device: no ID specified";
+        [self reportError];
+        return;
     }
 
-    NSMutableURLRequest *request = [self makeGETrequest:urlString];
+    NSMutableURLRequest *request = [self makeGETrequest:[NSString stringWithFormat:@"devices/%@/logs", deviceID] :YES];
 
-	if (request)
-	{
-		Connexion *aConnexion = [self launchConnection:request :action];
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeGetDeviceLogs :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create request to get logs for the device.";
+        [self reportError];
+    }
+}
 
-		if (aConnexion)
-		{
-			// Initial request for logs (from which we get the poll URL) sent successfully
-			// so update the logging device's connection record
 
-			if (isStream)
-			{
-				[logDevice setObject:aConnexion forKey:@"connection"];
-				[_loggingDevices addObject:logDevice];
-			}
-		}
-	}
-	else
-	{
-		errorMessage = @"[ERROR] Could not create a request to get logs from the device.";
-		[self reportError];
-	}
+
+- (void)getDeviceHistory:(NSString *)deviceID
+{
+    [self getDeviceHistory:deviceID :nil];
+}
+
+
+
+- (void)getDeviceHistory:(NSString *)deviceID :(id)someObject
+{
+    // Send a GET request to /devices/{id}/history
+
+    if (deviceID == nil || deviceID.length == 0)
+    {
+        errorMessage = @"Can't get a history of a device: no ID specified";
+        [self reportError];
+        return;
+    }
+
+    NSMutableURLRequest *request = [self makeGETrequest:[NSString stringWithFormat:@"devices/%@/history", deviceID] :YES];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeGetDeviceHistory :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to get a history of the device.";
+        [self reportError];
+    }
+}
+
+
+
+#pragma mark Deployments
+
+
+- (void)getDeployments
+{
+    [self getDeployments:nil];
+}
+
+
+
+- (void)getDeployments:(id)someObject
+{
+    // Set up a GET request to /deployments
+
+    NSMutableURLRequest *request = [self makeGETrequest:@"deployments" :YES];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeGetDeployments :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to get your deployments.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)getDeploymentsWithFilter:(NSString *)filter :(NSString *)uuid
+{
+    [self getDeploymentsWithFilter:filter :uuid :nil];
+}
+
+
+
+- (void)getDeploymentsWithFilter:(NSString *)filter :(NSString *)uuid :(id)someObject
+{
+    // Set up a GET request to /deployments - gets deployments by filter
+
+    if (uuid == nil || uuid.length == 0)
+    {
+        // No ID? Just get all deployments
+
+        [self getDeployments:nil];
+        return;
+    }
+
+    if (filter == nil || filter.length == 0)
+    {
+        // No filter? Can't proceed - is the ID a product ID or what?
+
+        errorMessage = @"Could not create a request to get your deployments: no filter specified.";
+        [self reportError];
+        return;
+    }
+
+    if (![self checkFilter:filter :@[@"owner.id", @"creator.id", @"product.id", @"devicegroup.id", @"sha", @"flagged", @"flagger.id", @"tags"]])
+    {
+        // Wrong type of filter?
+
+        errorMessage = @"Could not create a request to get your deployments: unrecognized filter specified.";
+        [self reportError];
+        return;
+    }
+
+    NSMutableURLRequest *request = [self makeGETrequest:[NSString stringWithFormat:@"deployments?filter[%@]=%@", filter, uuid] :YES];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeGetDeployments :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to get current deployments.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)getDeployment:(NSString *)deploymentID
+{
+    [self getDeployment:deploymentID :nil];
+}
+
+
+
+- (void)getDeployment:(NSString *)deploymentID :(id)someObject
+{
+    // Set up a GET request to /deployments/deploymentID
+
+    if (deploymentID == nil || deploymentID.length == 0)
+    {
+        // No ID? Can't proceed
+
+        errorMessage = @"Could not create a request to get the deployment: no ID specified.";
+        [self reportError];
+        return;
+    }
+
+    NSMutableURLRequest *request = [self makeGETrequest:[NSString stringWithFormat:@"deployments/%@", deploymentID] :NO];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeGetDeployment :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to get the specified deployment.";
+        [self reportError];
+    }
 }
 
 
 
 #pragma mark - Action Methods
 
+#pragma mark Products
 
-- (void)createNewModel:(NSString *)modelName
+
+- (void)createProduct:(NSString *)name :(NSString *)description
 {
-    // Set up a POST request to the /models URL - we'll post the new model there
+    [self createProduct:name :description :nil];
+}
 
-    if (modelName == nil || modelName.length == 0)
+
+
+- (void)createProduct:(NSString *)name :(NSString *)description :(id)someObject
+{
+    // Set up a POST request to /products
+
+    if (name == nil || name.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to create the new model: invalid model name.";
+        errorMessage = @"Could not create a request to create the new product: no product name.";
         [self reportError];
         return;
     }
 
-    NSDictionary *dict = [self makeDictionary:@"name" :modelName];
-    NSMutableURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:@"models"] :dict];
+    if (description == nil) description = @"";
+
+    // Impose API length limits: they'll be rejected otherwise
+
+    if (description.length > 255) description = [description substringToIndex:255];
+    if (name.length > 80) name = [name substringToIndex:80];
+
+    NSDictionary *attributes = @{ @"name" : name,
+                                  @"description" : description };
+
+    NSDictionary *data = @{ @"type" : @"product",
+                            @"attributes" : attributes };
+
+    NSDictionary *dict = @{ @"data" : data };
+
+    // NOTE we don't add a relationships dictionary, so the product will be assigned
+    // to the account the user is logged in as
+
+    NSMutableURLRequest *request = [self makePOSTrequest:@"products" :dict];
 
     if (request)
     {
-        [self launchConnection:request :kConnectTypeNewModel];
+        [self launchConnection:request :kConnectTypeCreateProduct :someObject];
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to create the new model.";
+        errorMessage = @"Could not create a request to create the new product.";
         [self reportError];
     }
 }
 
 
 
-- (void)updateModel:(NSString *)modelID :(NSString *)key :(NSString *)value
+- (void)updateProduct:(NSString *)productID :(NSArray *)keys :(NSArray *)values
 {
-    // Make a PUT request to send the change
+    [self updateProduct:productID :keys :values :nil];
+}
 
-    if (modelID == nil || modelID.length == 0)
+
+
+- (void)updateProduct:(NSString *)productID :(NSArray *)keys :(NSArray *)values :(id)someObject
+{
+    // Set up a PATCH request to /products
+    // We can ONLY update a product's name and/or description
+
+    if (productID == nil || productID.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to update the model: invalid model ID.";
+        errorMessage = @"Could not create a request to update the product: no product ID.";
         [self reportError];
         return;
     }
 
-    if (key == nil || key.length == 0)
+    if (keys == nil || keys.count == 0)
     {
-        // Malformed key? Report error and bail
-
-        errorMessage = @"[ERROR] Could not create a request to update the model: invalid data field name.";
+        errorMessage = @"Could not create a request to update the product: no data fields specified.";
         [self reportError];
         return;
     }
 
-    // Put the new name into the dictionary to pass to the API
-
-    NSDictionary *newDict = [self makeDictionary:key :value];
-    NSMutableURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"models/%@", modelID] :newDict];
-
-    if (request)
+    if (keys == nil || values.count == 0 || values.count != keys.count)
     {
-        [self launchConnection:request :kConnectTypeUpdateModel];
+        errorMessage = @"Could not create a request to update the product: insufficient or extraneous data supplied.";
+        [self reportError];
+        return;
+    }
+
+    // Check the keys for validity - only a product's attributes.name and attributes.description can be changed
+
+    NSMutableDictionary *attributes = [[NSMutableDictionary alloc] init];
+    NSString *name = nil;
+
+    for (NSUInteger i = 0 ; i < keys.count ; ++i)
+    {
+        NSString *key = [keys objectAtIndex:i];
+
+        if ([key compare:@"name"] == NSOrderedSame)
+        {
+            name = [values objectAtIndex:i];
+
+            if (name != nil)
+            {
+                if (name.length > 0)
+                {
+                    [attributes setValue:name forKey:@"name"];
+                }
+                else
+                {
+                    errorMessage = @"Could not create a request to update the product: invalid product name supplied.";
+                    [self reportError];
+                    return;
+                }
+            }
+
+            break;
+        }
+
+        if ([key compare:@"description"] == NSOrderedSame)
+        {
+            name = [values objectAtIndex:i];
+            if (name != nil) [attributes setValue:name forKey:@"description"];
+        }
+    }
+
+    if (attributes.count > 0)
+    {
+        // Only proceed with if valid changes have been made
+
+        NSDictionary *data = @{ @"type" : @"product",
+                                @"id" : productID,
+                                @"attributes" : [NSDictionary dictionaryWithDictionary:attributes] };
+
+        NSDictionary *dict = @{ @"data" : data };
+
+        NSMutableURLRequest *request = [self makePATCHrequest:[NSString stringWithFormat:@"products/%@", productID] :dict];
+
+        if (request)
+        {
+            [self launchConnection:request :kConnectTypeUpdateProduct :someObject];
+        }
+        else
+        {
+            errorMessage = @"Could not create a request to update the product.";
+            [self reportError];
+        }
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to update the model.";
+        errorMessage = @"Could not create a request to update the product - no changes made.";
         [self reportError];
     }
 }
 
 
 
-- (void)deleteModel:(NSString *)modelID
+- (void)deleteProduct:(NSString *)productID
 {
-    // Set up a DELETE request to the /models/[id]
+    [self deleteProduct:productID :nil];
+}
 
-    if (modelID == nil || modelID.length == 0)
+
+
+- (void)deleteProduct:(NSString *)productID :(id)someObject
+{
+    // Set up a DELETE to /products with the product ID URL-encoded
+
+    if (productID == nil || productID.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to delete the model: invalid model ID.";
+        errorMessage = @"Could not create a request to delete the product: no product ID.";
         [self reportError];
         return;
     }
 
-    NSMutableURLRequest *request = [self makeDELETErequest:[_baseURL stringByAppendingFormat:@"models/%@", modelID]];
+    NSMutableURLRequest *request = [self makeDELETErequest:[NSString stringWithFormat:@"products/%@", productID]];
 
     if (request)
     {
-        [self launchConnection:request :kConnectTypeDeleteModel];
+        [self launchConnection:request :kConnectTypeDeleteProduct :someObject];
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to delete the model.";
+        errorMessage = @"Could not create a request to delete the product.";
         [self reportError];
     }
 }
 
 
 
-- (void)uploadCode:(NSString *)modelID :(NSString *)newDeviceCode :(NSString *)newAgentCode
-{
-    // Set up a POST request to the /models/[ID]/revisions URL - we'll post the new code there
+#pragma mark Device Groups
 
-    if (modelID == nil || modelID.length == 0)
+
+- (void)createDevicegroup:(NSDictionary *)details
+{
+    [self createDevicegroup:details :nil];
+}
+
+
+
+- (void)createDevicegroup:(NSDictionary *)details :(id)someObject
+{
+    // Set up a POST request to /devicegroups
+
+    // The dictionary 'details' should contain all of the data we may need:
+    // 'name', 'description', 'type', 'productid', 'targetid'
+    // First get the mandatory items - method will fail without these
+
+    NSString *name = [details valueForKey:@"name"];
+    NSString *productID = [details valueForKey:@"productid"];
+
+    if (name == nil || name.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to upload the code: invalid model ID.";
+        errorMessage = @"Could not create a request to create the new device group: no device group name.";
         [self reportError];
         return;
     }
 
-    // Replace nil code parameters with empty strings
+    if (productID == nil || productID.length == 0)
+    {
+        errorMessage = @"Could not create a request to create the new device group: no product ID.";
+        [self reportError];
+        return;
+    }
 
-    if (newDeviceCode == nil) newDeviceCode = @"";
-    if (newAgentCode == nil) newAgentCode = @"";
+    // Optional items
 
-    // Put the new code into a dictionary
+    NSString *description = [details valueForKey:@"description"];
+    NSString *type = [details valueForKey:@"type"];
 
-    NSArray *keys = [NSArray arrayWithObjects:@"agent_code", @"device_code", nil];
-    NSArray *values = [NSArray arrayWithObjects:newAgentCode, newDeviceCode, nil];
-    NSDictionary *dict = [NSDictionary dictionaryWithObjects:values forKeys:keys];
+    if (name.length > 80) name = [name substringToIndex:80];
+    if (description == nil) description = @"";
+    if (description.length > 255) description = [description substringToIndex:255];
 
-    // Make the POST request to send the code
+    BOOL flag = NO;
 
-    NSString *urlString = [@"models/" stringByAppendingString:modelID];
-    urlString = [urlString stringByAppendingString:@"/revisions"];
-    NSMutableURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingString:urlString] :dict];
+    // Check a legal type of device group has been specified
+
+    if (type == nil || type.length == 0) type = @"development_devicegroup";
+
+    NSArray *allowedTypes = @[ @"pre_production_devicegroup",
+                               @"pre_factoryfixture_devicegroup",
+                               @"development_devicegroup",
+                               @"production_devicegroup",
+                               @"factoryfixture_devicegroup",
+                               @"development",
+                               @"production",
+                               @"factoryfixture",
+                               @"pre_factoryfixture",
+                               @"pre_production" ];
+
+    for (NSUInteger i = 0 ; i < allowedTypes.count ; ++i)
+    {
+        NSString *pType = [allowedTypes objectAtIndex:i];
+
+        if ([type compare:pType] == NSOrderedSame)
+        {
+            flag = YES;
+
+            if (i > 4) type = [type stringByAppendingString:@"_devicegroup"];
+        }
+    }
+
+    if (!flag)
+    {
+        errorMessage = @"Could not create a request to create the new device group: invalid device group type.";
+        [self reportError];
+        return;
+    }
+
+    // (Pre) Factory Fixture Device Groups must have a target - check that we have it
+
+    NSDictionary *target = nil;
+    NSString *targetID = [details valueForKey:@"targetid"];
+
+    if ([type compare:@"factoryfixture_devicegroup"] == NSOrderedSame)
+    {
+        if (targetID == nil || targetID.length == 0)
+        {
+            errorMessage = @"Could not create a request to create the new device group: invalid production target device group.";
+            [self reportError];
+            return;
+        }
+
+        target = @{ @"type" : @"production_devicegroup",
+                    @"id" : targetID };
+    }
+
+    if ([type compare:@"pre_factoryfixture_devicegroup"] == NSOrderedSame)
+    {
+        if (targetID == nil || targetID.length == 0)
+        {
+            errorMessage = @"Could not create a request to create the new device group: invalid test production target device group.";
+            [self reportError];
+            return;
+        }
+
+        target = @{ @"type" : @"pre_production_devicegroup",
+                    @"id" : targetID };
+    }
+
+    NSDictionary *attributes = @{ @"name" : name,
+                                  @"description" : description };
+
+    NSDictionary *product = @{ @"type" : @"product",
+                               @"id" : productID };
+
+    NSDictionary *relationships = target != nil
+    ? @{ @"product" : product, @"production_target" : target }
+    : @{ @"product" : product };
+
+    NSDictionary *data = @{ @"type" : type,
+                            @"attributes" : attributes,
+                            @"relationships" : relationships};
+
+    NSDictionary *dict = @{ @"data" : data };
+
+    NSMutableURLRequest *request = [self makePOSTrequest:@"devicegroups" :dict];
 
     if (request)
     {
-        [self launchConnection:request :kConnectTypePostCode];
+        [self launchConnection:request :kConnectTypeCreateDeviceGroup :someObject];
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to upload the code to the model.";
+        errorMessage = @"Could not create a request to create the new device group.";
         [self reportError];
     }
 }
 
 
 
-- (void)assignDevice:(NSString *)deviceID toModel:(NSString *)modelID
+- (void)updateDevicegroup:(NSString *)devicegroupID :(NSArray *)keys :(NSArray *)values
 {
-    // Set up a PUT request to assign a device to a model
+    [self updateDevicegroup:devicegroupID :keys :values :nil];
+}
 
-    if (modelID == nil || modelID.length == 0)
+
+
+- (void)updateDevicegroup:(NSString *)devicegroupID :(NSArray *)keys :(NSArray *)values :(id)someObject
+{
+    // Set up a PATCH request to /devicegroups
+    // We can ONLY update a device group's name or description FOR NOW
+    // Coming: production_target, load_code_after_blessing
+
+    if (devicegroupID == nil || devicegroupID.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to assign the device: invalid model ID.";
+        errorMessage = @"Could not create a request to update a device group: no device group specified.";
         [self reportError];
         return;
     }
 
-    if (deviceID == nil || deviceID.length == 0)
+    if (keys == nil || keys.count == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to assign the device: invalid device ID.";
+        errorMessage = @"Could not create a request to update the device group: no data fields specified.";
         [self reportError];
         return;
     }
 
-    NSString *urlString = [@"devices/" stringByAppendingString:deviceID];
-
-    // Put the new model ID into the dictionary to pass to the API
-
-    NSDictionary *dict = [self makeDictionary:@"model_id" :modelID];
-
-    // Make the PUT request to send the change
-
-    NSMutableURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingString:urlString] :dict];
-
-    if (request)
+    if (keys == nil || values.count == 0 || values.count != keys.count)
     {
-        [self launchConnection:request :kConnectTypeAssignDeviceToModel];
+        errorMessage = @"Could not create a request to update the device group: insufficient or extraneous data supplied.";
+        [self reportError];
+        return;
+    }
+
+    // Check the keys for validity - only a device group's attributes.name, attributes.description,
+    // attributes.load_code_after_blessing, and relationships.production_target can be changed
+
+    NSMutableDictionary *attributes = [[NSMutableDictionary alloc] init];
+    NSMutableDictionary *relationships = [[NSMutableDictionary alloc] init];
+
+    NSString *devicegroupType = nil;
+    NSString *name = nil;
+
+    for (NSUInteger i = 0 ; i < keys.count ; ++i)
+    {
+        NSString *key = [keys objectAtIndex:i];
+
+        if ([key compare:@"name"] == NSOrderedSame)
+        {
+            name = [values objectAtIndex:i];
+
+            if (name != nil)
+            {
+                if (name.length > 0)
+                {
+                    [attributes setValue:name forKey:@"name"];
+                }
+                else
+                {
+                    errorMessage = @"Could not create a request to update the device group: invalid device group name supplied.";
+                    [self reportError];
+                    return;
+                }
+            }
+
+            continue;
+        }
+
+        if ([key compare:@"description"] == NSOrderedSame)
+        {
+            name = [values objectAtIndex:i];
+            if (name != nil) [attributes setValue:name forKey:@"description"];
+            continue;
+        }
+
+        if ([key compare:@"production_target"] == NSOrderedSame)
+        {
+            NSDictionary *pt = [values objectAtIndex:i];
+            if (pt != nil) [relationships setValue:pt forKey:@"production_target"];
+            continue;
+        }
+
+        if ([key compare:@"type"] == NSOrderedSame)
+        {
+            devicegroupType = [values objectAtIndex:i];
+
+            if (devicegroupType.length == 0) devicegroupType = @"development_devicegroup";
+
+            BOOL flag = NO;
+            NSArray *allowedTypes = @[ @"pre_production_devicegroup",
+                                       @"pre_factoryfixture_devicegroup",
+                                       @"development_devicegroup",
+                                       @"production_devicegroup",
+                                       @"factoryfixture_devicegroup",
+                                       @"development",
+                                       @"production",
+                                       @"factoryfixture",
+                                       @"pre_factoryfixture",
+                                       @"pre_production" ];
+
+            for (NSUInteger i = 0 ; i < allowedTypes.count ; ++i)
+            {
+                NSString *pType = [allowedTypes objectAtIndex:i];
+
+                if ([devicegroupType compare:pType] == NSOrderedSame)
+                {
+                    flag = YES;
+
+                    if (i > 4) devicegroupType = [devicegroupType stringByAppendingString:@"_devicegroup"];
+                }
+            }
+
+            if (!flag)
+            {
+                errorMessage = @"Could not create a request to update the device group: invalid device group type supplied.";
+                [self reportError];
+                return;
+            }
+
+            continue;
+        }
+
+        if ([key compare:@"load_code_after_blessing"] == NSOrderedSame)
+        {
+            NSNumber *val = [values objectAtIndex:i];
+            if (val != nil) [attributes setValue:val forKey:@"load_code_after_blessing"];
+        }
+    }
+
+    NSDictionary *data;
+
+    if (devicegroupType == nil) devicegroupType = @"development_devicegroup";
+
+    if (attributes.count > 0)
+    {
+        if (relationships.count > 0)
+        {
+            data = @{ @"id" : devicegroupID,
+                        @"type" : devicegroupType,
+                        @"attributes" : [NSDictionary dictionaryWithDictionary:attributes],
+                        @"relationships" : [NSDictionary dictionaryWithDictionary:relationships] };
+        }
+        else
+        {
+            data = @{ @"id" : devicegroupID,
+                      @"type" : devicegroupType,
+                      @"attributes" : [NSDictionary dictionaryWithDictionary:attributes] };
+        }
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to assign the device.";
+        if (relationships.count > 0)
+        {
+            data = @{ @"id" : devicegroupID,
+                      @"type" : devicegroupType,
+                      @"relationships" : [NSDictionary dictionaryWithDictionary:relationships] };
+        }
+        else
+        {
+            errorMessage = @"Could not create a request to update the device group: no changes made.";
+            [self reportError];
+            return;
+        }
+    }
+
+    NSDictionary *dict = @{ @"data" : data };
+
+    NSMutableURLRequest *request = [self makePATCHrequest:[NSString stringWithFormat:@"devicegroups/%@", devicegroupID] :dict];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeUpdateDeviceGroup :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to update the device group.";
         [self reportError];
     }
 }
 
+
+
+- (void)deleteDevicegroup:(NSString *)devicegroupID
+{
+    [self deleteDevicegroup:devicegroupID :nil];
+}
+
+
+
+- (void)deleteDevicegroup:(NSString *)devicegroupID :(id)someObject
+{
+    // Set up a DELETE request to /devicegroups/id
+
+    if (devicegroupID == nil || devicegroupID.length == 0)
+    {
+        errorMessage = @"Could not create a request to delete a device group: no device group specified.";
+        [self reportError];
+        return;
+    }
+
+    NSMutableURLRequest *request = [self makeDELETErequest:[NSString stringWithFormat:@"devicegroups/%@", devicegroupID]];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeDeleteDeviceGroup :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to delete the device group.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)restartDevices:(NSString *)devicegroupID
+{
+    [self restartDevices:devicegroupID :nil];
+}
+
+
+
+- (void)restartDevices:(NSString *)devicegroupID :(id)someObject
+{
+    if (devicegroupID == nil || devicegroupID.length == 0)
+    {
+        errorMessage = @"Could not create a request to restart a device group: no device group ID specified.";
+        [self reportError];
+        return;
+    }
+
+    NSMutableURLRequest *request = [self makePOSTrequest:[NSString stringWithFormat:@"devicegroups/%@/restart", devicegroupID] :nil];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeRestartDevices :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to restart the device group.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)conditionalRestartDevices:(NSString *)devicegroupID
+{
+    [self conditionalRestartDevices:devicegroupID :nil];
+}
+
+
+
+- (void)conditionalRestartDevices:(NSString *)devicegroupID :(id)someObject
+{
+    if (devicegroupID == nil || devicegroupID.length == 0)
+    {
+        errorMessage = @"Could not create a request to conditionally restart a device group: no device group ID specified.";
+        [self reportError];
+        return;
+    }
+
+    NSMutableURLRequest *request = [self makePOSTrequest:[NSString stringWithFormat:@"devicegroups/%@/conditional_restart", devicegroupID] :nil];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeRestartDevices :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to conditionally restart the device group.";
+        [self reportError];
+    }
+}
+
+
+
+#pragma mark Devices
 
 
 - (void)restartDevice:(NSString *)deviceID
 {
-    // Set up a POST request to the /devices/[ID]/restart URL - updates device with an unchanged model_id
+    [self restartDevice:deviceID :nil];
+}
 
+
+
+- (void)restartDevice:(NSString *)deviceID :(id)someObject
+{
     if (deviceID == nil || deviceID.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to restart the device: invalid device ID.";
+        errorMessage = @"Could not create a request to restart a device: no device ID specified.";
         [self reportError];
         return;
     }
 
-    NSMutableURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingFormat:@"devices/%@/restart", deviceID] :nil];
+    NSMutableURLRequest *request = [self makePOSTrequest:[NSString stringWithFormat:@"devices/%@/restart", deviceID] :nil];
 
     if (request)
     {
-        [self launchConnection:request :kConnectTypeRestartDevice];
+        [self launchConnection:request :kConnectTypeRestartDevice :someObject];
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to restart the device.";
+        errorMessage = @"Could not create a request to restart the device.";
         [self reportError];
     }
 }
 
 
 
-- (void)restartDevices:(NSString *)modelID
+- (void)updateDevice:(NSString *)deviceID :(NSString *)name
 {
-    // Set up a POST request to the /models/[ID] URL - gets all models
+    [self updateDevice:deviceID :name :nil];
+}
 
-    if (modelID == nil || modelID.length == 0)
+
+
+- (void)updateDevice:(NSString *)deviceID :(NSString *)name :(id)someObject
+{
+    // Set up a PATCH request to /devices/
+    // We can ONLY change the device's name
+
+    if (deviceID == nil)
     {
-        errorMessage = @"[ERROR] Could not create a request to restart all the model’s device: invalid model ID.";
+        errorMessage = @"Could not create a request to update a device: no device specified.";
         [self reportError];
         return;
     }
 
-    NSMutableURLRequest *request = [self makePOSTrequest:[_baseURL stringByAppendingFormat:@"models/%@/restart", modelID] :nil];
+    if (name == nil || name.length == 0) name = @"";
+
+    // NOTE watch for a zero-length name - this is valid as it removes the device name,
+    // ie. sets it to the device ID
+
+    NSDictionary *attributes = @{ @"name" : name };
+
+    NSDictionary *data = @{ @"type" : @"device",
+                            @"id" : deviceID,
+                            @"attributes" : attributes };
+
+    NSDictionary *dict = @{ @"data" : data };
+
+    NSMutableURLRequest *request = [self makePATCHrequest:[NSString stringWithFormat:@"devices/%@", deviceID] :dict];
 
     if (request)
     {
-        [self launchConnection:request :kConnectTypeRestartDevice];
+        [self launchConnection:request :kConnectTypeUpdateDevice :someObject];
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to restart all the model’s devices.";
+        errorMessage = @"Could not create a request to update the device.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)unassignDevice:(NSDictionary *)device
+{
+    [self unassignDevice:device: nil];
+}
+
+
+
+- (void)unassignDevice:(NSDictionary *)device :(id)someObject
+{
+    // Set up a DELETE to /devicegroups/{id}/relationships/devices
+    // 'device' is an standard device record
+
+    if (device == nil)
+    {
+        errorMessage = @"Could not create a request to unassign a device: no device specified.";
+        [self reportError];
+        return;
+    }
+
+    NSDictionary *relationships = [device objectForKey:@"relationships"];
+    NSDictionary *dg = [relationships objectForKey:@"devicegroup"];
+
+    if (dg == nil)
+    {
+        // If there is no devicegroup set for the device, it is unassigned
+        // This is not an error, so we replicate the post-unassignment process
+        // to inform the host app
+
+        NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+
+        NSDictionary *dict = someObject != nil
+        ? @{ @"object" : someObject, @"data" : @"already unassigned" }
+        : @{ @"data" : @"already unassigned" };
+
+        [nc postNotificationName:@"BuildAPIDeviceUnassigned" object:dict];
+        return;
+    }
+
+    NSString *dgid = [dg objectForKey:@"id"];
+
+    NSMutableURLRequest *request = [self makeRequest:@"DELETE" :[NSString stringWithFormat:@"/devicegroups/%@/relationships/devices", dgid] :YES :NO];
+
+    NSDictionary *data = @{ @"type" : @"device",
+                            @"id" : [device objectForKey:@"id"] };
+
+    NSArray *array = @[ data ];
+
+    NSDictionary *dict = @{ @"data" : array };
+
+    NSError *error;
+
+    [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
+
+    if (error)
+    {
+        errorMessage = @"Could not create a request to unassign the device: bad JSON data.";
+        [self reportError];
+        return;
+    }
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeUnassignDevice :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to unassign the device: bad request.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)unassignDevices:(NSArray *)devices
+{
+    [self unassignDevices:devices :nil];
+}
+
+
+
+- (void)unassignDevices:(NSArray *)devices :(id)someObject
+{
+    // Set up a DELETE to /devicegroups/{id}/relationships/devices
+    // 'devices' is an array of standard device records
+
+    if (devices == nil || devices.count == 0)
+    {
+        errorMessage = @"Could not create a request to unassign devices: no devices specified.";
+        [self reportError];
+        return;
+    }
+
+    NSMutableArray *array = [[NSMutableArray alloc] init];
+    NSString *groupid;
+
+    for (NSDictionary *device in devices)
+    {
+        NSDictionary *relationships = [device objectForKey:@"relationships"];
+        NSDictionary *dg = [relationships objectForKey:@"devicegroup"];
+
+        if (dg == nil)
+        {
+            // If there is no devicegroup set for the device, it is unassigned
+            // This is not an error, so we replicate the post-unassignment process to inform the host app
+
+            NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+
+            NSDictionary *dict = someObject != nil
+            ? @{ @"object" : someObject, @"data" : @"already unassigned" }
+            : @{ @"data" : @"already unassigned" };
+
+            [nc postNotificationName:@"BuildAPIDeviceUnassigned" object:dict];
+        }
+        else
+        {
+            NSString *dgid = [dg objectForKey:@"id"];
+
+            NSDictionary *dict = @{ @"type" : @"device",
+                                @"id" : [device objectForKey:@"id"] };
+
+            if (groupid == nil)
+            {
+                // Store the first device group ID on the list
+                // This will be used for all further devices on the list
+
+                groupid = dgid;
+
+            }
+
+            if ([groupid compare:dgid] == NSOrderedSame)
+            {
+                // Add the device info to the data array
+
+                [array addObject:dict];
+            }
+        }
+    }
+
+    NSDictionary *dict = @{ @"data" : [NSArray arrayWithArray:array] };
+    NSError *error;
+    NSMutableURLRequest *request = [self makeRequest:@"DELETE" :[NSString stringWithFormat:@"/devicegroups/%@/relationships/devices", groupid] :YES :NO];
+
+    [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
+
+    if (error)
+    {
+        errorMessage = @"Could not create a request to unassign the devices: bad JSON data.";
+        [self reportError];
+        return;
+    }
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeUnassignDevices :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to unassign the device: bad request.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)assignDevice:(NSDictionary *)device :(NSString *)devicegroupID
+{
+    [self assignDevice:device :devicegroupID :nil];
+}
+
+
+
+- (void)assignDevice:(NSDictionary *)device :(NSString *)devicegroupID :(id)someObject
+{
+    // Set up a POST to /devicegroups/{id}/relationships/devices
+    // 'device' is a standard device record
+
+    if (device == nil)
+    {
+        errorMessage = @"Could not create a request to assign a device: no device specified.";
+        [self reportError];
+        return;
+    }
+
+    if (devicegroupID == nil || devicegroupID.length == 0)
+    {
+        errorMessage = @"Could not create a request to assign a device: no device group specified.";
+        [self reportError];
+        return;
+    }
+
+    NSString *did = [device objectForKey:@"id"];
+
+    if ([devicegroupID compare:did] == NSOrderedSame)
+    {
+        // Device is already assigned to this device group
+        // This is not an error, so we replicate the post-assignment process to inform the host app
+
+        NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+
+        NSDictionary *dict = someObject != nil
+        ? @{ @"data" : @"already assigned", @"object" : someObject }
+        : @{ @"data" : @"already assigned" };
+
+        [nc postNotificationName:@"BuildAPIDeviceAssigned" object:dict];
+        return;
+    }
+
+    NSDictionary *data = @{ @"type" : @"device",
+                            @"id" : did};
+
+    NSArray *array = @[ data ];
+
+    NSDictionary *dict = @{ @"data" : array };
+
+    NSMutableURLRequest *request = [self makePOSTrequest:[NSString stringWithFormat:@"/devicegroups/%@/relationships/devices", devicegroupID] :dict];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeAssignDevice :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to assign the device: bad request.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)assignDevices:(NSArray *)devices :(NSString *)devicegroupID
+{
+    [self assignDevices:devices :devicegroupID :nil];
+}
+
+
+
+- (void)assignDevices:(NSArray *)devices :(NSString *)devicegroupID :(id)someObject
+{
+    if (devices == nil || devices.count == 0)
+    {
+        errorMessage = @"Could not create a request to assign devices: no devices specified.";
+        [self reportError];
+        return;
+    }
+
+    NSMutableArray *array = [[NSMutableArray alloc] init];
+
+    for (NSDictionary *device in devices)
+    {
+        NSDictionary *relationships = [device objectForKey:@"relationships"];
+        NSDictionary *dg = [relationships objectForKey:@"devicegroup"];
+
+        if (dg != nil)
+        {
+            NSString *dgid = [dg objectForKey:@"id"];
+
+            if ([dgid compare:devicegroupID] == NSOrderedSame)
+            {
+                // Device is already assigned to this device group
+                // This is not an error, so we replicate the post-assignment process to inform the host app
+
+                NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+
+                NSDictionary *data = someObject != nil
+                ? @{ @"data" : @"already assigned", @"object" : someObject }
+                : @{ @"data" : @"already assigned" };
+
+                [nc postNotificationName:@"BuildAPIDeviceAssigned" object:data];
+            }
+            else
+            {
+                NSDictionary *data = @{ @"type" : @"device",
+                                        @"id" : [device objectForKey:@"id"] };
+
+                [array addObject:data];
+            }
+        }
+    }
+
+    NSDictionary *dict = @{ @"data" : [NSArray arrayWithArray:array] };
+    NSMutableURLRequest *request = [self makePOSTrequest:[NSString stringWithFormat:@"/devicegroups/%@/relationships/devices", devicegroupID] :dict];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeUnassignDevices :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to unassign the device: bad request.";
         [self reportError];
     }
 }
@@ -531,323 +2057,225 @@
 
 - (void)deleteDevice:(NSString *)deviceID
 {
-    // Set up a DELETE request to the /devices/[id]
+    [self deleteDevice:deviceID :nil];
+}
+
+
+
+- (void)deleteDevice:(NSString *)deviceID :(id)someObject
+{
+    // Set up a DELETE to /devices/{id}
 
     if (deviceID == nil || deviceID.length == 0)
     {
-        errorMessage = @"[ERROR] Could not create a request to delete the device: invalid device ID.";
+        errorMessage = @"Could not create a request to delete a device: no device specified.";
         [self reportError];
         return;
     }
 
-    NSMutableURLRequest *request = [self makeDELETErequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID]];
+    NSMutableURLRequest *request = [self makeDELETErequest:[NSString stringWithFormat:@"/devices/%@", deviceID]];
 
     if (request)
     {
-        [self launchConnection:request :kConnectTypeDeleteDevice];
+        [self launchConnection:request :kConnectTypeDeleteDevice :someObject];
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to delete the device.";
+        errorMessage = @"Could not create a request to assign the device: bad request.";
         [self reportError];
     }
 }
 
 
 
-- (void)updateDevice:(NSString *)deviceID :(NSString *)key :(NSString *)value
-{
-    // Make the PUT request to send the change
+#pragma mark Deployments
 
-    if (deviceID == nil || deviceID.length == 0)
+
+- (void)createDeployment:(NSDictionary *)deployment
+{
+    [self createDeployment:deployment :nil];
+}
+
+
+
+- (void)createDeployment:(NSDictionary *)deployment :(id)someObject
+{
+    // Set up a POST to /deployments
+
+    if (deployment == nil)
     {
-        errorMessage = @"[ERROR] Could not create a request to update the device: invalid device ID.";
+        errorMessage = @"Could not create a request to create a deployment: no deployment specified.";
         [self reportError];
         return;
     }
 
-    if (key == nil || key.length == 0)
-    {
-        // Malformed key? Report error and bail
+    NSMutableURLRequest *request = [self makePOSTrequest:@"deployments" :deployment];
 
-        errorMessage = @"[ERROR] Could not create a request to update the device: invalid device property.";
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeCreateDeployment :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to create a deployment: bad request.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)updateDeployment:(NSString *)deploymentID :(NSArray *)keys :(NSArray *)values
+{
+    [self updateDeployment:deploymentID :keys :values :nil];
+}
+
+
+
+- (void)updateDeployment:(NSString *)deploymentID :(NSArray *)keys :(NSArray *)values :(id)someObject
+{
+    // Set up a PATCH request to /deployments/{id}
+    // We can ONLY update a deployments flagged state and description FOR NOW
+    // Coming: tags
+
+    if (deploymentID == nil || deploymentID.length == 0)
+    {
+        errorMessage = @"Could not create a request to update a deployment: no deployment specified.";
         [self reportError];
         return;
     }
 
-    // Put the new name into the dictionary to pass to the API
-
-    NSDictionary *newDict = [self makeDictionary:key :value];
-    NSMutableURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID] :newDict];
-
-    if (request)
+    if (keys == nil || keys.count == 0)
     {
-        // TODO - add special case for unassigning a device kConnectTypeUnassignDevice
+        errorMessage = @"Could not create a request to update the deployment: no data fields specified.";
+        [self reportError];
+        return;
+    }
 
-        [self launchConnection:request :kConnectTypeUpdateDevice];
+    if (values == nil || values.count == 0 || values.count != keys.count)
+    {
+        errorMessage = @"Could not create a request to update the deployment: insufficient or extraneous data supplied.";
+        [self reportError];
+        return;
+    }
+
+    NSMutableDictionary *attributes = [[NSMutableDictionary alloc] init];
+    NSString *desc = nil;
+
+    for (NSUInteger i = 0 ; i < keys.count ; ++i)
+    {
+        NSString *key = [keys objectAtIndex:i];
+
+        if ([key compare:@"description"] == NSOrderedSame)
+        {
+            desc = [values objectAtIndex:i];
+            if (desc != nil) [attributes setValue:desc forKey:@"description"];
+            break;
+        }
+
+        if ([key compare:@"flagged"] == NSOrderedSame)
+        {
+            NSNumber *value = [values objectAtIndex:i];
+            if (value != nil) [attributes setValue:value forKey:@"flagged"];
+        }
+    }
+
+    if (attributes.count > 0)
+    {
+        // Only proceed if valid changes have actually been made
+
+        NSDictionary *data = @{ @"id" : deploymentID,
+                                @"type" : @"deployment",
+                                @"attributes" : [NSDictionary dictionaryWithDictionary:attributes] };
+
+        NSDictionary *dict = @{ @"data" : data };
+
+        NSMutableURLRequest *request = [self makePATCHrequest:[NSString stringWithFormat:@"deployments/%@", deploymentID] :dict];
+
+        if (request)
+        {
+            [self launchConnection:request :kConnectTypeUpdateDeployment :someObject];
+        }
+        else
+        {
+            errorMessage = @"Could not create a request to update the deployment.";
+            [self reportError];
+        }
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to update the device.";
+        errorMessage = @"Could not create a request to update the deployment - no valid changes made.";
         [self reportError];
     }
 }
 
 
 
-- (void)autoRenameDevice:(NSString *)deviceID
+- (void)deleteDeployment:(NSString *)deploymentID
 {
-    // This method should be used SOLELY to change the name of new, unassigned device
-    // from <NULL> to their own id. It is called when the devices are listed
+    [self deleteDeployment:deploymentID :nil];
+}
 
-    // Put the new name (which matches id) into the dictionary to pass to the API
 
-    NSDictionary *newDict = [self makeDictionary:@"name" :deviceID];
 
-    // Make the PUT request to send the change
+- (void)deleteDeployment:(NSString *)deploymentID :(id)someObject
+{
+    // Set up a DELETE to /devices/{id}
 
-    NSMutableURLRequest *request = [self makePUTrequest:[_baseURL stringByAppendingFormat:@"devices/%@", deviceID] :newDict];
+    if (deploymentID == nil || deploymentID.length == 0)
+    {
+        errorMessage = @"Could not create a request to delete a deployment: no deployment specified.";
+        [self reportError];
+        return;
+    }
+
+    NSMutableURLRequest *request = [self makeDELETErequest:[NSString stringWithFormat:@"/devices/%@", deploymentID]];
 
     if (request)
     {
-        [self launchConnection:request :kConnectTypeUpdateDevice];
+        [self launchConnection:request :kConnectTypeDeleteDeployment :someObject];
     }
     else
     {
-        errorMessage = @"[ERROR] Could not create a request to auto-rename the device.";
+        errorMessage = @"Could not create a request to delete the deployment: bad request.";
         [self reportError];
     }
 }
 
 
 
-#pragma mark - Logging Methods
-
-
-- (void)startLogging:(NSString *)deviceID
+- (void)setMinimumDeployment:(NSString *)devicegroupID :(NSDictionary *)deployment
 {
-	if (deviceID.length == 0 || deviceID == nil) return;
-
-	NSString *logURL;
-	NSMutableDictionary *logDevice;
-	BOOL match = NO;
-
-	for (NSMutableDictionary *aLogDevice in _loggingDevices)
-	{
-		NSString *devID = [aLogDevice objectForKey:@"id"];
-
-		if ([deviceID compare:devID] == NSOrderedSame)
-		{
-			// We've found the record for the logging device, so check we
-			// have a valid poll URL
-
-			logURL = [aLogDevice objectForKey:@"url"];
-
-			if ([logURL compare:@"*"] == NSOrderedSame)
-			{
-				// We don't have a poll URL yet, so get one
-
-				[self getLogsForDevice:deviceID :@"" :YES];
-				return;
-			}
-			else
-			{
-				match = YES;
-				logDevice = aLogDevice;
-				break;
-			}
-		}
-	}
-
-	if (!match)
-	{
-		// The device ID is not on the list so assume the user wants it to be, so add it
-
-		[self getLogsForDevice:deviceID :@"" :YES];
-		return;
-	}
-
-	// Assemble and send a request for logs to the now-retrieved poll URL
-
-	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:logURL] cachePolicy:NSURLRequestUseProtocolCachePolicy timeoutInterval:3600.0];
-
-	if (request)
-	{
-		[self setRequestAuthorization:request];
-		Connexion *aConnexion = [self launchConnection:request :kConnectTypeGetLogEntriesStreamed];
-
-		if (aConnexion)
-		{
-			// The request for logs from the specified device has been successfully
-			// sent, so add the connection to the the device’s record (which is
-			// already in the '_loggingDevices' list)
-
-			[logDevice setObject:aConnexion forKey:@"connection"];
-		}
-		else
-		{
-			// Could not launch the connection for some reason,
-			// so remove the specified device from the list of devices
-			// currently being streamed
-
-			[_loggingDevices removeObject:logDevice];
-		}
-	}
-	else
-	{
-		errorMessage = @"[ERROR] Could not create a request to start or continue logging.";
-		[self reportError];
-		[_loggingDevices removeObject:logDevice];
-	}
-}
-
-
-- (void)stopLogging:(NSString *)deviceID
-{
-	// There's no logging going on, or no connections, so bail
-
-	if (_connexions.count == 0 || _loggingDevices.count == 0) return;
-
-	Connexion *conn = nil;
-
-	if (deviceID.length == 0 || deviceID == nil)
-	{
-		// No device ID passed in, so clear *all* logging devices and the connections
-
-		for (NSMutableDictionary *aLogDevice in _loggingDevices)
-		{
-			for (Connexion *aConnexion in _connexions)
-			{
-				if (aConnexion.actionCode == kConnectTypeGetLogEntriesStreamed || aConnexion.actionCode == kConnectTypeGetLogEntriesRanged)
-				{
-					if (aConnexion == (Connexion *)[aLogDevice objectForKey:@"connection"])
-					{
-						if (_useSessionFlag)
-						{
-							[aConnexion.task cancel];
-						}
-						else
-						{
-							[aConnexion.connexion cancel];
-						}
-
-						// Recall the connexion so we don't mutate the array we're enumerating
-
-						conn = aConnexion;
-					}
-				}
-			}
-
-			if (conn)
-			{
-				// We noted a connexion to clear, so remove it
-
-				[_connexions removeObject:conn];
-				numberOfConnections = _connexions.count;
-				conn = nil;
-			}
-		}
-
-		// Clear the list of logging devices
-
-		[_loggingDevices removeAllObjects];
-	}
-	else
-	{
-		// A device ID was passed in so just clear this device from the logging list
-
-		NSMutableDictionary *deviceToRemove = nil;
-		BOOL match = NO;
-
-		for (NSMutableDictionary *aLogDevice in _loggingDevices)
-		{
-			NSString *devID = [aLogDevice objectForKey:@"id"];
-
-			if ([deviceID compare:devID] == NSOrderedSame)
-			{
-				match = YES;
-				deviceToRemove = aLogDevice;
-				break;
-			}
-		}
-
-		if (match)
-		{
-			[_loggingDevices removeObject:deviceToRemove];
-
-			// Check through the connection list for log streaming connections,
-			// and of those that are, find the one that's linked to the logging
-			// device we want to remove...
-
-			Connexion *conn = nil;
-
-			for (Connexion *aConnexion in _connexions)
-			{
-				if (aConnexion.actionCode == kConnectTypeGetLogEntriesStreamed || aConnexion.actionCode == kConnectTypeGetLogEntriesRanged)
-				{
-					if (aConnexion == [deviceToRemove objectForKey:@"connection"])
-					{
-						// ...and remove its connection
-
-						if (_useSessionFlag)
-						{
-							[aConnexion.task cancel];
-						}
-						else
-						{
-							[aConnexion.connexion cancel];
-						}
-
-						conn = aConnexion;
-					}
-				}
-			}
-
-			[_connexions removeObject:conn];
-			numberOfConnections = _connexions.count;
-		}
-	}
-
-	if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+    [self setMinimumDeployment:devicegroupID :deployment :nil];
 }
 
 
 
-- (BOOL)isDeviceLogging:(NSString *)deviceID
+- (void)setMinimumDeployment:(NSString *)devicegroupID :(NSDictionary *)deployment :(id)someObject
 {
-	if ([self indexForID:deviceID] != -1) return YES;
-	return NO;
-}
+    // Set up a PUT to /devicegroups/{ID}/relationships/min_supported_deployment
+    // 'deployment' is a standard deployment record
 
+    if (devicegroupID == nil || devicegroupID.length == 0)
+    {
+        errorMessage = @"Could not create a request to set a minimum deployment: no device group specified.";
+        [self reportError];
+        return;
+    }
 
+    NSDictionary *data = @{ @"type" : @"deployment", @"id" : [deployment objectForKey:@"id"] };
+    NSDictionary *dict = @{ @"data" : data };
 
-- (NSInteger)indexForID:(NSString *)deviceID
-{
-	NSInteger index = -1;
+    NSMutableURLRequest *request = [self makePUTrequest:[NSString stringWithFormat:@"/devicegroups/%@/relationships/min_supported_deployment", devicegroupID] :dict];
 
-	if (_loggingDevices.count > 0)
-	{
-		for (NSUInteger i = 0 ; i < _loggingDevices.count ; ++i)
-		{
-			NSMutableDictionary *aLogDevice = [_loggingDevices objectAtIndex:i];
-			NSString *aDevID = [aLogDevice objectForKey:@"id"];
-
-			if ([aDevID compare:deviceID] == NSOrderedSame)
-			{
-				index = i;
-				break;
-			}
-		}
-	}
-
-	return index;
-}
-
-
-
-- (NSUInteger)loggingCount
-{
-	return _loggingDevices.count;
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeSetMinDeployment :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to set a minimum deployment: bad request.";
+        [self reportError];
+    }
 }
 
 
@@ -855,57 +2283,104 @@
 #pragma mark - HTTP Request Construction Methods
 
 
-- (NSMutableURLRequest *)makeGETrequest:(NSString *)path
+- (NSMutableURLRequest *)makeGETrequest:(NSString *)path :(BOOL)getMultipleItems
 {
-    return [self makeRequest:@"GET" :path];
-}
-
-
-
-- (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)bodyDictionary
-{
-    NSError *error = nil;
-
-    NSMutableURLRequest *request = [self makeRequest:@"POST" :path];
-    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-
-    if (bodyDictionary) [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:bodyDictionary options:0 error:&error]];
-
-    if (error)
-    {
-        return nil;
-    }
-    else
-    {
-        return request;
-    }
-}
-
-
-
-- (NSMutableURLRequest *)makePUTrequest:(NSString *)path :(NSDictionary *)bodyDictionary
-{
-    NSError *error = nil;
-
-    NSMutableURLRequest *request = [self makeRequest:@"PUT" :path];
-    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-    [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:bodyDictionary options:0 error:&error]];
-
-    if (error)
-    {
-        return nil;
-    }
-    else
-    {
-        return request;
-    }
+    return [self makeRequest:@"GET" :path :NO : getMultipleItems];
 }
 
 
 
 - (NSMutableURLRequest *)makeDELETErequest:(NSString *)path
 {
-    return [self makeRequest:@"DELETE" :path];
+    return [self makeRequest:@"DELETE" :path :NO :NO];
+}
+
+
+
+- (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)body
+{
+    NSError *error = nil;
+    NSMutableURLRequest *request = [self makeRequest:@"POST" :path :YES :NO];
+
+    if (body != nil) [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:body options:0 error:&error]];
+    if (error != nil) return nil;
+    return request;
+}
+
+
+
+- (NSMutableURLRequest *)makePATCHrequest:(NSString *)path :(NSDictionary *)body
+{
+    NSError *error = nil;
+    NSMutableURLRequest *request = [self makeRequest:@"PATCH" :path :YES :NO];
+
+    if (body != nil) [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:body options:0 error:&error]];
+    if (error != nil) return nil;
+    return request;
+}
+
+
+
+- (NSMutableURLRequest *)makePUTrequest:(NSString *)path :(NSDictionary *)body
+{
+    NSError *error = nil;
+    NSMutableURLRequest *request = [self makeRequest:@"PUT" :path :YES :NO];
+
+    if (body != nil) [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:body options:0 error:&error]];
+    if (error != nil) return nil;
+    return request;
+}
+
+
+
+- (NSMutableURLRequest *)makeRequest:(NSString *)verb :(NSString *)path :(BOOL)addContentType :(BOOL)getMultipleItems
+{
+    // Generic HTTP request constructor used by the specific-verb methods, and separately
+
+    if (token == nil || !isLoggedIn)
+    {
+        // We have no access token, so we can't get any data
+
+        errorMessage = @"You must be logged in to access the Electric Imp impCloud™";
+        [self reportError];
+        return nil;
+    }
+
+    if (pageSizeChangeFlag && ([path compare:@"accounts/me"] != NSOrderedSame) && [verb compare:@"GET"] == NSOrderedSame)
+    {
+        // User has changed the page size, so we need to pass this in now to set it
+        // NOTE make sure this is not called when we do a request for the user's account
+        // and that it's not duplicating the encoded string
+
+        if (![path containsString:@"?"] && getMultipleItems) path = [path stringByAppendingFormat:@"?page[size]=%li", pageSize];
+    }
+
+    // Deal with paths that already contain an HTTP mode and domain
+
+    if (![path hasPrefix:@"https://"]) path = [baseURL stringByAppendingString:path];
+
+    // Prepare the request
+
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
+
+    [self setRequestAuthorization:request];
+    [request setHTTPMethod:verb];
+    [request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
+
+    if (addContentType) [request setValue:@"application/vnd.api+json" forHTTPHeaderField:@"Content-Type"];
+
+    return request;
+}
+
+
+
+- (void)setRequestAuthorization:(NSMutableURLRequest *)request
+{
+    // Applies the stored access token data to the request
+    // NOTE the validity of the accessToken should already have been checked
+
+    [request setValue:[@"Bearer " stringByAppendingString:token.accessToken] forHTTPHeaderField:@"Authorization"];
+    [request setTimeoutInterval:30.0];
 }
 
 
@@ -913,345 +2388,631 @@
 #pragma mark - Connection Methods
 
 
-- (Connexion *)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode
+- (Connexion *)launchConnection:(NSMutableURLRequest *)request :(NSInteger)actionCode :(id)someObject
 {
-    // Create a default connexion object to store the details of the connection we're about
-	// to initiate
+    // Create a default connexion object to store the details of the connection we're about to initiate
+    // PARAMETERS:
+    //   'request' is the HTTP request we're making to the API
+    //   'actionCode' is an internal ID indicating what the API is being asked to do
+    //   'someObject' is an optional object, supplied by the host app, that is bound to this request
+    //                and follows it through sending and processing the response from the server
+    // RETURNS:
+    //   A BuildAPIAccess Connexion instance
 
     Connexion *aConnexion = [[Connexion alloc] init];
     aConnexion.actionCode = actionCode;
+    aConnexion.originalRequest = request;
     aConnexion.data = [NSMutableData dataWithCapacity:0];
 
-    if (actionCode == kConnectTypeGetLogEntriesStreamed) [request setTimeoutInterval:3600.0];
+    if (someObject) aConnexion.representedObject = someObject;
 
-    if (_useSessionFlag)
+    // Use NSURLSession for the connection. Compatible with iOS, tvOS and Mac OS X
+
+    if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
+                                                          delegate:self
+                                                     delegateQueue:[NSOperationQueue mainQueue]];
+
+    // Do we have a valid access token - or are we getting/refreshing the access token?
+
+    if (aConnexion.actionCode == kConnectTypeGetAccessToken || aConnexion.actionCode == kConnectTypeRefreshAccessToken || [self isAccessTokenValid])
     {
-        // Use NSURLSession for the connection. Compatible with iOS, tvOS and Mac OS X
+        // Create and begin the task
 
-        NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
-															  delegate:self
-														 delegateQueue:[NSOperationQueue mainQueue]];
-        aConnexion.task = [session dataTaskWithRequest:request];
+        aConnexion.task = [apiSession dataTaskWithRequest:request];
+
         [aConnexion.task resume];
+
+        // Notify the main app to show and start its progress indicator, if it has one
+
+        if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStart" object:nil];
+
+        // Add the new connection to the list
+
+        [connexions addObject:aConnexion];
+
+        // Update the public property, numberOfConnections
+
+        numberOfConnections = connexions.count;
+
+        // Set 'tokenConnexion' if we need to
+
+        if (aConnexion.actionCode == kConnectTypeGetAccessToken || aConnexion.actionCode == kConnectTypeRefreshAccessToken) tokenConnexion = aConnexion;
     }
     else
     {
-        // Use NSURLConnection for the connection. Compatible with iOS and Mac OS X, but not tvOS
-        // NOTE This approach has been *deprecated* by Apple
+        // We do not have a valid access token, so we must now acquire one. In the meantime,
+        // we cache all new connexions in 'pendingConnections' so they can be actioned when
+        // we finally get the token
 
-        aConnexion.connexion = [[NSURLConnection alloc] initWithRequest:request delegate:self];
+        // Q: do we want to put a limit on 'pendingConnections' size?
 
-        if (!aConnexion.connexion)
+        if (pendingConnections == nil) pendingConnections = [[NSMutableArray alloc] init];
+
+        if (tokenConnexion == nil)
         {
-            // Inform the user that the connection failed.
+            // We have no queued attempt to get a new access token yet, so get one now, either
+            // with a stored login key (pass in the key) or a stored refresh token (pass in nil)
+            // NOTE we need to ensure this is called only once per refresh
 
-            errorMessage = @"[ERROR] Could not establish a connection to the Electric Imp impCloud.";
-            [self reportError];
-            return nil;
+            [self refreshAccessToken:(token != nil && token.loginKey.length > 0 ? token.loginKey : nil)];
         }
+
+        // Add the current request to the pending queue while the new token is retrieved
+
+        [pendingConnections addObject:aConnexion];
     }
 
-    if (_connexions.count == 0)
-    {
-        // Connection established successfully, so notify the main app to trigger the progress indicator
-        // and then add the new connexion to the list of current connections
-
-        [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStart" object:nil];
-    }
-
-    // Add the new connection to the list
-
-    [_connexions addObject:aConnexion];
-	numberOfConnections = _connexions.count;
-	return aConnexion;
-}
-
-
-
-- (void)killAllConnections
-{
-	if (_connexions.count > 0)
-	{
-		// There are connections that we need to terminate
-
-		if (_loggingDevices.count > 0)
-		{
-			// There are devices for which we are streaming logs, so clear the list...
-
-			NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
-			NSArray *loggingDevices = [_loggingDevices copy];
-			[_loggingDevices removeAllObjects];
-
-			// ...and notify the host for each device
-
-			for (NSMutableDictionary *loggingDevice in loggingDevices)
-			{
-				[nc postNotificationName:@"BuildAPILogStreamEnd" object:[loggingDevice objectForKey:@"id"]];
-			}
-		}
-
-		// Kill the remaining connections
-
-		for (Connexion *aConnexion in _connexions)
-		{
-			if (_useSessionFlag)
-			{
-				[aConnexion.task cancel];
-			}
-			else
-			{
-				[aConnexion.connexion cancel];
-			}
-		}
-
-		[_connexions removeAllObjects];
-		numberOfConnections = _connexions.count;
-	}
-}
-
-
-
-#pragma mark - NSURLConnection Delegate Methods
-
-
-- (BOOL)connection:(NSURLConnection *)connection canAuthenticateAgainstProtectionSpace:(NSURLProtectionSpace *)protectionSpace
-{
-	// Because the Build API uses Basic authentication, this is probably unnecessary,
-	// but retain for future use as required
-
-	if (protectionSpace.authenticationMethod == NSURLAuthenticationMethodHTTPBasic ||
-		protectionSpace.authenticationMethod == NSURLAuthenticationMethodDefault)
-	{
-		return YES;
-	}
-	else
-	{
-		return NO;
-	}
-}
-
-
-
-- (void)connection:(NSURLConnection *)connection didReceiveAuthenticationChallenge:(NSURLAuthenticationChallenge *)challenge
-{
-	// Because the Build API uses Basic authentication, this is probably unnecessary,
-	// but retain for future use as required
-
-	NSURLCredential *bonaFides;
-
-	if (challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust)
-	{
-		bonaFides = [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust];
-	}
-	else
-	{
-		bonaFides = [NSURLCredential credentialWithUser:[self encodeBase64String:_harvey]
-											   password:[self encodeBase64String:_harvey]
-											persistence:NSURLCredentialPersistenceNone];
-	}
-
-	[[challenge sender] useCredential:bonaFides forAuthenticationChallenge:challenge];
-}
-
-
-
-- (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error
-{
-	// Inform the host app that there was a connection failure
-
-	errorMessage = @"[ERROR] Could not connect to the Electric Imp impCloud.";
-	[self reportError];
-
-	// Is the connection related to a log stream?
-	// If so record the device details as 'loggingDevice'
-
-	NSMutableDictionary *loggingDevice = nil;
-	for (NSMutableDictionary *aLogDevice in _loggingDevices)
-	{
-		Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
-		if (aConnexion.connexion == connection) loggingDevice = aLogDevice;
-	}
-
-	if (loggingDevice)
-	{
-		// This call is prompted by a failed streaming log connection, so remove
-		// the device from the list of streaming devices and notify the host app
-
-		[_loggingDevices removeObject:loggingDevice];
-		NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
-		[nc postNotificationName:@"BuildAPILogStreamEnd" object:[loggingDevice objectForKey:@"id"]];
-	}
-
-	// Terminate the failed connection and remove it from the list of current connections
-
-	[connection cancel];
-	[_connexions removeObject:connection];
-	numberOfConnections = _connexions.count;
-
-	if (_connexions.count < 1)
-	{
-		// If there are no current connections, tell the app to
-		// turn off the connection activity indicator
-
-		[[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-	}
-}
-
-
-
-- (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
-{
-	// This delegate method is called when the server responds to the connection request
-	// Use it to trap certain status codes
-
-	NSHTTPURLResponse *rps = (NSHTTPURLResponse *)response;
-	NSInteger code = rps.statusCode;
-
-	if (code > 399)
-	{
-		// The API has responded with a status code that indicates an error
-		// only 409s and 504s kill the connection there and then - others are retained for later use
-
-		if (code == 429)
-		{
-			// Build API rate limit hit
-
-			Connexion *conn = nil;
-
-			for (Connexion *aConnexion in _connexions)
-			{
-				// Run through the connections in our list and add the incoming error code to the correct one
-
-				if (aConnexion.connexion == connection)
-				{
-					// This request has been rate-limited, so we need to recall it in 1+ seconds
-
-					NSArray *values = [NSArray arrayWithObjects:[connection.originalRequest copy], [NSNumber numberWithInteger:aConnexion.actionCode], nil];
-					NSArray *keys = [NSArray arrayWithObjects:@"request", @"actioncode", nil];
-					NSDictionary *dict =[NSDictionary dictionaryWithObjects:values forKeys:keys];
-					[NSTimer scheduledTimerWithTimeInterval:1.1 target:self selector:@selector(relaunchConnection:) userInfo:dict repeats:NO];
-					conn = aConnexion;
-				}
-			}
-
-			[connection cancel];
-
-			if (conn)
-			{
-				[_connexions removeObject:conn];
-				numberOfConnections = _connexions.count;
-			}
-
-			if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
-
-			return;
-		}
-
-		if (code == 504)
-		{
-			// Bad Gateway error received - this usually indicates a log stream 'no message' timeout signal from the server
-
-			Connexion *conn = nil;
-
-			for (Connexion *aConnexion in _connexions)
-			{
-				if (aConnexion.connexion == connection) conn = aConnexion;
-			}
-
-			for (NSMutableDictionary *aLogDevice in _loggingDevices)
-			{
-				Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
-
-				if (conn == aConnexion)
-				{
-					[connection cancel];
-					[_connexions removeObject:conn];
-					numberOfConnections = _connexions.count;
-					[aLogDevice removeObjectForKey:@"connection"];
-					[self startLogging:[aLogDevice objectForKey:@"id"]];
-				}
-			}
-		}
-		else
-		{
-			// Allow the connection to pass because we'll handle the error later
-
-			for (Connexion *aConnexion in _connexions)
-			{
-				// Run through the connections in our list and add the incoming error code to the correct one
-
-				if (aConnexion.connexion == connection) aConnexion.errorCode = code;
-			}
-		}
-	}
-	else if (code > 299 && code < 400)
-	{
-
-		// This is a redirect code not an error. This *should* not occur,
-		// but here is a point to trap it just in case
-
-		errorMessage = [NSString stringWithFormat:@"[WARNING] Server redirect status code received: %li", (long)code];
-		[self reportError];
-	}
+    return aConnexion;
 }
 
 
 
 - (void)relaunchConnection:(id)userInfo
 {
-	// This method is called in response to the receipt of a status code 429 from the server,
-	// ie. we have been rate-limited. A timer will bring us here in 1.0 seconds
+    // This method is called in response to the receipt of a status code 429 from the server,
+    // ie. we have been rate-limited. A timer will bring us here 1.0 seconds after receipt of the error
+    // 'userInfo' is user data from the previous request
 
-	NSDictionary *dict = (NSDictionary *)userInfo;
-	NSMutableURLRequest *request = [dict objectForKey:@"request"];
-	NSInteger actionCode = [[dict objectForKey:@"actioncode"] integerValue];
-	[self launchConnection:request :actionCode];
+    NSDictionary *dict = (NSDictionary *)userInfo;
+    NSMutableURLRequest *request = [dict objectForKey:@"request"];
+    NSInteger actionCode = [[dict objectForKey:@"actioncode"] integerValue];
+
+    [self launchConnection:request :actionCode :[dict objectForKey:@"object"]];
 }
 
 
 
-- (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
+- (void)launchPendingConnections
 {
-	// This delegate method is called when the server sends some data back
-	// Add it to the correct connexion object
+    // Pending connections are cached when we attempt to create a connection but no session
+    // token has yet been received. Having elsewhere received the new token, we can now
+    // launch the pending connections, if there are any
 
-	for (Connexion *aConnexion in _connexions)
-	{
-		// Run through the connections in our list and add the incoming data to the correct one
+    if (pendingConnections != nil && pendingConnections.count > 0)
+    {
+        for (Connexion *conn in pendingConnections)
+        {
+            [self setRequestAuthorization:conn.originalRequest];
 
-		if (aConnexion.connexion == connection) [aConnexion.data appendData:data];
-	}
+            if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
+                                                                  delegate:self
+                                                             delegateQueue:[NSOperationQueue mainQueue]];
+
+            conn.task = [apiSession dataTaskWithRequest:conn.originalRequest];
+
+            [conn.task resume];
+            [connexions addObject:conn];
+
+            numberOfConnections = connexions.count;
+        }
+
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStart" object:nil];
+        [pendingConnections removeAllObjects];
+    }
 }
 
 
 
-- (void)connectionDidFinishLoading:(NSURLConnection *)connection
+- (void)killAllConnections
 {
-	// All the data has been supplied by the server in response to a connection
-	// Parse the data and, according to the connection activity - update device, create model etc –
-	// apply the results
+    // Cancel and clear all in-flight connections and any pending connections
 
-	Connexion *theCurrentConnexion;
-	id parsedData = nil;
+    if (connexions.count > 0)
+    {
+        // There are connections that we need to terminate
 
-	for (Connexion *aConnexion in _connexions)
-	{
-		// Run through the connections in the list and find the one that has just finished loading
+        if (loggingDevices.count > 0)
+        {
+            // There are devices for which we are streaming logs, so clear the list...
 
-		if (aConnexion.connexion == connection)
-		{
-			theCurrentConnexion = aConnexion;
-			parsedData = [self processConnection:aConnexion];
-		}
-	}
+            NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+            NSMutableArray *lgds = [loggingDevices copy];
+            numberOfLogStreams = 0;
 
-	// End the finished connection and remove it from the list of current connections
+            [loggingDevices removeAllObjects];
+            [self closeStream];
 
-	[connection cancel];
+            // ...and notify the host for each device
 
-	if (theCurrentConnexion.actionCode != kConnectTypeNone) [self processResult:theCurrentConnexion :parsedData];
+            for (NSString *loggingDevice in lgds) [nc postNotificationName:@"BuildAPILogStreamEnd" object:loggingDevice];
+        }
 
-	theCurrentConnexion = nil;
+        // Kill the remaining connections.
+        // The triggered delegate method didBecomeInvalid: will clear out 'connexions'
+
+        if (apiSession != nil) [apiSession invalidateAndCancel];
+    }
+
+    // Remove any pending connections
+
+    if (pendingConnections != nil && pendingConnections.count > 0) [pendingConnections removeAllObjects];
+}
+
+
+
+#pragma mark - Log Stream Methods
+
+
+- (void)startLogging:(NSString *)deviceID
+{
+    [self startLogging:deviceID :nil];
+}
+
+
+
+- (void)startLogging:(NSString *)deviceID :(id)someObject
+{
+    // Begin logging for the specified device ID
+    // PARAMETERS:
+    //   'deviceID' is the device's ID
+    //   'someObject' is an optional object, supplied by the host app, that is bound to this request
+    //                and follows it through sending and processing the response from the server
+    // RETURNS:
+    //   Nothing
+
+    if (deviceID == nil || deviceID.length == 0)
+    {
+        // No device ID? Can't proceed
+
+        errorMessage = @"Could not create a request to stream the device logs: no device specified.";
+        [self reportError];
+        return;
+    }
+
+    if (loggingDevices == nil) loggingDevices = [[NSMutableArray alloc] init];
+
+    // Check whether this is first device we're starting logging for, ie. whether we have a stream ID
+
+    if (logStreamID == nil || logStreamID.length == 0)
+    {
+        // This is the first device, so we need to first get the stream ID and stream URL
+
+        NSMutableURLRequest *request = [self makePOSTrequest:@"logstream?format=json" :nil];
+
+        if (request)
+        {
+            // Pass in the first device's ID so we have it to use after the stream has been established
+
+            NSDictionary *dict = someObject != nil
+            ? @{ @"device" : deviceID, @"object" : someObject }
+            : @{ @"device" : deviceID };
+
+            [self launchConnection:request :kConnectTypeGetLogStreamID :dict];
+        }
+        else
+        {
+            errorMessage = @"Could not create a request to stream the specified device logs.";
+            [self reportError];
+        }
+    }
+    else
+    {
+        // We are already streaming from one or more devices, so just add the new one to the list
+
+        [self addDeviceToLogStream:deviceID :someObject];
+    }
+}
+
+
+
+- (void)addDeviceToLogStream:(NSString *)deviceID :(id)someObject
+{
+    // Add a new device to an existing stream (already checked for in 'startLogging:'
+    // Make a PUT request with {device identifier} to /logstream/{stream_id}
+    // {device identifier} eg. { id: ‘d9f6f253-d203-487f-bdb0-70ea1529ee1b’, type: ‘device’ }
+    // PARAMETERS:
+    //   'deviceID' is the device's ID
+    //   'someObject' is an optional object, supplied by the host app, that is bound to this request
+    //                and follows it through sending and processing the response from the server
+    // RETURNS:
+    //   Nothing
+
+    if (loggingDevices.count > 0)
+    {
+        // First check that the device is not already logging; if it is, bail
+
+        for (NSString *devid in loggingDevices)
+        {
+            if ([devid compare:deviceID] == NSOrderedSame) return;
+        }
+    }
+
+    NSDictionary *dict = @{ @"id" : deviceID,
+                            @"type" : @"device" };
+
+    NSMutableURLRequest *request = [self makePUTrequest:[NSString stringWithFormat:@"%@/%@", logStreamURL.absoluteString, deviceID] :dict];
+
+    if (request)
+    {
+        dict = (someObject != nil)
+        ? @{ @"device" : deviceID, @"object" : someObject }
+        : @{ @"device" : deviceID };
+
+        [self launchConnection:request :kConnectTypeAddLogStream :dict];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to stream the specified device logs.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)stopLogging:(NSString *)deviceID
+{
+    [self stopLogging:deviceID :nil];
+}
+
+
+
+- (void)stopLogging:(NSString *)deviceID :(id)someObject
+{
+    // Remove the specified device from an existing log stream
+    // ie. make a DELETE reqyest to /logstream/{stream_id}/{device_identifier}
+    // {device_identifier} eg. {id: ‘d9f6f253-d203-487f-bdb0-70ea1529ee1b’, type: ‘device’}
+    // PARAMETERS:
+    //   'deviceID' is the device's ID
+    //   'someObject' is an optional object, supplied by the host app, that is bound to this request
+    //                and follows it through sending and processing the response from the server
+    // RETURNS:
+    //   Nothing
+
+    NSDictionary *dict = @{ @"id" : deviceID,
+                            @"type" : @"device" };
+
+    NSMutableURLRequest *request = [self makeRequest:@"DELETE" :[NSString stringWithFormat:@"%@/%@", logStreamURL, deviceID] :NO :NO];
+    NSError *error;
+
+    [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
+
+    if (error)
+    {
+        errorMessage = @"Could not create a request to stop streaming the specified device logs: bad JSON data.";
+        [self reportError];
+        return;
+    }
+
+    if (request)
+    {
+        dict = (someObject != nil)
+        ? @{ @"device" : deviceID, @"object" : someObject }
+        : @{ @"device" : deviceID };
+
+        [self launchConnection:request :kConnectTypeEndLogStream :dict];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to stop streaming the specified device logs.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)restartLogging
+{
+    // This is called if a log connection breaks for some reason, so enable logging to auto-restart
+    // POST-ing to /logstream will return a stream ID by way of a 302, which we will trap later
+
+    NSMutableURLRequest *request = [self makePOSTrequest:@"logstream?format=json" :nil];
+
+    if (request)
+    {
+        // Pass in the first device's ID so we have it to use after the stream has been established
+
+        restartingLog = YES;
+        [self launchConnection:request :kConnectTypeGetLogStreamID :nil];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to stream the specified device logs.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)startStream:(NSURL *)url
+{
+    // This method sets up the log stream which will receive and handle server-sent events (SSE) from the API
+    // At this point we have no connection to pipe the SSEs, just the URL for the stream (sent by the server)
+
+    logStreamURL = url;
+    logIsClosed = YES;
+
+    if (eventQueue == nil)
+    {
+        // Establish an single-tier operation to handle incoming log messages in order
+
+        eventQueue = [[NSOperationQueue alloc] init];
+        eventQueue.maxConcurrentOperationCount = 1;
+    }
+
+    // Create the only connexion for streaming
+
+    logConnexion = [[Connexion alloc] init];
+    logConnexion.actionCode = kConnectTypeLogStream;
+
+    // Add the stream's connection to the list
+
+    [connexions addObject:logConnexion];
+
+    if (connexions.count == 1)
+    {
+        // Notify the main app to start the progress indicator
+
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStart" object:nil];
+    }
+
+    // Open the SSE connection
+    // NOTE openStream: is a separate method so it can be called elsewhere too
+
+    [self openStream];
+}
+
+
+
+- (void)openStream
+{
+    // Here we actually open the connection through which events from the server will pass
+
+    logIsClosed = NO;
+
+    if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
+                                                                      delegate:self
+                                                                 delegateQueue:[NSOperationQueue mainQueue]];
+
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:logStreamURL
+                                                           cachePolicy:NSURLRequestReloadIgnoringCacheData
+                                                       timeoutInterval:logTimeout];
+
+    [request setHTTPMethod:@"GET"];
+
+    if (logLastEventID) [request setValue:logLastEventID forHTTPHeaderField:@"Last-Event-ID"];
+
+    logConnexion.task = [apiSession dataTaskWithRequest:request];
+
+    [logConnexion.task resume];
+
+    // Create a new event to record the state change (connecting) and issue it
+    // TODO Do we need to do this??
+
+    LogStreamEvent *event = [[LogStreamEvent alloc] init];
+    event.state = kLogStreamEventStateConnecting;
+    event.type = kLogStreamEventTypeStateChange;
+
+    // Place the event in the the event queue to guarantee displayed order = received order
+
+    [eventQueue addOperationWithBlock:^{
+        [self dispatchEvent:event];
+    }];
+}
+
+
+
+- (void)closeStream
+{
+    // Flag the closure (prevents an error report from the 'didComplete:' delegate method)
+    // and perform a clean-up of the stream connection
+
+    logIsClosed = YES;
+
+    // Cancel the saved task to close it
+
+    if (logConnexion != nil)
+    {
+        [logConnexion.task cancel];
+        [connexions removeObject:logConnexion];
+
+        // Notify the main app to stop the progress indicator
+
+        if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+
+        logConnexion = nil;
+        logStreamURL = nil;
+        logStreamID = nil;
+    }
+}
+
+
+
+- (void)dispatchEvent:(LogStreamEvent *)event
+{
+    // Dispactches an event from the event queue by passing it to the main thread for processing in 'processEvent:'
+
+    [self performSelectorOnMainThread:@selector(processEvent:) withObject:event waitUntilDone:NO];
+}
+
+
+
+- (void)processEvent:(LogStreamEvent *)event
+{
+    // Processes the supplied event when it is called from the connection queue
+
+    NSDictionary *dict = nil;
+
+    switch (event.type)
+    {
+        case kLogStreamEventTypeStateChange:
+
+            // A stream state change has been signalled (by us or by the stream)
+
+            switch (event.state)
+            {
+                case kLogStreamEventStateConnecting:
+#ifdef DEBUG
+    NSLog(@"%@", @"Log State: Connecting");
+#endif
+                    break;
+
+                case kLogStreamEventStateOpen:
+#ifdef DEBUG
+    NSLog(@"%@", @"Log State: Connection open");
+#endif
+                    // The log stream signals that it is open, so we can now add the first device,
+                    // whose ID has been retained through the stream set-up process. Calling logOpened: does this
+
+                    [self performSelectorOnMainThread:@selector(logOpened) withObject:nil waitUntilDone:NO];
+                    break;
+
+                case kLogStreamEventStateSubscribed:
+#ifdef DEBUG
+    NSLog(@"%@", @"Log State: Device added");
+#endif
+                    break;
+
+                case kLogStreamEventStateUnsubscribed:
+#ifdef DEBUG
+    NSLog(@"%@", @"Log State: Device removed");
+#endif
+                    break;
+
+                case kLogStreamEventStateClosed:
+#ifdef DEBUG
+    NSLog(@"%@", @"Log State: Connection closed");
+#endif
+                    // Log stream has signalled closure for some reason, so we need to re-open it
+
+                    [self closeStream];
+                    [self restartLogging];
+            }
+
+            break;
+
+        case kLogStreamEventTypeMessage:
+
+            // A mesage has been received from the server. Relay it to the host app via relayLogEntry:
+
+            if (event.data != nil)
+            {
+                dict = @{ @"message" : event.data };
+
+                [self performSelectorOnMainThread:@selector(relayLogEntry:) withObject:dict waitUntilDone:NO];
+            }
+
+            break;
+
+        case kLogStreamEventTypeError:
+            // An error has broken the stream. Relay the error to the host app via logClosed:
+
+            dict = @{ @"message" : event.error,
+                      @"code" : [NSNumber numberWithInteger:event.state] };
+
+            [self performSelectorOnMainThread:@selector(logClosed:) withObject:dict waitUntilDone:NO];
+            break;
+    }
+}
+
+
+
+- (void)relayLogEntry:(NSDictionary *)entry
+{
+    // Called on the main thread to pass a received log entry to the host app
+
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPILogEntryReceived" object:entry];
+}
+
+
+
+- (void)logOpened
+{
+    // Called on the main thread when the log stream has been successfully opened
+
+    if (deviceToStream != nil) [self addDeviceToLogStream:deviceToStream :nil];
+    deviceToStream = nil;
+
+    if (restartingLog)
+    {
+        if (loggingDevices.count > 0)
+        {
+            for (NSString *deviceId in loggingDevices)
+            {
+                [self addDeviceToLogStream:deviceId :nil];
+            }
+        }
+
+        restartingLog = NO;
+    }
+}
+
+
+
+- (void)logClosed:(NSDictionary *)error
+{
+    // Called on the main thread to notify the host that the log stream is closed - possibly because of an error
+
+    errorMessage = @"Log stream closed due to a connection error";
+    [self reportError];
+
+    NSMutableArray *lgds = [loggingDevices copy];
+    [loggingDevices removeAllObjects];
+    [self closeStream];
+
+    numberOfLogStreams = 0;
+
+    // ...and notify the host for each device
+
+    NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+
+    for (NSString *loggingDevice in lgds) [nc postNotificationName:@"BuildAPILogStreamEnd" object:loggingDevice];
+}
+
+
+
+- (BOOL)isDeviceLogging:(NSString *)deviceID
+{
+    // Check if a device, specified by ID, is one of those currently logging,
+    // responding with YES or NO as appropriate
+
+    if (deviceID == nil || deviceID.length == 0) return NO;
+
+    for (NSString *dvid in loggingDevices)
+    {
+        if ([dvid compare:deviceID] == NSOrderedSame) return YES;
+    }
+
+    return NO;
+}
+
+
+
+- (NSInteger)indexOfLoggedDevice:(NSString *)deviceID
+{
+    // Returns the index within the list of logging devices of the specified device (by ID)
+    // Returns -1 in the event of an error - the device is not on the list
+
+    for (NSUInteger i = 0 ; i < loggingDevices.count ; ++i)
+    {
+        NSString *dvid = [loggingDevices objectAtIndex:i];
+
+        if ([deviceID compare:dvid] == NSOrderedSame)
+        {
+            return i;
+        }
+    }
+
+    return -1;
 }
 
 
@@ -1260,753 +3021,1415 @@
 
 
 - (void)URLSession:(NSURLSession *)session
-		  dataTask:(NSURLSessionDataTask *)dataTask
+          dataTask:(NSURLSessionDataTask *)dataTask
 didReceiveResponse:(NSURLResponse *)response
  completionHandler:(void (^)(NSURLSessionResponseDisposition))completionHandler
 {
-	// This delegate method is called when the server responds to the connection request
-	// Use it to trap certain status codes
+    // This delegate method is called when the server responds to the connection request
+    // It is used to trap certain status codes / errors which affect connections rather than data
+    // eg. rate-limiting responses
 
-	NSHTTPURLResponse *rps = (NSHTTPURLResponse *)response;
-	NSInteger code = rps.statusCode;
+    // Get the connexion instance representing this connection task
 
-	if (code > 399)
-	{
-		// The API has responded with a status code that indicates an error
+    Connexion *connexion = nil;
 
-		if (code == 429)
-		{
-			// Build API rate limit hit
+    for (Connexion *aConnexion in connexions)
+    {
+        if (aConnexion.task == dataTask)
+        {
+            connexion = aConnexion;
+            break;
+        }
+    }
 
-			Connexion *conn = nil;
+    // Get the HTTP status code
 
-			for (Connexion *aConnexion in _connexions)
-			{
-				// Run through the connections in our list and add the incoming error code to the correct one
-				// TODO support for logging connections
+    NSHTTPURLResponse *resp = (NSHTTPURLResponse *)response;
+    NSInteger statusCode = resp.statusCode;
 
-				if (aConnexion.task == dataTask)
-				{
-					// This request has been rate-limited, so we need to recall it in 1+ seconds
+    if (statusCode > 399 || statusCode == 302)
+    {
+        // The API has responded with a status code that indicates an error.
+        // Examine the status code to deal with specific errors
 
-					NSArray *values = [NSArray arrayWithObjects:[dataTask.originalRequest copy], [NSNumber numberWithInteger:aConnexion.actionCode], nil];
-					NSArray *keys = [NSArray arrayWithObjects:@"request", @"actioncode", nil];
-					NSDictionary *dict =[NSDictionary dictionaryWithObjects:values forKeys:keys];
-					[NSTimer scheduledTimerWithTimeInterval:1.1 target:self selector:@selector(relaunchConnection:) userInfo:dict repeats:NO];
-					conn = aConnexion;
-					break;
-				}
-			}
+        if (statusCode == 302)
+        {
+            // TODO Is this ever called now?
 
-			if (conn != nil)
-			{
-				[_connexions removeObject:conn];
-				numberOfConnections = _connexions.count;
-			}
+            if (connexion.actionCode == kConnectTypeGetLogStreamID)
+            {
+                // We have asked for a log stream ID; this is returned as a 302, which we trap here
 
-			completionHandler(NSURLSessionResponseCancel);
-			return;
-		}
+                logStreamID = [resp.allHeaderFields objectForKey:@"location"];
 
-		if (code == 504)
-		{
-			// Bad Gateway error received - this usually occurs during log streaming
-			// so if we are streaming, make sure we re-initiate the stream
+#ifdef DEBUG
+    NSLog(@"Log Stream ID received: %@", logStreamID);
+#endif
+            }
+        }
 
-			Connexion *conn = nil;
+        if (statusCode == 401)
+        {
+            if (connexion.actionCode == kConnectTypeGetAccessToken)
+            {
+                // We have asked for an access token, so this indicates a login credentials failure -
+                // we can proceed no further at this time. Report the error back to the host app
+                // and end the connection
 
-			for (Connexion *aConnexion in _connexions)
-			{
-				if (aConnexion.task == dataTask) conn = aConnexion;
-			}
+                isLoggedIn = NO;
 
-			for (NSMutableDictionary *aLogDevice in _loggingDevices)
-			{
-				Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
+                errorMessage = @"Your impCloud access credentials have been rejected.";
+                [self reportError:kErrorLoginRejectCredentials];
 
-				if (conn == aConnexion)
-				{
-					[aLogDevice removeObjectForKey:@"connection"];
-					[self startLogging:[aLogDevice objectForKey:@"id"]];
-				}
-			}
-		}
-		else
-		{
-			// All other 400-and-up error codes
+                [connexions removeObject:connexion];
+                numberOfConnections = connexions.count;
 
-			for (Connexion *aConnexion in _connexions) {
+                if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
 
-				// Run through the connections in our list and add the incoming error code to the correct one
-				
-				if (aConnexion.task == dataTask) aConnexion.errorCode = code;
-			}
-		}
-	}
+                // Run the completion handler with a 'cancel' response becuase we are killing this connection
 
-	// All the failed connection to complete so we can analyze it later
+                if (completionHandler != nil) completionHandler(NSURLSessionResponseCancel);
 
-	completionHandler(NSURLSessionResponseAllow);
+                return;
+            }
+
+            if (connexion.actionCode == kConnectTypeRefreshAccessToken)
+            {
+                NSLog(@"401 encountered refreshing access token");
+            }
+        }
+
+        if (statusCode == 429)
+        {
+            // impCentral API rate limit has been exceeded, which we neeed to deal with here
+            // Bundle up connection data and pass it to 'relauchConnection:' in 'limit' * 1000 seconds' time
+            // 'limit' is the milliseconds time to wait before reconnecting that has been submitted by
+            // the server
+
+            NSDictionary *dict = connexion.representedObject != nil
+            ? @{ @"request" : [dataTask.originalRequest copy],
+                 @"actioncode" : [NSNumber numberWithInteger:connexion.actionCode],
+                 @"object" : connexion.representedObject }
+            : @{ @"request" : [dataTask.originalRequest copy],
+                 @"actioncode" : [NSNumber numberWithInteger:connexion.actionCode] };
+
+            NSInteger limit = [[resp.allHeaderFields valueForKey:@"X-RateLimit-Reset"] integerValue];
+
+            // Wait ('limit' * 1000) seconds and re-access the impCloud
+
+            [NSTimer scheduledTimerWithTimeInterval:(limit * 1000)
+                                             target:self
+                                           selector:@selector(relaunchConnection:)
+                                           userInfo:dict
+                                            repeats:NO];
+
+            if (connexion != nil)
+            {
+                [connexions removeObject:connexion];
+                numberOfConnections = connexions.count;
+            }
+
+            if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+
+            // Run the completion handler with a 'cancel' response becuase we are killing this connection
+
+            if (completionHandler != nil) completionHandler(NSURLSessionResponseCancel);
+
+            return;
+        }
+    }
+
+    // For all other server-issued errors, record the error code to deal with later
+
+    connexion.errorCode = statusCode;
+
+    // Allow the connection to complete so we can analyze the error later
+
+    if (completionHandler != nil) completionHandler(NSURLSessionResponseAllow);
 }
 
 
 
-- (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask didReceiveData:(NSData *)data
+- (void)URLSession:(NSURLSession *)session
+          dataTask:(NSURLSessionDataTask *)dataTask
+    didReceiveData:(NSData *)data
 {
     // This delegate method is called when the server sends some data back
-    // Add the data to the correct connexion object
 
-    for (Connexion *aConnexion in _connexions)
+    // Get the connexion instance representing this NSURLSessionDataTask
+
+    Connexion *connexion = nil;
+
+    for (Connexion *aConnexion in connexions)
     {
-        // Run through the connections in our list and add the incoming data to the correct one
+        if (aConnexion.task == dataTask)
+        {
+            connexion = aConnexion;
+            break;
+        }
+    }
 
-        if (aConnexion.task == dataTask) [aConnexion.data appendData:data];
+    if (connexion.actionCode == kConnectTypeLogStream)
+    {
+        // For logging connections, deal with the data immediately
+
+        [self parseStreamData:data :connexion];
+    }
+    else
+    {
+        // For non-logging connections, append the incoming data chunk to the store
+        // held by the appropriate connexion instance
+
+        [connexion.data appendData:data];
     }
 }
 
 
 
-- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
+- (void)URLSession:(NSURLSession *)session
+              task:(NSURLSessionTask *)task
+didCompleteWithError:(NSError *)error
+{
+    // All the data has been supplied by the server in response to a connection - or an error has been encountered.
+    // Deal with the error, or pass the retrieved data on for processing
 
-	// All the data has been supplied by the server in response to a connection - or an error has been encountered
-	// Parse the data and, according to the connection activity - update device, create model etc – apply the results
+    // Get the connexion instance representing this connection task
 
-	if (error)
-	{
-		// React to a passed client-side error - most likely a timeout or inability to resolve the URL
-		// ie. the client is not connected to the Internet
+    Connexion *connexion = nil;
 
-		// 'error.code' will equal NSURLErrorCancelled when we kill all connections
+    for (Connexion *aConnexion in connexions)
+    {
+        // Run through the connections in the list and find the one that has just finished loading
 
-		if (error.code == NSURLErrorCancelled) return;
+        if (aConnexion.task == task)
+        {
+            connexion = aConnexion;
+            break;
+        }
+    }
 
-		// Notify the host app
+    // Complete the finished NSURLSessionTask - this may be redundant, but just in case...
 
-		errorMessage = @"[SERVER ERROR] Could not connect to the Electric Imp server.";
-		[self reportError];
+    [task cancel];
+    connexion.task = nil;
 
-		// Is the connection related to a log stream?
-		// If so record the device details as 'loggingDevice'
+    // React to a passed client-side error - most likely a timeout or inability to resolve the URL
+    // eg. the client is not connected to the Internet
 
-		NSMutableDictionary *loggingDevice = nil;
-		for (NSMutableDictionary *aLogDevice in _loggingDevices)
-		{
-			Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
-			if (aConnexion.task == task) loggingDevice = aLogDevice;
-		}
+    if (error)
+    {
+        // NOTE 'error.code' will equal NSURLErrorCancelled when we cancel a live connection task,
+        // eg. by killing all connections, so just return
 
-		if (loggingDevice)
-		{
-			// This call is prompted by a failed streaming log connection, so remove
-			// the device from the list of streaming devices and notify the host app
-			// NOTE don't call stopLogging: because we're about to cancel the connection like it does
+        if (error.code == NSURLErrorCancelled) return;
 
-			[_loggingDevices removeObject:loggingDevice];
-			NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
-			[nc postNotificationName:@"BuildAPILogStreamEnd" object:[loggingDevice objectForKey:@"id"]];
-		}
-		
-		// Terminate the failed connection and remove it from the list of current connections
+        // Now process other errors
 
-		Connexion *conn = nil;
-		for (Connexion *aConnexion in _connexions)
-		{
-			// Run through the connections in the list and find the one that has just finished loading
+#ifdef DEBUG
+    NSLog(@"%@", error.localizedDescription);
+#endif
 
-			if (aConnexion.task == task)
-			{
-				[task cancel];
-				conn = aConnexion;
-				break;
-			}
-		}
+        if (connexion != nil)
+        {
+            if (connexion.actionCode == kConnectTypeLogStream)
+            {
+                // Are we logging? If so, handle this type of connection here
+                // Is the connection already closed? If so, just bail
 
-		if (conn)
-		{
-			[_connexions removeObject:conn];
-			numberOfConnections = _connexions.count;
-		}
+                if (logIsClosed) return;
 
-		// Check if there are any active connections
+                logIsClosed = YES;
+                logStreamURL = nil;
 
-		if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+                // Create an error event
 
-		return;
-	}
+                LogStreamEvent *event = [[LogStreamEvent alloc] init];
+                event.type = kLogStreamEventTypeError;
+                event.error = error != nil ? error : [NSError errorWithDomain:@"NSURLErrorDomain" code:event.state userInfo:@{ NSLocalizedDescriptionKey: @"Connection with the event source was closed." } ];
 
-	// The connection has come to a conclusion without error
+                // Add an error event to the event queue
 
-	Connexion *currentConnexion;
+                [eventQueue addOperationWithBlock:^{
+                    [self dispatchEvent:event];
+                }];
 
-	for (Connexion *aConnexion in _connexions)
-	{
-		// Run through the connections in the list and find the one that has just finished loading
+                /*
+                 // Attempt to re-open the connection in 'retryInterval' seconds
 
-		if (aConnexion.task == task) currentConnexion = aConnexion;
-	}
+                 [NSTimer timerWithTimeInterval:logRetryInterval
+                 repeats:NO
+                 block:^(NSTimer * _Nonnull timer) {
+                 [self openStream];
+                 }];
+                 */
 
-	// End the finished connection and remove it from the list of current connections
+                // Bail because we will handle connection clear-up later
 
-	[task cancel];
+                return;
+            }
 
-	// If we have a valid action code, process the received data
-	
-	if (currentConnexion.actionCode != kConnectTypeNone) [self processResult:currentConnexion :[self processConnection:currentConnexion]];
+            // Make sure we're not logged in if we haven't been able to get an access token
+
+            if (connexion.actionCode == kConnectTypeGetAccessToken || connexion.actionCode == kConnectTypeRefreshAccessToken) isLoggedIn = NO;
+
+            errorMessage = @"Unable to connect to the Electric Imp impCloud. Please check your network connection.";
+
+            [self reportError:kErrorNetworkError];
+
+            [connexions removeObject:connexion];
+
+            numberOfConnections = connexions.count;
+        }
+
+        // If there are no more active connections, tell the host app
+
+        if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+
+        return;
+    }
+
+    // The connection has come to a conclusion without error, so if we have a valid action code,
+    // we can proceed to process the received data
+
+    if (connexion != nil)
+    {
+        if (connexion.actionCode != kConnectTypeNone)
+        {
+            // Handle the received data
+
+            [self processResult:connexion :[self processConnection:connexion]];
+        }
+        else
+        {
+            // This might be redundant - can a connexion ever have 'actionCode == kConnectTypeNone' at this point?
+
+            [connexions removeObject:connexion];
+
+            numberOfConnections = connexions.count;
+
+            // If there are no more active connections, tell the host app
+
+            if (connexions.count == 0) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+        }
+    }
 }
 
 
 
-#pragma mark - Joint NSURLSession/NSURLConnection Methods
+- (void)URLSession:(NSURLSession *)session didBecomeInvalidWithError:(NSError *)error
+{
+    // This method is called after we have called invalidateAndCancel on an NSURLSession, eg. in 'killAllConnections:'
+
+    // Clear all the connexions from the list
+
+    [connexions removeAllObjects];
+
+    // Tell the host app
+
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+
+    // Zero all the other connection-related properties
+
+    apiSession = nil;
+    numberOfConnections = 0;
+}
 
 
-- (NSDictionary *)processConnection:(Connexion *)connexion {
 
-	// Process the data returned by the current connection. This comes independently
-	// of whether the source was an NSURLSession or NSURLConncection.
+#pragma mark - Connection Result Processing Methods
 
-	id parsedData = nil;
-	NSError *dataDecodeError = nil;
 
-	if (connexion.data != nil && connexion.data.length > 0)
-	{
-		// If we have data, attempt to decode it assuming that it is JSON (if it's not, 'error' will not equal nil
+- (void)parseStreamData:(NSData *)data :(Connexion *)connexion
+{
+    // Wrangle an incoming batch of streamed data to pull out server-sent events and extract
+    // the data from them (and defer incomplete events until the rest of them arrives)
 
-		parsedData = [NSJSONSerialization JSONObjectWithData:connexion.data options:kNilOptions error:&dataDecodeError];
-	}
+    NSString *eventString;
 
-	if (dataDecodeError != nil)
-	{
-		// If the incoming data could not be decoded to JSON for some reason,
-		// most likely a malformed request which returns a block of HTML
+    if (connexion.data != nil)
+    {
+        // Add in existing data from the last streamed chunk, if there is any
 
-		// TODO?? Better interpret the HTML
+        [connexion.data appendData:data];
+        eventString = [[NSString alloc] initWithData:connexion.data encoding:NSUTF8StringEncoding];
+        connexion.data = [NSMutableData dataWithLength:0];
+    }
+    else
+    {
+        // Otherwise, just work with the freshly passed in data alone
 
-		errorMessage = @"[SERVER ERROR] Received data could not be decoded. Is is JSON?";
-		errorMessage = [errorMessage stringByAppendingFormat:@" %@", (NSString *)connexion.data];
-		[self reportError];
+        eventString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    }
 
-		// Are we streaming?
-		
-		for (NSMutableDictionary *aLogDevice in _loggingDevices)
-		{
-			Connexion *devConnexion = [aLogDevice objectForKey:@"connection"];
+    // Check the last two characters of the string: are they newlines? If not, the data
+    // is truncated and needs to be retained for the next pass
 
-			if (devConnexion == connexion)
-			{
-				[_loggingDevices removeObject:aLogDevice];
-				NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
-				[nc postNotificationName:@"BuildAPILogStreamEnd" object:[aLogDevice objectForKey:@"id"]];break;
-			}
-		}
+    NSString *lastTwoChars = @"";
+    if (eventString.length > 2) lastTwoChars = [eventString substringFromIndex:eventString.length - 2];
+    BOOL lastMessageTruncated = ([lastTwoChars compare:kLogStreamEventSeparatorLFLF] == NSOrderedSame) ? NO : YES;
 
-		connexion.errorCode = -1;
-		connexion.actionCode = kConnectTypeNone;
-	}
+    // Separate the string into individual events (separated by newline pairs)
+    // If there are no newlines, events.count == 1, which we trap quickly
 
-	if (connexion.errorCode != -1)
-	{
-		// Check for an error being reported by the server. This will have been set for the current connection
-		// by either of the didReceiveResponse: methods
+    NSArray *events = [eventString componentsSeparatedByString:kLogStreamEventSeparatorLFLF];
 
-		errorMessage = [NSString stringWithFormat:@"[SERVER ERROR] [Code: %lu] ", connexion.errorCode];
+    if (events.count > 1)
+    {
+        for (NSUInteger i = 0 ; i < events.count ; ++i)
+        {
+            NSString *event = [events objectAtIndex:i];
 
-		if (parsedData != nil)
-		{
-			// 'parsedData' should contain a description of the error, eg. unknown device, or a code syntax error
+            if (event.length == 0) continue;
 
-			NSDictionary *errDict = [parsedData objectForKey:@"error"];
-			NSString *errString = [errDict objectForKey:@"message_short"];
-			errorMessage = [errorMessage stringByAppendingString:errString];
-
-			if (connexion.errorCode == 400)
-			{
-				// Check for lapsed token errors
-
-				NSRange eRange = [errString rangeOfString:@"Token may have expired" options:NSCaseInsensitiveSearch];
-
-				if (eRange.location != NSNotFound)
-				{
-					// This IS a lapsed token. We need to restart logging for this device from scratch
-
-					NSMutableDictionary *loggingDevice = nil;
-
-					for (NSMutableDictionary *aLogDevice in _loggingDevices)
-					{
-						Connexion *aConnexion = (Connexion *)[aLogDevice objectForKey:@"connection"];
-
-						if (aConnexion == connexion)
-						{
-							loggingDevice = aLogDevice;
-							break;
-						}
-					}
-
-					if (loggingDevice)
-					{
-						[_loggingDevices removeObject:loggingDevice];
-						[self startLogging:[loggingDevice objectForKey:@"id"]];
-						errorMessage = [errorMessage stringByAppendingFormat:@". Restarting log stream for device '%@'", [loggingDevice objectForKey:@"name"]];
-					}
-				}
-			}
-
-			errString = [errDict objectForKey:@"code"];
-
-            if (codeErrors == nil)
+            if (i == events.count - 1 && lastMessageTruncated)
             {
-                codeErrors = [[NSMutableArray alloc] init];
+                // This is the detected event and it MIGHT be truncated, so just hold it for the next pass
+
+                connexion.data = [NSMutableData dataWithData:[event dataUsingEncoding:NSUTF8StringEncoding]];
+
+#ifdef DEBUG
+     NSLog(@"Holding data for next stream chunk\nEvent -> %@", event);
+#endif
+
             }
             else
             {
-                [codeErrors removeAllObjects];
+                // We have an event that we KNOW has been terminated with a \n\n,
+                // ie. it is complete and can be processed
+
+                LogStreamEvent *logStreamEvent = [[LogStreamEvent alloc] init];
+                logStreamEvent.type = kLogStreamEventTypeMessage;
+
+                // Separate the key-value pairs (separated by newlines)
+
+                NSArray *lines = [event componentsSeparatedByString:kLogStreamEventKeyValuePairSeparator];
+#ifdef DEBUG
+    NSLog(@"Lines -> %lu", (long)lines.count);
+#endif
+
+                // Run through each of the event's lines and extract the information into the
+                // relevant logStreamEvent object properties
+
+                for (NSString *line in lines)
+                {
+#ifdef DEBUG
+    NSLog(@"Line  -> %@ (%li)", line, (long)line.length);
+#endif
+
+                    if ([line hasPrefix:@":"]) continue;
+
+                    NSString *key, *value;
+                    NSRange fieldSeparatorRange = [line rangeOfString:kLogStreamKeyValueDelimiter];
+
+                    if (fieldSeparatorRange.location != NSNotFound)
+                    {
+                        key = [line substringToIndex:fieldSeparatorRange.location];
+                        value = [line substringFromIndex:fieldSeparatorRange.location + 2];
+
+                        if (key != nil && value != nil)
+                        {
+                            if ([key isEqualToString:kLogStreamEventEventKey])
+                            {
+                                // 'event' - value will be 'message' or 'state_change'
+
+                                logStreamEvent.event = value;
+                            }
+                            else if ([key isEqualToString:kLogStreamEventDataKey])
+                            {
+                                // 'data' - value will be, eg. 'opened', 'closed', '40000c2a69109f08 subscribed', or '<log entry>'
+
+                                logStreamEvent.data = logStreamEvent.data != nil ? [logStreamEvent.data stringByAppendingFormat:@"\n%@", value] : value;
+                            }
+                            else if ([key isEqualToString:kLogStreamEventIDKey])
+                            {
+                                // 'id'
+
+                                logLastEventID = value;
+                            }
+                            else if ([key isEqualToString:kLogStreamEventRetryKey])
+                            {
+                                // 'retry'
+
+                                logRetryInterval = [value doubleValue];
+                            }
+                        }
+                    }
+                    else
+                    {
+#ifdef DEBUG
+    // No field separator????
+                        NSLog(@"Incoming event malformed - no field separator (: )");
+#endif
+                    }
+                }
+
+                if (logStreamEvent.data != nil)
+                {
+                    // Change the logStreamEvent's 'state' according to type
+                    // NOTE 'type' is set to kLogStreamEventTypeMessage above; 'state' doesn't matter for messages
+
+                    if ([logStreamEvent.event compare:@"state_change"] == NSOrderedSame)
+                    {
+                        logStreamEvent.type = kLogStreamEventTypeStateChange;
+                        if ([logStreamEvent.data compare:@"opened"] == NSOrderedSame) logStreamEvent.state = kLogStreamEventStateOpen;
+                        if ([logStreamEvent.data compare:@"closed"] == NSOrderedSame) logStreamEvent.state = kLogStreamEventStateClosed;
+                        if ([logStreamEvent.data hasSuffix:@"subscribed"]) logStreamEvent.state = kLogStreamEventStateSubscribed;
+                        if ([logStreamEvent.data hasSuffix:@"unsubscribed"]) logStreamEvent.state = kLogStreamEventStateUnsubscribed;
+                    }
+
+                    // Place the event in the the event queue to guarantee displayed order = received order
+
+                    [eventQueue addOperationWithBlock:^{
+                        [self dispatchEvent:logStreamEvent];
+                    }];
+                }
             }
-            
-			// Is the problem a code syntax error?
+        }
+    }
+    else
+    {
+        // Partial event (no \n\n in received data) so preserve it in the connexion
+        // so it's ready to be added to the next chunk of data received from the server
 
-			if ([errString compare:@"CompileFailed"] == NSOrderedSame)
-			{
-				// The returned error description contains a 'message_short' field, if this key’s
-				// value is 'CompileFailed', we have a syntax error in the (just) uploaded Squirrel
+        [connexion.data appendData:data];
+    }
+}
 
-				errDict = [errDict objectForKey:@"details"];
-				NSArray *aArray = nil;
-				NSArray *dArray = nil;
-				aArray = [errDict objectForKey:@"agent_errors"];
-				dArray = [errDict objectForKey:@"device_errors"];
 
-				// We have to check for [NSNull null] because this is how an empty
-				// 'agent_errors' or 'device_errors' fields will be decoded
 
-				if (aArray != nil && (NSNull *)aArray != [NSNull null])
-				{
-					// We have error(s) in the agent Squirrel - decode and report them
+- (NSDictionary *)processConnection:(Connexion *)connexion
+{
+    // Process the data returned by the current connection
+    // This may include an API error, so this is where we do the main impCentral API error
+    // handling, eg. for code compilation errors
 
-					errorMessage = [errorMessage stringByAppendingString:@"\n  Agent Code errors:"];
+    id parsedData = nil;
+    NSError *dataDecodeError = nil;
+    NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
 
-					for (NSUInteger j = 0 ; j < aArray.count ; ++j)
-					{
-						errDict = [aArray objectAtIndex:j];
-						NSNumber *row = [errDict valueForKey:@"row"];
-						NSNumber *col = [errDict valueForKey:@"column"];
-						errorMessage = [errorMessage stringByAppendingFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue];
+    if (connexion.data != nil && connexion.data.length > 0)
+    {
+        // If we have received data, so attempt to decode it assuming that it is JSON
+        // If it's not JSON, 'dataDecodeError' will not be nil
 
-                        // Preserve the error details, and add extra keys - 'message' and 'type' -
-                        // to the error record dictionary
+        parsedData = [NSJSONSerialization JSONObjectWithData:connexion.data options:kNilOptions error:&dataDecodeError];
+    }
 
-                        NSMutableDictionary *aDict = [NSMutableDictionary dictionaryWithDictionary:errDict];
-                        [aDict setObject:@"agent" forKey:@"type"];
-                        [aDict setObject:[NSString stringWithFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue] forKey:@"message"];
+    if (dataDecodeError != nil)
+    {
+        // If the incoming data could not be decoded to JSON for some reason,
+        // most likely a malformed request which returns a block of HTML
 
-                        [codeErrors addObject:aDict];
-					}
-				}
+        errorMessage = [NSString stringWithFormat:@"[SERVER ERROR] Received data could not be decoded: %@", (NSString *)connexion.data];
+        [self reportError];
 
-				if (dArray != nil && (NSNull *)dArray != [NSNull null])
-				{
-					// We have error(s) in the device Squirrel - decode and report them
+        connexion.errorCode = -1;
+        connexion.actionCode = kConnectTypeNone;
+    }
 
-					errorMessage = [errorMessage stringByAppendingString:@"\n  Device Code errors:"];
+    if (connexion.errorCode > 399)
+    {
+        // Trap and handle impCentral API errors here
+        // NOTE The value of 'errorCode' is the returned HTTP status code
 
-					for (NSUInteger j = 0 ; j < dArray.count ; ++j)
-					{
-						errDict = [dArray objectAtIndex:j];
-						NSNumber *row = [errDict valueForKey:@"row"];
-						NSNumber *col = [errDict valueForKey:@"column"];
-						errorMessage = [errorMessage stringByAppendingFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue];
+        errorMessage = @"";
 
-                        NSMutableDictionary *aDict = [NSMutableDictionary dictionaryWithDictionary:errDict];
-                        [aDict setObject:[NSString stringWithFormat:@"\n  %@ at row %li, col %li", [errDict objectForKey:@"error"], row.longValue, col.longValue] forKey:@"message"];
-                        [aDict setObject:@"device" forKey:@"type"];
+        if (parsedData != nil)
+        {
+            // 'parsedData' should contain an array of errors, eg. unknown device, or a code syntax error
 
-                        [codeErrors addObject:aDict];
-					}
-				}
-			}
-			else
-			{
-				errorMessage = [errorMessage stringByAppendingString:@"Unknown error"];
-			}
-		}
-		else
-		{
-			errorMessage = [errorMessage stringByAppendingString:@"Unknown error"];
-		}
+            NSUInteger count = 0;
+            NSMutableArray *codeErrors = [[NSMutableArray alloc] init];
 
-		if (_loggingDevices.count > 0)
-		{
-			// We have devices logging, so check if the failed connection is one of theirs
+            // Get the array of error messages from the returned data
 
-			NSMutableDictionary *removeLogDevice = nil;
+            NSArray *errors = [parsedData objectForKey:@"errors"];
 
-			for (NSMutableDictionary *aLogDevice in _loggingDevices)
-			{
-				Connexion *aConn = (Connexion *)[aLogDevice objectForKey:@"connection"];
+            // Trap 'old' errors and those not related to the API
 
-				if (aConn == connexion)
-				{
-					// The failed connection IS a logging connection
+            if (errors == nil)
+            {
+                NSString *message = [parsedData objectForKey:@"message"];
+                errorMessage = [errorMessage stringByAppendingString:message];
+            }
+            else
+            {
+                // Run through the array elements and decode each in turn
 
-					if (connexion.errorCode != 504)
-					{
-						// Error is not a 'known' timeout (504), so record the device for later clearance
+                for (NSDictionary *error in errors)
+                {
+                    NSString *internalErrCode = [error objectForKey:@"code"];
 
-						removeLogDevice = aLogDevice;
-						break;
-					}
-				}
-			}
+                    if ([internalErrCode compare:@"CX005"] == NSOrderedSame)
+                    {
+                        // We have compilation errors.
+                        // The 'meta' field contains all the details so add them to the 'codeErrors' array
 
-			if (removeLogDevice)
-			{
-				// Deal with the logging device's failed connection that was not a 'known' timeout (504)
-				// Remove the device from the logging list and notify the host app
+                        [codeErrors addObject:[error objectForKey:@"meta"]];
+                    }
+                    else
+                    {
+                        // Process other API errors
+                        
+                        NSDictionary *errorPlus;
+                        NSMutableDictionary *ed = [NSMutableDictionary dictionaryWithDictionary:error];
+                        NSString *action = @"N/A";
+                        
+                        if (connexion.representedObject != nil)
+                        {
+                            NSString *act = [connexion.representedObject objectForKey:@"action"];
+                            
+                            if (act != nil) action = act;
+                        }
+                        
+                        [ed setObject:action forKey:@"action"];
+                        errorPlus = [NSDictionary dictionaryWithObjects:[ed allValues] forKeys:[ed allKeys]];
+                        
+                        errorMessage = errors.count > 1
+                        ? [errorMessage stringByAppendingFormat:@"%li. %@\n", (count + 1), [self processAPIError:errorPlus]]
+                        : [self processAPIError:errorPlus];
+                    }
 
-				[_loggingDevices removeObject:removeLogDevice];
-				NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
-				[nc postNotificationName:@"BuildAPILogStreamEnd" object:[removeLogDevice objectForKey:@"id"]];
-			}
-		}
+                    ++count;
+                }
 
-		parsedData = nil;
-		connexion.actionCode = kConnectTypeNone;
-		[self reportError];
-	}
+                // Check if there were any code compilation errors and if so, relay them to the host
 
-	// Tidy up the connection list
+                if (codeErrors.count > 0)
+                {
+                    NSDictionary *returnData;
 
-	[_connexions removeObject:connexion];
-	numberOfConnections = _connexions.count;
-	if (_connexions.count < 1) [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIProgressStop" object:nil];
+                    if (connexion.representedObject != nil)
+                    {
+                        returnData = @{ @"data" : codeErrors,
+                                        @"object" : connexion.representedObject };
+                    }
+                    else
+                    {
+                        returnData = @{ @"data" : codeErrors };
+                    }
 
-	// Return the decoded data (or nil)
+                    [nc postNotificationName:@"BuildAPICodeErrors" object:returnData];
 
-	return parsedData;
+                    errorMessage = nil;
+                }
+            }
+        }
+        else
+        {
+            // We have no data payload so we can't say what the error was
+
+            errorMessage = [errorMessage stringByAppendingString:@"Unknown error"];
+        }
+
+        // We've managed all the errors, so clear the returned data to avoid errors in subsequent
+        // connection processing and clear the action code to avoid unnecessary checking later
+
+        parsedData = nil;
+        connexion.actionCode = kConnectTypeNone;
+
+        // Report the error to the host if we have one (code compilation errors clear 'errorMessage')
+
+        if (connexion.representedObject != nil)
+        {
+            NSDictionary *dict = connexion.representedObject;
+            NSString *action = [dict objectForKey:@"action"];
+            if (action != nil && action.length > 0) errorMessage = [errorMessage stringByAppendingFormat:@" (%@)", action];
+        }
+
+        if (errorMessage) [self reportError];
+    }
+
+    // Tidy up the connection list by removing the current connexion from the list of connexions
+
+    [connexions removeObject:connexion];
+
+    numberOfConnections = connexions.count;
+
+    // Signal the host app if the number of connections is zero
+
+    if (connexions.count == 0) [nc postNotificationName:@"BuildAPIProgressStop" object:nil];
+
+    // Return the decoded data (or nil)
+
+    return parsedData;
 }
 
 
 
 - (void)processResult:(Connexion *)connexion :(NSDictionary *)data
 {
-    // If there has been no error recorded, we can now process the data returned by the server
-    // (via NSURLSession or NSURLConnection), according to the type of connection that was initiated
+    // If there has been no error recorded, we can now process the real data returned by the server
+    // according to the type of connection that was originally initiated
 
-    if (data)
+    // The object we return as the notification's object is structured as follows:
+    //
+    // "object" - The object passed into the BuildAPIAccess instance from the host,
+    //            eg. the devicegroup that is being restarted.
+    //   "data" - The data retrieved from the server, eg. the updated product, or
+    //            a useful message string (in cases where these is no returned data)
+
+    // Avoid processing the connection if it has no action code
+
+    if (connexion.actionCode == kConnectTypeNone) return;
+
+    NSDictionary *returnData;
+    NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+
+    switch (connexion.actionCode)
     {
-        // We have data returned by the server, but does it signal success or failure?
-        // Call checkStatus: to find out and only proceed on success
-
-        if ([self checkStatus:data] == kServerSendsSuccess)
+        case kConnectTypeGetProducts:
         {
-            NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+            // The server returns an array of one or more products, which we add to an
+            // emptied master array. The list is returned one page at a time, so we need
+            // to check for the supplied URL of the next page in sequence
 
-            switch (connexion.actionCode)
+            NSDictionary *links = [data objectForKey:@"links"];
+            NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
+            BOOL isFirstPage = [self isFirstPage:links];
+
+            // Only clear the products list if this is the first page
+
+            if (isFirstPage) [products removeAllObjects];
+
+            // Add the received page of product records to the array
+
+            NSArray *productList = [data objectForKey:@"data"];
+
+            if (products == nil) products = [[NSMutableArray alloc] init];
+
+            for (NSMutableDictionary *product in productList) [products addObject:product];
+
+            // Are there more pages yet to be received?
+
+            if (nextURL.length != 0)
             {
-                case kConnectTypeGetModels:
+                // We found a 'next' field in the 'links' list. This will get us the next page of data
+                // which we do by making a new request using the provided 'next' link
+
+                NSMutableURLRequest *request = [self makeGETrequest:nextURL :NO];
+
+                if (request)
                 {
-                    // We asked for a list of all the models, so replace the current list with
-                    // the newly returned data. This may have been called for an initial list at
-                    // start-up, or later if a model has changed name
-
-                    [models removeAllObjects];
-
-                    NSDictionary *mods = [data objectForKey:@"models"];
-
-                    for (NSDictionary *model in mods)
-                    {
-                        // Add each model to the list
-                        // Each model has the following keys:
-                        // id - string
-                        // name - string
-                        // device - array of devices
-
-                        [models addObject:model];
-                    }
-
-                    // Signal the host app that the list of models is ready to read
-
-                    [nc postNotificationName:@"BuildAPIGotModelsList" object:self];
-
-                    // Have we been asked to automatically get the list of devices too?
-
-                    if (_followOnFlag)
-                    {
-                        _followOnFlag = NO;
-                        [self getDevices];
-                    }
-
+                    [self launchConnection:request :kConnectTypeGetProducts :connexion.representedObject];
                     break;
                 }
-
-                case kConnectTypeGetDevices:
+                else
                 {
-                    // We asked for a list of all the devices, so replace the current list with
-                    // the newly returned data. This may have been called for an initial list at
-                    // start-up, or later if a device has changed name or model allocation
-
-                    [devices removeAllObjects];
-
-                    NSDictionary *devs = [data objectForKey:@"devices"];
-
-                    for (NSDictionary *device in devs)
-                    {
-                        // Add each model to the list
-                        // Each model has the following keys:
-                        // id - string
-                        // name - string
-                        // powerstate - string
-                        // rssi - integer
-                        // agent_id - string
-                        // agent_status - string
-                        // model_id - string
-
-                        // Convert the loaded device dictionary into a mutable dictionary as we may
-                        // have the change values, ie. the name if it is <null>
-
-                        NSMutableDictionary *newDevice = [NSMutableDictionary dictionaryWithDictionary:device];
-
-                        // Check for unexpected null values for certain keys
-
-                        NSString *deviceState = [newDevice valueForKey:@"powerstate"];
-						if ((NSNull *)deviceState == [NSNull null])
-						{
-							// 'powerstate' is null for some unexpected reason - assume device is offline
-							[newDevice setObject:@"offline" forKey:@"powerstate"];
-						}
-
-						deviceState = [newDevice valueForKey:@"agent_status"];
-						if ((NSNull *)deviceState == [NSNull null])
-						{
-							// 'agent_status' is null for some unexpected reason - assume agent is offline
-							[newDevice setObject:@"offline" forKey:@"agent_status"];
-						}
-
-                        [devices addObject:newDevice];
-                    }
-
-                    // Signal the host app that the list of devices is ready to read
-
-                    [nc postNotificationName:@"BuildAPIGotDevicesList" object:self];
-                    break;
+                    errorMessage = @"Could not create a request to list all of your products — the list may be incomplete.";
+                    [self reportError];
                 }
-
-                case kConnectTypePostCode:
-                {
-                    // We posted a new code revision to a model, so just notify the host app that this succeeded
-
-                    [nc postNotificationName:@"BuildAPIPostedCode" object:nil];
-                    break;
-                }
-
-                case kConnectTypeRestartDevice:
-                {
-                    // We asked that the current device or all the current model's device be restarted,
-                    // so just notify the host app that this succeeded
-
-                    [nc postNotificationName:@"BuildAPIDeviceRestarted" object:nil];
-                    break;
-                }
-
-                case kConnectTypeAssignDeviceToModel:
-                {
-                    // We asked that the current device be assigned to another model,
-                    // so just notify the host app that this succeeded
-
-                    [nc postNotificationName:@"BuildAPIDeviceAssigned" object:nil];
-
-                    // Now refresh the list of models and then a new list of devices
-
-                    _followOnFlag = YES;
-                    [self getModels];
-                    break;
-                }
-
-                case kConnectTypeNewModel:
-                {
-                    // We created a new model, so we need to update the models list so that the
-                    // change is reflected in our local data. First, notify the host app that
-                    // the model creation was a success
-
-                    [nc postNotificationName:@"BuildAPIModelCreated" object:nil];
-
-                    // Now get a new list of models and then a new list of devices
-
-                    _followOnFlag = YES;
-                    [self getModels];
-                    break;
-                }
-
-                case kConnectTypeDeleteModel:
-                {
-                    // We deleted a new model, so we need to update the models list so that the
-                    // change is reflected locally
-
-                    // Tell the main app we have successfully deleted the model
-
-                    [nc postNotificationName:@"BuildAPIModelDeleted" object:nil];
-
-                    // Now get a new list of models and then a new list of devices
-
-                    _followOnFlag = YES;
-                    [self getModels];
-                    break;
-                }
-
-                case kConnectTypeUpdateDevice:
-                {
-                    // We asked that the device information be updated, which may include a name-change or
-                    // model assignment so we update the model and device lists so that the change
-                    // is reflected in our local data.
-
-                    // Tell the main app we have successfully updated the device
-
-                    [nc postNotificationName:@"BuildAPIDeviceUpdated" object:nil];
-
-                    // Now get a new list of models and then a new list of devices
-
-                    _followOnFlag = YES;
-                    [self getModels];
-                    break;
-                }
-
-                case kConnectTypeDeleteDevice:
-                {
-                    // We asked that the device be deleted, so we update the model and device lists
-                    // so that the change is reflected in our local data.
-
-                    // Tell the main app we have successfully deleted the device
-
-                    [nc postNotificationName:@"BuildAPIDeviceDeleted" object:nil];
-
-                    // Now get a new list of models and then a new list of devices
-
-                    _followOnFlag = YES;
-                    [self getModels];
-
-                    break;
-                }
-
-                case kConnectTypeUpdateModel:
-                {
-                    // We asked that the model be updated, which may include a name-change or
-                    // device assignment so we update the model and device lists so that the change
-                    // is reflected in our local data.
-
-                    // Tell the main app we have successfully updated the model
-
-                    [nc postNotificationName:@"BuildAPIModelUpdated" object:nil];
-
-                    // Now get a new list of models, and then a new list of devices
-
-                    _followOnFlag = YES;
-                    [self getModels];
-                    break;
-                }
-
-                case kConnectTypeGetCodeLatestBuild:
-                {
-                    // We asked for the most recent code revision. Here we have received all the builds –
-                    // we extract the version of the most recent entry, then request this particular build
-
-                    NSArray *revs = [data objectForKey:@"revisions"];
-                    NSDictionary *latestBuild = [revs objectAtIndex:0];
-                    NSNumber *num = [latestBuild valueForKey:@"version"];
-                    [self getCodeRev:_currentModelID :num.integerValue];
-                    break;
-                }
-
-                case kConnectTypeGetCodeRev:
-                {
-                    // We asked for a code revision, which we make available to the main app
-
-                    NSDictionary *code = [data objectForKey:@"revision"];
-                    deviceCode = [code objectForKey:@"device_code"];
-                    agentCode = [code objectForKey:@"agent_code"];
-
-                    // Tell the main app we have the code in the deviceCode and agentCode properties
-
-                    [nc postNotificationName:@"BuildAPIGotCodeRev" object:nil];
-
-                    break;
-                }
-
-                case kConnectTypeGetLogEntries:
-                {
-                    // We asked for all of a devices log entries, which we return to the main app
-
-                    NSArray *logs = [data objectForKey:@"logs"];
-
-                    // Pass the ball back to the AppDelegate
-
-                    // Tell the main app we have the code in the deviceCode and agentCode properties
-
-                    [nc postNotificationName:@"BuildAPIGotLogs" object:logs];
-
-                    break;
-                }
-
-                case kConnectTypeGetLogEntriesRanged:
-                {
-                    // We asked for a log stream. The first time through the process, we only access the poll_url
-                    // property, which we use to generate a second request, for the 'streamed' data
-
-                    // Save the URL of the log stream and begin logging
-
-					for (NSMutableDictionary *aLogDevice in _loggingDevices)
-					{
-						Connexion *aConnexion = [aLogDevice objectForKey:@"connection"];
-
-						if (aConnexion == connexion)
-						{
-							// Got a match, so save the poll URL
-
-							[aLogDevice setObject:[kBaseAPIURL stringByAppendingString:[data objectForKey:@"poll_url"]] forKey:@"url"];
-
-							// Start logging with the device ID
-
-							[self startLogging:[aLogDevice objectForKey:@"id"]];
-
-							break;
-						}
-					}
-
-					break;
-                }
-
-                case kConnectTypeGetLogEntriesStreamed:
-                {
-                    // We asked for a log stream and the first streamed entry has arrived. Send it to the main
-                    // app to be displayed, and then re-commence logging
-
-					for (NSMutableDictionary *aLogDevice in _loggingDevices)
-					{
-						// For each logging device, find the one whose connecion matches the one completed
-
-						Connexion *aConnexion = [aLogDevice objectForKey:@"connection"];
-
-						if (aConnexion == connexion)
-						{
-							// Bundle up the device ID and its logs and notify the main app
-
-							NSArray *keys = [NSArray arrayWithObjects:@"id", @"logs", nil];
-							NSArray *values = [NSArray arrayWithObjects:[aLogDevice objectForKey:@"id"], [data objectForKey:@"logs"], nil];
-							NSDictionary *postData = [NSDictionary dictionaryWithObjects:values forKeys:keys];
-
-							[nc postNotificationName:@"BuildAPILogStream" object:postData];
-
-							// Resume logging with the device ID
-
-							[self startLogging:[aLogDevice objectForKey:@"id"]];
-
-							break;
-						}
-					}
-
-					break;
-                }
-
-                default:
-                    break;
             }
+
+            // Send the array of products to the host
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : products, @"object" : connexion.representedObject }
+            : @{ @"data" : products };
+
+            [nc postNotificationName:@"BuildAPIGotProductsList" object:returnData];
+            break;
+        }
+
+        case kConnectTypeCreateProduct:
+        {
+            // The server returns a record of the created product
+
+            data = [data objectForKey:@"data"];
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : data, @"object" : connexion.representedObject }
+            : @{ @"data" : data };
+
+            [nc postNotificationName:@"BuildAPIProductCreated" object:returnData];
+            break;
+        }
+
+        case kConnectTypeUpdateProduct:
+        {
+            // The server returns a record of the updated product
+
+            data = [data objectForKey:@"data"];
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : data, @"object" : connexion.representedObject }
+            : @{ @"data" : data };
+
+            [nc postNotificationName:@"BuildAPIProductUpdated" object:returnData];
+            break;
+        }
+
+        case kConnectTypeDeleteProduct:
+        {
+            // The server returns no data
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : @"deleted", @"object" : connexion.representedObject }
+            : @{ @"data" : @"deleted" };
+
+            [nc postNotificationName:@"BuildAPIProductDeleted" object:returnData];
+            break;
+        }
+
+        case kConnectTypeGetProduct:
+        {
+            // The server returns a single product's record
+            // NOTE Single items are sent by the API as objects, not as single-entry arrays
+
+            NSDictionary *product = [data objectForKey:@"data"];
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : product, @"object" : connexion.representedObject }
+            : @{ @"data" : product };
+
+            [nc postNotificationName:@"BuildAPIGotProduct" object:returnData];
+            break;
+        }
+
+        case kConnectTypeGetDeviceGroups:
+        {
+            // The server returns an array of one or more device groups, which we add to an
+            // emptied master array. The list is returned one page at a time, so we need
+            // to check for the supplied URL of the next page in sequence
+
+            NSDictionary *links = [data objectForKey:@"links"];
+            NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
+            BOOL isFirstPage = [self isFirstPage:links];
+
+            if (isFirstPage) [devicegroups removeAllObjects];
+
+            NSArray *devicegroupList = [data objectForKey:@"data"];
+
+            if (devicegroups == nil) devicegroups = [[NSMutableArray alloc] init];
+
+            for (NSDictionary *devicegroup in devicegroupList) [devicegroups addObject:devicegroup];
+
+            if (nextURL.length != 0)
+            {
+                NSMutableURLRequest *request = [self makeGETrequest:nextURL :YES];
+
+                if (request)
+                {
+                    [self launchConnection:request :kConnectTypeGetDeviceGroups :connexion.representedObject];
+                    break;
+                }
+                else
+                {
+                    errorMessage = @"Could not create a request to list all of your device groups — the list may be incomplete.";
+                    [self reportError];
+                }
+            }
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : devicegroups, @"object" : connexion.representedObject }
+            : @{ @"data" : devicegroups };
+
+            [nc postNotificationName:@"BuildAPIGotDeviceGroupsList" object:returnData];
+            break;
+        }
+
+        case kConnectTypeCreateDeviceGroup:
+        {
+            // The server returns a record of the created device group
+
+            data = [data objectForKey:@"data"];
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : data, @"object" : connexion.representedObject }
+            : @{ @"data" : data };
+
+            [nc postNotificationName:@"BuildAPIDeviceGroupCreated" object:returnData];
+            break;
+        }
+
+        case kConnectTypeUpdateDeviceGroup:
+        {
+            // The server returns a record of the updated device group
+
+            data = [data objectForKey:@"data"];
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : data, @"object" : connexion.representedObject }
+            : @{ @"data" : data };
+
+            [nc postNotificationName:@"BuildAPIDeviceGroupUpdated" object:returnData];
+            break;
+        }
+
+        case kConnectTypeDeleteDeviceGroup:
+        {
+            // The server returns no data
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"object" : connexion.representedObject }
+            : nil;
+
+            [nc postNotificationName:@"BuildAPIDeviceGroupDeleted" object:returnData];
+            break;
+        }
+
+        case kConnectTypeGetDeviceGroup:
+        {
+            // The server returns a record of the single device group
+
+            NSDictionary *dg = [data objectForKey:@"data"];
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : dg, @"object" : connexion.representedObject }
+            : @{ @"data" : dg };
+
+            [nc postNotificationName:@"BuildAPIGotDevicegroup" object:returnData];
+            break;
+        }
+
+        case kConnectTypeRestartDevices:
+        {
+            // The server returns no data
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : @"restarted", @"object" : connexion.representedObject }
+            : @{ @"data" : @"restarted" };
+
+            [nc postNotificationName:@"BuildAPIDeviceGroupRestarted" object:returnData];
+            break;
+        }
+
+        case kConnectTypeGetDeployments:
+        {
+            // The server returns an array of one or more deployments, which we add to an
+            // emptied master array. The list is returned one page at a time, so we need
+            // to check for the supplied URL of the next page in sequence
+
+            NSDictionary *links = [data objectForKey:@"links"];
+            NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
+            BOOL isFirstPage = [self isFirstPage:links];
+
+            if (isFirstPage) [deployments removeAllObjects];
+
+            NSArray *deploymentList = [data objectForKey:@"data"];
+
+            if (deployments == nil) deployments = [[NSMutableArray alloc] init];
+
+            for (NSMutableDictionary *deployment in deploymentList) [deployments addObject:deployment];
+
+            if (nextURL.length != 0 && deployments.count < maxListCount)
+            {
+                NSMutableURLRequest *request = [self makeGETrequest:nextURL :YES];
+
+                if (request)
+                {
+                    [self launchConnection:request :kConnectTypeGetDeployments :connexion.representedObject];
+                    break;
+                }
+                else
+                {
+                    errorMessage = @"Could not create a request to list all of your deployments — the list may be incomplete.";
+                    [self reportError];
+                }
+            }
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : deployments, @"object" : connexion.representedObject }
+            : @{ @"data" : deployments };
+
+            [nc postNotificationName:@"BuildAPIGotDeploymentsList" object:returnData];
+            break;
+        }
+
+        case kConnectTypeCreateDeployment:
+        {
+            // The server returns a record of the created deployment
+
+            data = [data objectForKey:@"data"];
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : data, @"object" : connexion.representedObject }
+            : @{ @"data" : data };
+
+            [nc postNotificationName:@"BuildAPIDeploymentCreated" object:returnData];
+            break;
+        }
+
+        case kConnectTypeUpdateDeployment:
+        {
+            // The server returns a record of the updated deployment
+
+            data = [data objectForKey:@"data"];
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : data, @"object" : connexion.representedObject }
+            : @{ @"data" : data };
+
+            [nc postNotificationName:@"BuildAPIDeploymentUpdated" object:returnData];
+            break;
+        }
+
+        case kConnectTypeDeleteDeployment:
+        {
+            // The server returns no data
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : @"deleted", @"object" : connexion.representedObject }
+            : @{ @"data" : @"deleted" };
+
+            [nc postNotificationName:@"BuildAPIDeploymentDeleted" object:returnData];
+            break;
+        }
+
+        case kConnectTypeGetDeployment:
+        {
+            // The server returns a record of the single deployment
+
+            NSDictionary *dp = [data objectForKey:@"data"];
+
+            returnData = connexion.representedObject != nil
+            ?  @{ @"data" : dp, @"object" : connexion.representedObject }
+            : @{ @"data" : dp };
+
+            [nc postNotificationName:@"BuildAPIGotDeployment" object:returnData];
+            break;
+        }
+
+        case kConnectTypeSetMinDeployment:
+        {
+            // The server returns a record of the single deployment
+
+            NSDictionary *dp = [data objectForKey:@"data"];
+
+            returnData = connexion.representedObject != nil
+            ?  @{ @"data" : dp, @"object" : connexion.representedObject }
+            : @{ @"data" : dp };
+
+            [nc postNotificationName:@"BuildAPISetMinDeployment" object:returnData];
+            break;
+        }
+
+        case kConnectTypeGetDevices:
+        {
+            // The server returns an array of one or more devices, which we add to an
+            // emptied master array. The list is returned one page at a time, so we need
+            // to check for the supplied URL of the next page in sequence
+
+            NSDictionary *links = [data objectForKey:@"links"];
+            NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
+            BOOL isFirstPage = [self isFirstPage:links];
+
+            if (isFirstPage) [devices removeAllObjects];
+
+            NSArray *deviceList = [data objectForKey:@"data"];
+
+            if (devices == nil) devices = [[NSMutableArray alloc] init];
+
+            for (NSDictionary *device in deviceList) [devices addObject:device];
+
+            if (nextURL.length != 0)
+            {
+                NSMutableURLRequest *request = [self makeGETrequest:nextURL :YES];
+
+                if (request)
+                {
+                    [self launchConnection:request :kConnectTypeGetDevices :connexion.representedObject];
+                    break;
+                }
+                else
+                {
+                    errorMessage = @"Could not create a request to list all of your devices — the list may be incomplete.";
+                    [self reportError];
+                }
+            }
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : devices, @"object" : connexion.representedObject }
+            : @{ @"data" : devices };
+
+            [nc postNotificationName:@"BuildAPIGotDevicesList" object:returnData];
+            break;
+        }
+
+        case kConnectTypeUpdateDevice:
+        {
+            // The server returns a record of the updated device
+
+            data = [data objectForKey:@"data"];
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : data, @"object" : connexion.representedObject }
+            : @{ @"data" : data };
+
+            [nc postNotificationName:@"BuildAPIDeviceUpdated" object:returnData];
+            break;
+        }
+
+        case kConnectTypeDeleteDevice:
+        {
+            // The server returns no data
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : @"deleted", @"object" : connexion.representedObject }
+            : @{ @"data" : @"deleted" };
+
+            [nc postNotificationName:@"BuildAPIDeviceDeleted" object:returnData];
+            break;
+        }
+
+        case kConnectTypeAssignDevice:
+        {
+            // The server returns no data
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : @"assigned", @"object" : connexion.representedObject }
+            : @{ @"data" : @"assigned" };
+
+            [nc postNotificationName:@"BuildAPIDeviceAssigned" object:returnData];
+            break;
+        }
+
+        case kConnectTypeAssignDevices:
+        {
+            // The server returns no data
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : @"assigned", @"object" : connexion.representedObject }
+            : @{ @"data" : @"assigned" };
+
+            [nc postNotificationName:@"BuildAPIDevicesAssigned" object:returnData];
+            break;
+        }
+
+        case kConnectTypeUnassignDevice:
+        {
+            // The server returns no data
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : @"unassigned", @"object" : connexion.representedObject }
+            : @{ @"data" : @"unassigned" };
+
+            [nc postNotificationName:@"BuildAPIDeviceUnassigned" object:returnData];
+            break;
+        }
+
+        case kConnectTypeUnassignDevices:
+        {
+            // The server returns no data
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : @"unassigned", @"object" : connexion.representedObject }
+            : @{ @"data" : @"unassigned" };
+
+            [nc postNotificationName:@"BuildAPIDevicesUnassigned" object:returnData];
+            break;
+        }
+
+        case kConnectTypeRestartDevice:
+        {
+            // The server returns no data
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : @"restarted", @"object" : connexion.representedObject }
+            : @{ @"data" : @"restarted" };
+
+            [nc postNotificationName:@"BuildAPIDeviceRestarted" object:returnData];
+            break;
+        }
+
+        case kConnectTypeGetDevice:
+        {
+            // The server returns a record of the single deployment
+
+            NSDictionary *device = [data objectForKey:@"data"];
+
+            returnData = connexion.representedObject != nil
+            ? @{ @"data" : device, @"object" : connexion.representedObject }
+            : @{ @"data" : device };
+
+            [nc postNotificationName:@"BuildAPIGotDevice" object:returnData];
+            break;
+        }
+
+        case kConnectTypeGetDeviceLogs:
+        {
+            // The server returns an array of one or more log entries, which we add to an
+            // emptied master array. The list is returned one page at a time, so we need
+            // to check for the supplied URL of the next page in sequence
+
+            NSDictionary *links = [data objectForKey:@"links"];
+            NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
+            BOOL isFirstPage = [self isFirstPage:links];
+
+            if (logs == nil) logs = [[NSMutableArray alloc] init];
+
+            if (isFirstPage && logs.count > 0) [logs removeAllObjects];
+
+            NSArray *batch = [data objectForKey:@"data"];
+
+            for (NSDictionary *entry in batch) [logs addObject:entry];
+
+            if (nextURL.length != 0 && logs.count < maxListCount)
+            {
+                NSMutableURLRequest *request = [self makeGETrequest:nextURL :YES];
+
+                if (request)
+                {
+                    [self launchConnection:request :kConnectTypeGetDeviceLogs :connexion.representedObject];
+                    break;
+                }
+                else
+                {
+                    errorMessage = @"Could not create a request to list all of a device's log entries — the list may be incomplete.";
+                    [self reportError];
+                }
+            }
+
+            NSDictionary *dict = connexion.representedObject != nil
+            ? @{ @"data" : logs, @"count" : [NSNumber numberWithInteger:logs.count], @"object" : connexion.representedObject }
+            : @{ @"data" : logs, @"count" : [NSNumber numberWithInteger:logs.count] };
+
+            [nc postNotificationName:@"BuildAPIGotLogs" object:dict];
+            break;
+        }
+
+        case kConnectTypeGetDeviceHistory:
+        {
+            // The server returns an array of one or more log entries, which we add to an
+            // emptied master array. The list is returned one page at a time, so we need
+            // to check for the supplied URL of the next page in sequence
+
+            NSDictionary *links = [data objectForKey:@"links"];
+            NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
+            BOOL isFirstPage = [self isFirstPage:links];
+
+            if (history == nil) history = [[NSMutableArray alloc] init];
+
+            if (isFirstPage && history.count > 0) [history removeAllObjects];
+
+            NSArray *batch = [data objectForKey:@"data"];
+
+            for (NSDictionary *entry in batch) [history addObject:entry];
+
+            if (nextURL.length != 0 && history.count < maxListCount)
+            {
+                // There is at least one more page of data, so go and get it
+
+                NSMutableURLRequest *request = [self makeGETrequest:nextURL :YES];
+
+                if (request)
+                {
+                    [self launchConnection:request :kConnectTypeGetDeviceHistory :connexion.representedObject];
+                    break;
+                }
+                else
+                {
+                    errorMessage = @"Could not create a request to list all of a device's history — the list may be incomplete.";
+                    [self reportError];
+                }
+            }
+
+            NSDictionary *dict = connexion.representedObject != nil
+            ? @{ @"data" : history, @"object" : connexion.representedObject }
+            : @{ @"data" : history };
+
+            [nc postNotificationName:@"BuildAPIGotHistory" object:dict];
+            break;
+        }
+
+
+        case kConnectTypeGetAccessToken:
+        {
+            // The server returns the requested access token directly
+
+            if ((connexion.errorCode == 403) && useTwoFactor)
+            {
+                // We are using 2FA and the initial contact has resulted in a login token which we need to
+                // hand back now to the host app
+
+                NSString *lt = [data objectForKey:@"login_token"];
+
+                NSDictionary *dict = connexion.representedObject != nil
+                ? @{ @"action" : @"needotp", @"token" : lt, @"object" : connexion.representedObject }
+                : @{ @"action" : @"needotp", @"token" : lt };
+
+                [nc postNotificationName:@"BuildAPINeedOTP" object:dict];
+                break;
+            }
+
+            if (token == nil) token = [[Token alloc] init];
+            token.accessToken = [data valueForKey:@"access_token"];
+            token.expiryDate = [data valueForKey:@"expires_at"];
+            token.refreshToken = [data valueForKey:@"refresh_token"];
+            NSNumber *n = [data valueForKey:@"expires_in"];
+            token.lifetime = n.integerValue;
+            isLoggedIn = YES;
+            tokenConnexion = nil;
+
+            // TODO check that we actually have the data we require
+
+#ifdef DEBUG
+    NSLog(@"Initial Token: %@", token.accessToken);
+    NSLog(@"      Expires: %@", token.expiryDate);
+    NSLog(@"   Expires in: %li", (long)token.lifetime);
+#endif
+
+            // Record the cloud type
+            impCloudCode = tempImpCloudCode;
+
+            // Get user's account information before we do anything else
+
+            [self getMyAccount];
+
+            // Do we have any pending connections we need to process?
+            // NOTE 'launchPendingConnections' returns immediately if there are no pending connections
+
+            [self launchPendingConnections];
+
+            NSDictionary *dict = connexion.representedObject != nil
+            ? @{ @"action" : @"loggedin", @"object" : connexion.representedObject }
+            : @{ @"action" : @"loggedin" };
+
+            [nc postNotificationName:@"BuildAPILoggedIn" object:dict];
+            break;
+        }
+
+        case kConnectTypeRefreshAccessToken:
+        {
+            // The server returns the requested access token directly
+
+            token.accessToken = [data valueForKey:@"access_token"];
+            token.expiryDate = [data valueForKey:@"expires_at"];
+            NSNumber *n = [data valueForKey:@"expires_in"];
+            token.lifetime = n.integerValue;
+            tokenConnexion = nil;
+
+#ifdef DEBUG
+    NSLog(@"Refreshed Token: %@", token.accessToken);
+    NSLog(@"        Expires: %@", token.expiryDate);
+NSLog(@"   Expires in: %li", (long)token.lifetime);
+#endif
+
+            // Do we have any pending connections we need to process?
+            // NOTE 'launchPendingConnections' returns immediately if there are no pending connections
+
+            [self launchPendingConnections];
+
+            break;
+        }
+
+        case kConnectTypeGetMyAccount:
+        {
+            // The server returns the user's own account information
+
+            data = [data objectForKey:@"data"];
+
+            me = @{ @"type" : @"account",
+                    @"id" : [data objectForKey:@"id"] };
+            
+            token.account = [data objectForKey:@"id"];
+            currentAccount = [data objectForKey:@"id"];
+
+#ifdef DEBUG
+    NSLog(@"My Account ID: %@", [me objectForKey:@"id"]);
+#endif
+
+            NSDictionary *dict = @{ @"type" : @"account",
+                                   @"id" : [data objectForKey:@"id"] };
+
+            [nc postNotificationName:@"BuildAPIGotAccountID" object:dict];
+
+            break;
+        }
+
+        case kConnectTypeGetLogStreamID:
+        {
+            // We've got the stream ID so we are ready to activate the log stream
+            // NOTE no devices have yet been subscribed - this happens after connection
+
+            data = [data objectForKey:@"data"];
+            logStreamID = [data objectForKey:@"id"];
+            
+#ifdef DEBUG
+            NSLog(@"Log Stream ID received: %@", logStreamID);
+#endif
+
+            NSDictionary *attributes = [data objectForKey:@"attributes"];
+            logStreamURL = [NSURL URLWithString:[attributes objectForKey:@"url"]];
+
+            // Preserve the first device's ID for use later
+
+            deviceToStream = [connexion.representedObject objectForKey:@"device"];
+
+            // Set up the log stream
+
+            [self startStream:logStreamURL];
+
+            break;
+        }
+
+        case kConnectTypeStreamActive:
+        {
+            break;
+        }
+
+        case kConnectTypeAddLogStream:
+        {
+            // We have added a device to the log stream
+
+            if (connexion.representedObject != nil)
+            {
+                id source = [connexion.representedObject objectForKey:@"object"];
+                NSString *devid = [connexion.representedObject objectForKey:@"device"];
+
+                NSDictionary *dict = source != nil
+                ? @{ @"device" : devid, @"object" : source }
+                : @{ @"device" : devid };
+
+                [loggingDevices addObject:devid];
+
+                numberOfLogStreams = loggingDevices.count;
+
+                [nc postNotificationName:@"BuildAPIDeviceAddedToStream" object:dict];
+            }
+
+            break;
+        }
+
+        case kConnectTypeEndLogStream:
+        {
+            if (connexion.representedObject != nil)
+            {
+                id source = [connexion.representedObject objectForKey:@"object"];
+                NSString *devid = [connexion.representedObject objectForKey:@"device"];
+
+                NSDictionary *dict = source != nil
+                ? @{ @"device" : devid, @"object" : source }
+                : @{ @"device" : devid };
+
+                [loggingDevices removeObject:devid];
+
+                numberOfLogStreams = loggingDevices.count;
+
+                if (loggingDevices.count == 0) [self closeStream];
+
+                [nc postNotificationName:@"BuildAPIDeviceRemovedFromStream" object:dict];
+            }
+
+            break;
+        }
+            
+        case kConnectTypeGetLoginToken:
+        {
+            // The server returns the requested access token directly
+            
+            data = [data objectForKey:@"data"];
+            token.loginKey = [data valueForKey:@"id"];
+            
+#ifdef DEBUG
+            NSLog(@"Login Key: %@", token.loginKey);
+#endif
+            
+            // Pass the loginKey to the host app
+            
+            [nc postNotificationName:@"BuildAPILoginKey" object:data];
+            
+            break;
         }
     }
 }
@@ -2016,73 +4439,79 @@ didReceiveResponse:(NSURLResponse *)response
 #pragma mark - Utility Methods
 
 
-- (NSDictionary *)makeDictionary:(NSString *)key :(NSString *)value
-{
-    NSArray *keys = [NSArray arrayWithObjects:key, nil];
-    NSArray *values = [NSArray arrayWithObjects:value, nil];
-    return [NSDictionary dictionaryWithObjects:values forKeys:keys];
-}
-
-
-
-- (NSMutableURLRequest *)makeRequest:(NSString *)verb :(NSString *)path
-{
-    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
-    [self setRequestAuthorization:request];
-    [request setHTTPMethod:verb];
-	[request setValue:_userAgent forHTTPHeaderField:@"User-Agent"];
-
-#ifdef DEBUG
-	NSLog(@"%@", _userAgent);
-#endif
-
-    return request;
-}
-
-
-
-- (void)setRequestAuthorization:(NSMutableURLRequest *)request
-{
-    if (_harvey != nil)
-    {
-        [request setValue:[@"Basic " stringByAppendingString:[self encodeBase64String:_harvey]] forHTTPHeaderField:@"Authorization"];
-        [request setTimeoutInterval:30.0];
-    }
-    else
-    {
-        errorMessage = @"Accessing the Build API requires an API key.";
-        [self reportError];
-    }
-}
-
-
-
-- (NSInteger)checkStatus:(NSDictionary *)data
-{
-	// Before using data returned from the server, check that the success field is not false
-	// If it is, set up an error message. 1 = success; 0 = failure
-
-	NSNumber *value = [data objectForKey:@"success"];
-
-	if (value.integerValue == 0)
-	{
-		// There has been an error reported by the API
-
-		NSDictionary *err = [data objectForKey:@"error"];
-		errorMessage = [err objectForKey:@"message_short"];
-		[self reportError];
-	}
-
-	return value.integerValue;
-}
-
-
-
 - (void)reportError
 {
-    // Signal the host app that we have an error message for it to display (in 'errorMessage')
+    [self reportError:-1];
+}
 
-    [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIError" object:self];
+
+
+- (void)reportError:(NSInteger)errCode
+{
+    // Signal the host app that we have an error message for it to display (in the property 'errorMessage')
+
+    NSDictionary *error;
+    NSString *message = errorMessage;
+
+    error = errCode == -1
+    ? @{ @"message" : message }
+    : @{ @"message" : message,
+         @"code" : [NSNumber numberWithInteger:errCode] };
+
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIError" object:error];
+}
+
+
+
+- (NSString *)processAPIError:(NSDictionary *)error
+{
+    // Parses an impCentral API error for relay to the host app
+
+    NSArray *types = @[ @"VX", @"Validation Error", @"CX", @"Contraint Error", @"NF", @"Resource Not Found",
+                        @"PX", @"Permissions Error", @"XX", @"Internal Error",  @"WA", @"Warning"];
+
+    NSString *code = [error valueForKey:@"code"];
+    NSString *status = [error valueForKey:@"status"];
+    NSString *message = [error valueForKey:@"detail"];
+    NSString *action = [error valueForKey:@"action"];
+    NSString *prefix = [code substringToIndex:2];
+    NSUInteger index = 99;
+
+    for (NSUInteger i = 0; i < types.count; i += 2)
+    {
+        NSString *aPrefix = [types objectAtIndex:i];
+
+        if ([aPrefix compare:prefix] == NSOrderedSame)
+        {
+            index = i + 1;
+            break;
+        }
+    }
+
+    prefix = index != 99 ? [types objectAtIndex:index] : @"Unknown";
+    return [NSString stringWithFormat:@"[API %@] %@ (%@) Action: %@", prefix, message, status, action];
+}
+
+
+
+- (BOOL)checkFilter:(NSString *)filter :(NSArray *)validFilters
+{
+    // Compares the passed value of 'filter' to a list of possible filters,
+    // passed into 'validFilters', and returns YES or NO according to whether
+    // the filter is on the list. Not on the list? You don't get in
+
+    BOOL filterIsOK = NO;
+
+    for (NSString *aFilter in validFilters)
+    {
+        if ([aFilter compare:filter] == NSOrderedSame)
+        {
+            filterIsOK = YES;
+            break;
+        }
+    }
+
+    return filterIsOK;
 }
 
 
@@ -2092,19 +4521,19 @@ didReceiveResponse:(NSURLResponse *)response
 
 - (NSString *)encodeBase64String:(NSString *)plainString
 {
-	NSData *data = [plainString dataUsingEncoding:NSUTF8StringEncoding];
-	NSString *base64String = [data base64EncodedStringWithOptions:0];
-	return base64String;
+    NSData *data = [plainString dataUsingEncoding:NSUTF8StringEncoding];
+    return [data base64EncodedStringWithOptions:0];
 }
 
 
 
 - (NSString *)decodeBase64String:(NSString *)base64String
 {
-	NSData *data = [[NSData alloc] initWithBase64EncodedString:base64String options:0];
-	NSString *decodedString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-	return decodedString;
+    NSData *data = [[NSData alloc] initWithBase64EncodedString:base64String options:0];
+    return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
 }
+
+
 
 
 

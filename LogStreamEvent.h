@@ -1,6 +1,6 @@
 
 //  BuildAPIAccess
-//  Copyright (c) 2015-18 Tony Smith. All rights reserved.
+//  Copyright (c) 2017-18 Tony Smith. All rights reserved.
 //  Issued under the MIT licence:
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -25,27 +25,24 @@
 
 
 #import <Foundation/Foundation.h>
+#import "BuildAPIAccessConstants.h"
 
 
-@interface Connexion : NSObject
+@interface LogStreamEvent : NSObject
 
 
 // Required by BuildAPI access class
-// Connexion is simply a packaging object for NSURLSessionTasks
-// and associated data
-
-// Methods
-
-- (instancetype)init;
+// LogStreamEvent is simply a packaging object for Server-Sent Events (SSE)
+// issued by the impCentral API's log-streaming system
 
 // Properties
 
-@property (nonatomic, strong) id                  representedObject;
-@property (nonatomic, strong) NSURLSessionTask    *task;
-@property (nonatomic, strong) NSMutableData       *data;
-@property (nonatomic, strong) NSMutableURLRequest *originalRequest;
-@property (nonatomic, assign) NSInteger           actionCode;
-@property (nonatomic, assign) NSInteger           errorCode;
+@property (nonatomic, strong) id        eid;        // Event ID
+@property (nonatomic, strong) NSString  *event;     // Name of the Event
+@property (nonatomic, strong) NSString  *data;      // Data received from the EventSource
+@property (nonatomic, strong) NSError   *error;     // Errors with the connection to the source
+@property (nonatomic, assign) NSInteger type;       // Current state of the connection to the source
+@property (nonatomic, assign) NSInteger state;      // Current state of the connection to the source
 
 
 @end

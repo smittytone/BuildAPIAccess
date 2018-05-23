@@ -1,6 +1,6 @@
 
 //  BuildAPIAccess
-//  Copyright (c) 2015-18 Tony Smith. All rights reserved.
+//  Copyright (c) 2017-18 Tony Smith. All rights reserved.
 //  Issued under the MIT licence:
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -27,25 +27,19 @@
 #import <Foundation/Foundation.h>
 
 
-@interface Connexion : NSObject
+@interface Token : NSObject
 
 
 // Required by BuildAPI access class
-// Connexion is simply a packaging object for NSURLSessionTasks
-// and associated data
+// Token is simply a packaging object for impCentral API access data
+// and associated data ie. it has no methods, just four properties:
 
-// Methods
-
-- (instancetype)init;
-
-// Properties
-
-@property (nonatomic, strong) id                  representedObject;
-@property (nonatomic, strong) NSURLSessionTask    *task;
-@property (nonatomic, strong) NSMutableData       *data;
-@property (nonatomic, strong) NSMutableURLRequest *originalRequest;
-@property (nonatomic, assign) NSInteger           actionCode;
-@property (nonatomic, assign) NSInteger           errorCode;
+@property (nonatomic, strong) NSString  *accessToken;
+@property (nonatomic, strong) NSString  *expiryDate;
+@property (nonatomic, strong) NSString  *refreshToken;
+@property (nonatomic, strong) NSString  *loginKey;
+@property (nonatomic, strong) NSString  *account;
+@property (nonatomic, assign) NSInteger lifetime;
 
 
 @end

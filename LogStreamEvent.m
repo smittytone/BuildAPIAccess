@@ -24,28 +24,29 @@
 //  BuildAPIAccess 3.0.0
 
 
-#import <Foundation/Foundation.h>
+#import "LogStreamEvent.h"
 
 
-@interface Connexion : NSObject
+@implementation LogStreamEvent
 
 
-// Required by BuildAPI access class
-// Connexion is simply a packaging object for NSURLSessionTasks
-// and associated data
+@synthesize eid, event, data, type, state, error;
 
-// Methods
 
-- (instancetype)init;
+- (instancetype)init
+{
+    if (self = [super init])
+    {
+        eid = nil;
+        type = kLogStreamEventTypeNone;
+        state = kLogStreamEventStateUnknown;
+        event = nil;
+        error = nil;
+        data = nil;
+    }
 
-// Properties
-
-@property (nonatomic, strong) id                  representedObject;
-@property (nonatomic, strong) NSURLSessionTask    *task;
-@property (nonatomic, strong) NSMutableData       *data;
-@property (nonatomic, strong) NSMutableURLRequest *originalRequest;
-@property (nonatomic, assign) NSInteger           actionCode;
-@property (nonatomic, assign) NSInteger           errorCode;
+    return self;
+}
 
 
 @end

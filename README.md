@@ -1,282 +1,305 @@
-# BuildAPIAccess 2.0.1
+# BuildAPIAccess 3.0.0 #
 
-An Objective-C (Mac OS X / iOS / tvOS) class wrapper for [Electric Imp’s Build API](https://electricimp.com/docs/buildapi/).
+*BuildAPIAccess* is an Objective-C (macOS, iOS and tvOS) wrapper for [Electric Imp’s impCentral™ API](https://developer.electricimp.com/tools/impcentralapi). It is called BuildAPIAccess for historical reasons: it was written to the support Electric Imp’s Build API, the predecessor to the impCentral API. **BuildAPIAccess 3.0.0 does not support the Build API**, which has been deprecated and will shortly be removed from service.
 
-BuildAPIAccess requires the (included) class Connexion, a simple convenience class for bundling either an [NSURLConnection](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSURLConnection_Class/index.html) or [NSURLSession](https://developer.apple.com/library/prerelease/mac/documentation/Foundation/Reference/NSURLSession_class/index.html) instance and associated Build API connection data.
+*BuildAPIAccess* requires the (included) classes *Connexion*, *LogStreamEvent* and *Toke*n. All three are convenience classes for combining properties.
 
-BuildAPIAccess 2.0.0 supports both NSURLSession and NSURLConnection. The former is Apple’s preferred mechanism and the only one of the two supported by tvOS. For more information, see [Initialization Methods](#buildapiaccess-initialization-methods).
+- *Connexion* combines an [NSURLSession](https://developer.apple.com/library/prerelease/mac/documentation/Foundation/Reference/NSURLSession_class/index.html) instance and associated impCentral API connection data.
+- *Token* is used to store impCentral API authorization data.
+- *LogStreamEvent* is a packaging object for Server-Sent Events (SSE) issued by the impCentral API's logging system.
 
-### Build API Authorization
+## impCentral API Authorization ##
 
-Making use of the Build API requires an Electric Imp account and a Build API key associated with that account. Build API keys can be generated using the  Electric Imp IDE, as [detailed here](https://electricimp.com/docs/buildapi/keys/).
+Making use of the impCentral API requires an Electric Imp account. You will need your account username and password to authorize calls to the API. These are passed into the *login:* method. *BuildAPIAccess* instances do not maintain a permanent record of the selected account; this is the task of the host application.
 
-Each *BuildAPIAccess* instance does not maintain a permanent record of the selected account’s Build API Key; this is the task of the host application. *BuildAPIAccess* does require this information, so methods are provided to pass an account’s Build API Key into *BuildAPIAccess* instances.
+## Licence and Copyright ##
 
-## Licence and Copyright
+BuildAPIAccess is &copy; Tony Smith, 2015-18 and is offered under the terms of the MIT licence.
 
-BuildAPIAccess is &copy; Tony Smith, 2015-2016 and is offered under the terms of the MIT licence.
+The impCentral API is &copy; Electric Imp, 2017-18.
 
-The BuildAPI is &copy; Electric Imp, 2014-2016.
-
-## Build API Entities
-
-### Devices
-
-Devices are stored internally as [NSMutableDictionary](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableDictionary_Class/) objects with the following keys:
-
-Key | Type | Description | Editable?
---- | --- | --- | ---
-*id* | string | Unique identifier | No
-*name* | string | Human-friendly name | Yes
-*powerstate* | string | "offline" or "online" | No
-*rssi* | integer | Local WiFi signal strength | No
-*agent_id* | string | ID of the device’s paired agent | No
-*agent_status* | string | "offline" or "online" | No
-*model_id* | string | ID of the model the device is assigned to | Yes
-
-### Models
-
-Models are stored internally as [NSMutableDictionary](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableDictionary_Class/) objects with the following keys:
-
-Key | Type | Description | Editable?
---- | --- | --- | ---
-*id* | string | Unique identifier | No
-*name* | string | Human-friendly name | Yes
-*device* | array | An array of ID strings for the devices assigned to this model | No
-
-### Log Entries
-
-Log entries are returned as the *object* property of the [NSNotification](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSNotification_Class/index.html) object sent to the host application. This object will be of type *id* but is an instance of [NSArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSArray_Class/) containing zero or more [NSDictionary](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSDictionary_Class/) objects, each representing a single log entry using the following keys:
-
-Key | Type | Description | Editable?
---- | --- | --- | ---
-*timestamp* | string | The ISO 8601 timestamp at which the entry was posted | No
-*type* | string | The entry’s flag, eg. ”Agent”, “Device”, “Status”, etc. | No
-*message* | string | The logged information | No
-
-### Code Revisions
-
-A model’s code revisions are not retained by *BuildAPIAccess* but are retrieved when required on a per-build basis. When a given code revision is requested, the device and agent code files it comprises are stored, respectively, in the public properties *deviceCode* and *agentCode* as strings. Should a subsequent revision be retrieved from the same model or a different one, these properties’ values will be overwritten.
-
-If the host application wishes to maintain a full local record of all of a model’s code revisions, it will need it iterate through each build. A call to the method [*getCode:*](#--voidgetcodensstring-modelid) will record the latest build number in the public property *latestBuild*.
-
-## BuildAPIAccess Version History
-
-### 2.0.1
-
-- Add read-only *numberOfConnections* property (NSUInteger)
-- Add custom user agent string to HTTP requests
-
-### 2.0.0
-
-- Support for simultaneous log streaming from multiple devices.
-- Breaking changes to methods:
-	- launchConnection::
-	- startLogging:
-	- stopLogging:
-- New methods:
-	- isDeviceLogging:
-	- indexForID:
-	- loggingCount
-	- killAllConnections
-
-### 1.1.3
-
-- Add *codeErrors* property to record [server-reported code syntax errors](#code-syntax-errors).
-- Streamline HTTP request assembly.
-- Code improvements and minor bug fixes.
-
-## Installing BuildAPIAccess
-
-Drag the files `BuildAPIAccess.h`, `BuildAPIAccess.m`, `BuildAPIAccessConstants.h`, `Connexion.h` and `Connexion.m` into Xcode’s Project Navigator (with your project loaded). Make sure you copy the files to your project &mdash; there is a checkbox in the ‘Add files...’ window for this. Add `#import "BuildAPI.h"` to the header of the code that will make use of BuildAPIAccess and in which you will instantiate one or more *BuildAPIAccess* objects.
-
-## BuildAPIAccess Properties
-
-| Property | Type | Default | Notes |
-| --- | --- | --- | --- |
-| *devices* | [NSMutableArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/) | Empty array | Contains zero or more device records in NSDictionary form |
-| *models* | [NSMutableArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/) | Empty array | Contains zero or more model records in NSDictionary form |
-| *codeErrors* | [NSMutableArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/) | Empty array | Contains zero or more coder syntax error records in NSDictionary form **New in 1.1.3** |
-| *deviceCode* | [NSString](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSString_Class/) | Empty string | The most recently retrieved code revision’s device code |
-| *agentCode* | [NSString](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSString_Class/) | Empty string | The most recently retrieved code revision’s agent code |
-| *latestBuild* | [NSInteger](https://developer.apple.com/library/ios/documentation/Cocoa/Reference/Foundation/Miscellaneous/Foundation_DataTypes/#//apple_ref/c/tdef/NSInteger) | -1 | The latest build number of the most recently request model. This is not set until [*getCode:*](#--voidgetcodensstring-modelid) is called |
-| *errorMesage* | [NSString](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSString_Class/) | Empty string | The most recently reported BuildAPIAccess error message |
-| *numberOfConnections* | NSUInteger | 0 | The number of connections currently in flight |
-
-## BuildAPIAccess Initialization Methods
-
-BuildAPIAccess provides two convenience initializers (constructors):
-
-### - (id)initForNSURLSession
-### - (id)initForNSURLConnection
-
-Both methods initialize the BuildAPIAccess instance to make use of, respectively, Apple’s NSURLSession and NSURLConnection connectivity systems. iOS and Mac OS X support both modes, though NSURLSession is the mechanism Apple recommends. Indeed, tvOS *only* supports NSURLSession. As such, BuildAPIAccess now defaults to NSURLSession.
-
-## BuildAPIAccess Authorization Methods
-
-### - (void)setk:(NSString *)apiKey
-### - (void)clrk
-
-Use the first method to pass to the BuildAPIAcess instance the user’s Build API key, stored only for the lifetime of the instance. It is up to your host app to persist the API key across launches.
-
-The second method can be used to clear the instance’s copy of the key.
-
-## BuildAPIAccess Methods
-
-BuildAPIAccess provides a number of methods, but these are the ones to call from your own application:
-
-### - (void)getModels
-
-This method results in a list of current models placed in the BuildAPIAccess NSMutableArray property *models*.
-
-### - (void)getDevices
-
-This method results in a list of current devices placed in the BuildAPIAccess NSMutableArray property *devices*.
-
-### - (void)createNewModel:(NSString *)modelName
-
-Creates a new model on the server with the name *modelName*.
-
-### - (void)uploadCode:(NSString *)modelID :(NSString *)newDeviceCode :(NSString *)newAgentCode
-
-Upload device and agent code, stored in strings, to the model with ID *modelID*.
-
-### - (void)assignDevice:(NSString *)deviceID toModel:(NSString *)modelID
-
-Associate the device with ID *deviceID* to the model with ID *modelID*.
-
-### - (void)getCode:(NSString *)modelID
-
-Get the most recent agent and device code from the model with ID *modelID*. This code is stored in the BuildAPIAccess NSString properties *deviceCode* and *agentCode*.
-
-### - (void)getCodeRev:(NSString *)modelID :(NSInteger)build
-
-Get a specific agent and device code revision &mdash; build number *build* &mdash; from the model with an ID *modelID*. This code is stored in the BuildAPIAccess NSString properties *deviceCode* and *agentCode*.
-
-### - (void)restartDevice:(NSString *)deviceID
-
-Force the device with ID *deviceID* to restart.
-
-### - (void)restartDevices:(NSString *)modelID
-
-Force all the devices assigned to the model of ID *modelID* to restart.
-
-### - (void)deleteDevice:(NSString *)deviceID
-
-Remove the device of ID *deviceID* from the server. Note that this doesn’t actually remove the device from the user’s Electric Imp account *(see the [Build API Delete Device documentation](https://electricimp.com/docs/buildapi/device/delete/))*
-
-### - (void)deteleModel:(NSString *)modelID
-
-Delete the model with ID *modelID*.
-
-### - (void)updateDevice:(NSString *)deviceID :(NSString *)key :(NSString *)value
-
-Update the information stored on the server for the device of ID *deviceID*. This is used to set or alter a single key within the key-value record.
-
-### - (void)updateModel:(NSString *)modelID :(NSString *)key :(NSString *)value
-
-Update the information stored on the server for the model of *modelID*. This is used to set or alter a single key within the key-value record.
-
-### - (void)getLogsForDevice:(NSString *)deviceID :(NSString *)since :(BOOL)isStream
-
-Get the current set of log entries stored on the server for the device of ID *deviceID*.
-
-The parameter *since* is a Unix timestamp and with limit the log entries returned to those posted on or after the timestamp. Pass an empty string, `""`, to get all the most recent log entries (up to a server-imposed maximum of 200).
-
-Pass `YES` into the *isStream* parameter if you want to initiate log streaming.
-
-Currently, log entries can be streamed from only one device. To stream from another device, call [*stopLogging:*](#--voidstoplogging) then call [*getLogsForDevice:::*](#--voidgetlogsfordevicensstring-deviceid-nsstring-since-boolisstream) with the new device’s *deviceIndex* value.
-
-### - (void)startLogging:(NSString *)deviceID
-
-Having initiated log streaming using [*getLogsForDevice:::*](#--voidgetlogsfordevicensstring-deviceid-nsstring-since-boolisstream), this method is called automatically. But if your application uses [*stopLogging:*](#--voidstoplogging) to halt logging, this method can be called to recommence logging.
-
-Its parameter is the device ID of the device for which logs can be streamed.
-
-### - (void)stopLogging:(NSString *)deviceID
-
-Call this method to stop the current logging stream. Its parameter is the device ID of the device for which logs are being streamed, or pass in `nil` to stop logging for **all** devices.
-
-### - (BOOL)isDeviceLogging:(NSString *)deviceID
-
-Call this method to check whether a device of ID *deviceID* is currently receiving streamed logs.
-
-### - (NSInteger)indexForID:(NSString *)deviceID
-
-Call this method to get the specified device’s location (0 - n) within BuildAPIAcess’ list of logging devices. It will return -1 if the device is not streaming logs.
-
-### - (NSUInteger)loggingCount
-
-This method returns the number of devices from which logs are currently being streamed.
-
-## BuildAPIAccess Connection Methods
-
-### - (void)killAllConnections
-
-This method quickly cancels **all** current connections and clears the list of devices for which log entries are being streamed. Typically used to tidy up when the host app is closing down. However, it will issue notifications for devices whose log streams are being terminated.
-
-## BuildAPIAccess HTTPS Request Construction Methods
-
-BuildAPIAccess provides the following convenience methods for construction HTTPS requests to the Electric Imp Cloud. Where a *bodyDictionary* parameter is required, pass an [NSDictionary](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSDictionary_Class/) object loaded with the key-value pairs you wish to change. Note that the Build API ignores keys that it does not allow users to change *([see above](#devices))*, and will ignore invalid keys.
-
-These methods are called by the above Build API Access methods.
-
-#### - (NSMutableURLRequest *)makeGETrequest:(NSString *)path
-
-#### - (NSMutableURLRequest *)makePUTrequest:(NSString *)path :(NSDictionary *)bodyDictionary
-
-#### - (NSMutableURLRequest *)makePOSTrequest:(NSString *)path :(NSDictionary *)bodyDictionary
-
-#### - (NSMutableURLRequest *)makeDELETErequest:(NSString *)path
-
-## Signalling Connections
-
-BuildAPIAccess maintains a list of active connections. When a connection is completed for whatever reason, it is removed from the list. If there are no connections in flight, the list will be empty. When a connection is added to the empty list, BuildAPIAccess will signal this by sending the notification `BuildAPIProgressStart`. When the last listed connection completes, it will send the notification `BuildAPIProgressStop`. This is so that the host app can maintain a progress indicator which is visible so long as at least one connection is in flight (but gives to indication as to the progress of individual connections).
-
-## Returning Data
-
-Requests for data are made asynchronously. When the data returns &mdash; or, in the case of data being uploaded or changed, confirmation is made by the server &mdash; the result is signalled to the host application through notifications, listed below. When data is returned, it is stored in BuildAPIAccess member properties as outlined in the Build API access methods [listed above](#buildapiaccess-methods).
-
-Notification | Description
---- | ---
-BuildAPIGotModelsList | Model list acquired and now accessible through the *models* property
-BuildAPIGotDevicesList | Device list acquired and now accessible through the *devices* property
-BuildAPIPostedCode | Code revision uploaded successfully
-BuildAPIDeviceRestarted | Device restarted as requested
-BuildAPIDeviceAssigned | Device successfully assigned to the specified model
-BuildAPIModelCreated | New model successfully created
-BuildAPIModelUpdated | Model information successfully updated on the server
-BuildAPIModelDeleted | Model successfully deleted
-BuildAPIDeviceUpdated | Device information successfully updated on the server
-BuildAPIDeviceDeleted | Device successfully ‘removed’ from your account
-BuildAPIGotCodeRev | Successfully retrieved the requested code revision. Device code added to the *deviceCode* property. Model code added to the *modelCode* property
-BuildAPIGotLogs | Successfully retrieved the requested log entries. The logs are sent with the notification as an [NSArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSArray_Class/) [log entry records](#log-entries)
-BuildAPILogStream | Successfully retrieved a freshly posted log entry. The log entry is sent with the notification as an [NSArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSArray_Class/) [log entry records](#log-entries)
-BuildAPILogStreamEnd | Signals that a connection failure has stopped log streaming. The ID of the device that is no longer streaming logs is sent with the notification as an NSString
-
-## Error Reporting
-
-Errors arising from connectivity, or through the application’s interaction with the Build API, are announced by the notification `BuildAPIError`. When the application receives this notification, it should read the BuildAPIAccess instance’s *errorMessage* property for more information.
-
-### Code Syntax Errors
-
-Code uploaded to the Electric Imp Cloud via the Build API is automatically checked for syntax errors. These are reported using the standard error message reporting system: a list of all the errors is added to the BuildAPIAccess instance‘s *errorMessage* property.
-
-From BuildAPIAccess 1.1.3 on, a new property *codeErrors* has been added. It is an [NSMutableArray](https://developer.apple.com/library/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableArray_Class/) containing zero or more code error records. These records are [NSMutableDictionary](https://developer.apple.com/library/prerelease/mac/documentation/Cocoa/Reference/Foundation/Classes/NSMutableDictionary_Class/) objects containing the following keys:
-
-Key | Type | Notes
---- | --- | ---
-*message* | String | A human readable error message |
-*type* | String | `"device"` or `"agent"` &mdash; which code unit contains the error |
-*row* | NSNumber | The line number of the *compiled code* in which the error was detected |
-*col* | NSNumber | The column at which the error was detected |
-
-Note that *codeErrors* is cleared every time code is uploaded &mdash; it only contains the results of the most recent syntax check.
-
-## HTTP User Agent
+## HTTP User Agent ##
 
 From version 2.0.1, BuildAPIAccess issues HTTPS requests with a custom user agent string of the following form:
 
 ```
-BuildAPIAcces/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
+BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 ```
+
+## Class Usage ##
+
+Initialize a *BuildAPIAccess* instance using *init:*
+
+```
+BuildAPIAccess *api = [[BuildAPIAccess alloc] init];
+```
+
+## Class Methods: Login and Authentication ##
+
+### - (void)login:(NSString &#42;)userName :(NSString &#42;)passWord :(BOOL)is2FA ###
+
+Log in using the supplied credentials. The method uses the credentials to retrieve a new API access token, which is used to authorize all further API accesses during the lifetime of the token. Values passed into *is2FA* are currently ignored; this parameter is for future use.
+
+### - (void)twoFactorLogin:(NSString &#42;)loginToken :(NSString &#42;)otp ###
+
+Placeholder for support of two-factor authentication.
+
+### - (void)logout ###
+
+Delete the instance's impCentral API authorization tokens and close any current connections.
+
+### - (void)setEndpoint:(NSString &#42;)pathWithVersion ###
+
+Changes the URL to which BuildAPIAccess accesses the impCentral API. Use this if you are accessing the API within a Private Cloud. If this is not called, all API accesses are made to `https://api.electricimp.com/v5`.
+
+## Class Methods: Getting Data ##
+
+### Products ###
+
+### - (void)getProducts ###
+
+Obtains a list of all the impCentral products associated with the account used to sign in to the impCentral API. This method may result in multiple calls to the API as it retrieves as many pages as a required *(see ‘Pagination’, below)*.
+
+The instance posts the notification `@"BuildAPIGotProductsList"` when the complete list of products has been received. The notification includes an NSDictionary: its *data* key points to an array of product NSDictionaries.
+
+### - (void)getProductsWithFilter:(NSString &#42;)filter :(NSString &#42;)uuid ###
+
+Obtains a list of all the impCentral products associated with the current account that has been filtered with the named filter and associated resource UUID. Currently the only filter supported is `@"owner.id"` for which the supplied UUID must be an account ID.
+
+This method may result in multiple calls to the API as it retrieves as many pages as a required. The instance posts the notification `@"BuildAPIGotProductsList"` when the complete list of products has been received. The notification includes an NSDictionary: its *data* key points to an array of product NSDictionaries.
+
+### - (void)getProduct:(NSString &#42;)productID ###
+
+Obtains the record of the product with the specified ID. The instance posts the notification `@"BuildAPIGotProduct"` when the product data has been received. The notification includes an NSDictionary: its *data* key points to the product NSDictionary.
+
+### Device Groups ###
+
+### - (void)getDevicegroups ###
+
+Obtains a list of all the impCentral device groups associated with the current account (see *login:*). This method may result in multiple calls to the API as it retrieves as many pages as a required.
+
+The instance posts the notification `@"BuildAPIGotDeviceGroupsList"` when the complete list of device groups has been received. The notification includes an NSDictionary: its *data* key points to an array of device group NSDictionaries.
+
+### - (void)getDevicegroupsWithFilter:(NSString &#42;)filter :(NSString &#42;)uuid ###
+
+Obtains a list of all the impCentral device groups associated with the current account (see *login:*) that has been filtered with the named filter and associated resource UUID. Currently the only filters supported are `@"owner.id"`, `@"product.id"` or `@"type"`. Valid values for type are `"development_devicegroup"`, `"factoryfixture_devicegroup"`, `"pre_factoryfixture_devicegroup"`, `"pre_production_devicegroup"` and `"production_devicegroup"`, passed into the *uuid* parameter. This method may result in multiple calls to the API as it retrieves as many pages as a required.
+
+The instance posts the notification `@"BuildAPIGotDeviceGroupsList"` when the complete list of device groups has been received. The notification includes an NSDictionary: its *data* key points to an array of device group NSDictionaries.
+
+### - (void)getDevicegroup:(NSString &#42;)devicegroupID ###
+
+Obtains the record of the device group with the specified ID. The instance posts the notification `@"BuildAPIGotDevicegroup"` when the device group data has been received. The notification includes an NSDictionary: its *data* key points to the device group NSDictionary.
+
+### Devices ###
+
+### - (void)getDevices ###
+
+Obtains a list of all the (development) devices associated with the current account (see *login:*). This method may result in multiple calls to the API as it retrieves as many pages as a required.
+
+The instance posts the notification `@"BuildAPIGotDevicesList"` when the complete list of devices has been received. The notification includes an NSDictionary: its *data* key points to an array of device NSDictionaries.
+
+### - (void)getDevicesWithFilter:(NSString &#42;)filter :(NSString &#42;)uuid ###
+
+Obtains a list of all the impCentral devices associated with the current account (see *login:*) that has been filtered with the named filter and associated resource UUID. Currently the only filters supported are `@"owner.id"`, `@"product.id"`, `@"devicegroup.id"`, `@"devicegroup.owner.id"` or `@"devicegroup.type"`. Valid values for type are `"development_devicegroup"`, `"factoryfixture_devicegroup"`, `"pre_factoryfixture_devicegroup"`, `"pre_production_devicegroup"` and `"production_devicegroup"`, passed into the *uuid* parameter. This method may result in multiple calls to the API as it retrieves as many pages as a required.
+
+The instance posts the notification `@"BuildAPIGotDevicesList"` when the complete list of device groups has been received. The notification includes an NSDictionary: its *data* key points to an array of device group NSDictionaries.
+
+### - (void)getDevice:(NSString &#42;)deviceID ###
+
+Obtains the record of the device with the specified ID. The instance posts the notification `@"BuildAPIGotDevice"` when the device data has been received. The notification includes an NSDictionary: its *data* key points to the device NSDictionary.
+
+### - (void)getDeviceLogs:(NSString &#42;)deviceID ###
+
+Obtains all of the historical logs posted by the specified device and its agent. This method may result in multiple calls to the API as it retrieves as many pages as a required.
+
+The instance posts the notification `@"BuildAPIGotLogs"` when the complete list of device logs has been received. The notification includes an NSDictionary: its *data* key points to an array of log entry NSDictionaries; its *count* key indicates the number of log items supplied.
+
+### - (void)getDeviceHistory:(NSString &#42;)deviceID ###
+
+Obtains the enrollment history of the specified device. This method may result in multiple calls to the API as it retrieves as many pages as a required.
+
+The instance posts the notification `@"BuildAPIGotHistory"` when the complete list of device history entries has been received. The notification includes an NSDictionary: its *data* key points to an array of history entry NSDictionaries.
+
+### Deployments ###
+
+### - (void)getDeployments ###
+
+Obtains a list of all the deployments made to device groups associated with the current account (see *login:*). This method may result in multiple calls to the API as it retrieves as many pages as a required.
+
+The instance posts the notification `@"BuildAPIGotDeploymentsList"` when the complete list of deployments has been received. The notification includes an NSDictionary: its *data* key points to an array of deployment NSDictionaries.
+
+### - (void)getDeploymentsWithFilter:(NSString &#42;)filter :(NSString &#42;)uuid ###
+
+Obtains a list of all the deployments made to device groups associated with the current account (see *login:*) that has been filtered with the named filter and associated resource UUID. Currently the only filters supported are `@"owner.id"`, `@"creator.id"`, `@"product.id"`, `@"devicegroup.id"`, `@"sha"`, `@"flagged"`, `@"flagger.id"` or `@"tags"`. This method may result in multiple calls to the API as it retrieves as many pages as a required.
+
+The instance posts the notification `@"BuildAPIGotDeploymentsList"` when the complete list of deployments has been received. The notification includes an NSDictionary: its *data* key points to an array of deployment NSDictionaries.
+
+### - (void)getDeployment:(NSString &#42;)deploymentID ###
+
+Obtains the record of the deployment with the specified ID. The instance posts the notification `@"BuildAPIGotDeployment"` when the deployment data has been received. The notification includes an NSDictionary: its *data* key points to the deployment NSDictionary.
+
+## Class Methods: Setting Data ##
+
+### Products ###
+
+### - (void)createProduct:(NSString &#42;)name :(NSString &#42;)description ###
+
+Creates a product with the specified name and description. These values are limited by the API to 80 and 255 characters, respectively; the method will tail the supplied strings to ensure this limit is adhered to. The name may not be nil and must be at least one character in length. The description may be nil or an empty string.
+
+The instance posts the notification `@"BuildAPIProductCreated"` when the product has been created. The notification includes an NSDictionary: its *data* key points to a record of the new product as an NSDictionary.
+
+### - (void)updateProduct:(NSString &#42;)productID :(NSArray &#42;)keys :(NSArray &#42;)values ###
+
+Updates the specified product using the supplied keys and their associated values. The order of items in the keys and values arrays should match; no check is made to ensure that this is the case. The method checks that the two arrays are of equal length, however. The only supported key values are *name* and *description*.
+
+The instance posts the notification `@"BuildAPIProductUpdated"` when the product has been updated. The notification includes an NSDictionary: its *data* key points to a record of the updated product as an NSDictionary.
+
+### - (void)deleteProduct:(NSString &#42;)productID ###
+
+Deletes the product of the specified ID. Products cannot be deleted if they have associated device groups. If you attempt to delete a product that does, the API will issue an error, which the BuildAPIAccess instance will relay to the host app.
+
+The instance posts the notification `@"BuildAPIProductDeleted"` when the product has been deleted.
+
+### Device Groups ###
+
+### - (void)createDevicegroup:(NSDictionary &#42;)details ###
+
+Creates a device group with the settings specified as the *details* dictionary’s key-value pairs. Allowed keys are *name*, *description*, *type*, *"targetid* and *productid*. The keys’ values are also strings. The first and last of these are mandatory, and must not be nil or of zero length. See the [impCentral API documentation](https://apidoc.electricimp.com/) for allowed types; BuildAPIAccess defaults to `@"development_devicegroup"` if no type is provided.
+
+The values of *name* and *description* are limited by the API to 80 and 255 characters, respectively; the method will tail the supplied strings to ensure this limit is adhered to. The name may not be nil and must be at least one character in length. The description may be nil or an empty string.
+
+The value of *targetid* is the ID of a production device group and can be omitted if the device group being created is of neither factoryfixture or pre_factoryfixture type.
+
+The instance posts the notification `@"BuildAPIDeviceGroupCreated"` when the device group has been created. The notification includes an NSDictionary: its *data* key points to a record of the new device group as an NSDictionary.
+
+### - (void)updateDevicegroup:(NSString &#42;)devicegroupID :(NSString &#42;)keys :(NSString &#42;)values ###
+
+Updates the specified device group using the supplied keys and their associated values. The order of items in the keys and values arrays should match; no check is made to ensure that this is the case. The method checks that the two arrays are of equal length, however. The only supported keys are *name*, *description*, *type*, *production_target* and *load_code_after_blessing*. The first three of these reference strings; *production_target* references a dictionary with the keys *id* (the ID of the target production device group) and *type* (the string `@"production_devicegroup"`); and *load_code_after_blessing* references an NSNumber created from a boolean value.
+
+The instance posts the notification `@"BuildAPIDeviceGroupUpdated"` when the device group has been updated. The notification includes an NSDictionary: its *data* key points to a record of the updated device group as an NSDictionary.
+
+### - (void)deleteDevicegroup:(NSString &#42;)devicegroupID ###
+
+Deletes the device group of the specified ID. Device groups cannot be deleted if they have assigned devices. If you attempt to delete a device group that does, the API will issue an error, which the BuildAPIAccess instance will relay to the host app.
+
+The instance posts the notification `@"BuildAPIDeviceGroupDeleted"` when the device group has been deleted.
+
+### Devices ###
+
+### - (void)updateDevice:(NSString &#42;)deviceID :(NSString &#42;)name ###
+
+Updates the specified device group using the supplied name values. Name may be `nil` &mdash; this removes the device’s name, if it has one.
+
+The instance posts the notification `@"BuildAPIDeviceUpdated"` when the product has been updated. The notification includes an NSDictionary: its *data* key points to a record of the updated device as an NSDictionary.
+
+### - (void)deleteDevice:(NSDictionary *)device ###
+
+Removes the specified development device from the account to which it is currently assigned. Production devices cannot be deleted.
+
+The instance posts the notification `@"BuildAPIDeviceDeleted"` when the device has been deleted.
+
+### Deployments ###
+
+### - (void)createDeployment:(NSDictionary &#42;)deployment ###
+
+Creates a deployment with the settings specified as the *deployment* dictionary’s key-value pairs. The dictionary’s keys and values should match those expected by the impCentral API.
+
+The instance posts the notification `@"BuildAPIDeploymentCreated"` when the deployment has been created. The notification includes an NSDictionary: its *data* key points to a record of the new deployment as an NSDictionary.
+
+### - (void)updateDeployment:(NSString &#42;)deploymentID :(NSArray &#42;)keys :(NSArray &#42;)values ###
+
+Updates the specified deployment using the supplied keys and their associated values. The order of items in the keys and values arrays should match; no check is made to ensure that this is the case. The method checks that the two arrays are of equal length, however. The only supported keys are *description* and *flagged*.
+
+The instance posts the notification `@"BuildAPIDeploymentUpdated"` when the deployment has been updated. The notification includes an NSDictionary: its *data* key points to a record of the updated deployment as an NSDictionary.
+
+### - (void)deleteDeployment:(NSString &#42;)deploymentID ###
+
+Deletes the deployment of the specified ID. Deployments cannot be deleted if the deployment is flagged, or it is a device group's most recent deployment. If you attempt to delete a deployment that meets either of these criteria, the API will issue an error, which the BuildAPIAccess instance will relay to the host app.
+
+The instance posts the notification `@"BuildAPIDeploymentDeleted"` when the device group has been deleted.
+
+## Class Methods: Other Actions ##
+
+### - (void)restartDevices:(NSString &#42;)devicegroupID ###
+
+Restarts all of the devices that are assigned to the specified device group. The instance posts the notification `@"BuildAPIDeviceGroupRestarted"` when all the devices has been instructed to restart. Note that not all devices will restart there and then as this depends upon their connection status.
+
+### - (void)restartDevice:(NSString &#42;)deviceID ###
+
+Restarts the specified device. The instance posts the notification `@"BuildAPIDeviceRestarted"` when the device has been instructed to restart. Note that the device may not restart there and then as this depends upon its connection status.
+
+### - (void)assignDevice:(NSMutableDictionary &#42;)device :(NSString &#42;)devicegroupID ###
+
+Assigns the specified device to the specified device group. The device is specified using a dictionary which matches the standard impCentral device record (see [the impCentral API reference](https://apidoc.electricimp.com/#tag/Devices)).
+
+The instance posts the notification `@"BuildAPIDeviceAssigned"` when the device has been assigned.
+
+### - (void)assignDevices:(NSArray &#42;)devices :(NSString &#42;)devicegroupID ###
+
+Assigns the specified devices to the specified device group. Each device is specified using a dictionary which matches the standard impCentral device record (see [the impCentral API reference](https://apidoc.electricimp.com/#tag/Devices)); these records are added to an array, which is passed into the method.
+
+The instance posts the notification `@"BuildAPIDevicesAssigned"` when the device has been assigned.
+
+### - (void)unassignDevice:(NSDictionary &#42;)device ###
+
+Removes a device from its assigned device group and leaves it in an unassigned state. The device is specified using a dictionary which matches the standard impCentral device record (see [the impCentral API reference](https://apidoc.electricimp.com/#tag/Devices)).
+
+The instance posts the notification `@"BuildAPIDeviceUnassigned"` when the device has been unassigned.
+
+### - (void)unassignDevices:(NSArray &#42;)devices ###
+
+Removes a set of devices from their assigned device group (singular) and leaves them in an unassigned state. Each device is specified using a dictionary which matches the standard impCentral device record (see [the impCentral API reference](https://apidoc.electricimp.com/#tag/Devices)), all provided to the method as an array.
+
+Note that the method checks for already unassigned devices based on the information in the impCentral device records passed in. It also notes the first referenced device group &mdash; this is the device group from which all other devices will be unassigned. Any devices included which are not already assigned to this device group will be ignored.
+
+The instance posts the notification `@"BuildAPIDevicesUnassigned"` when the device has been unassigned.
+
+## Class Methods: Logging ##
+
+### - (void)startLogging:(NSString &#42;)deviceID ###
+
+Adds the specified device (by its ID) to the list of devices for which streamed log entries are being received. If no stream is in place, BuildAPIAccess will set one up. The instance posts the notification `@"BuildAPIDeviceAddedToStream"` when the device has been added to the stream. The notification's object is a dictionary containing the key *device* &mdash; its value is the added device’s ID.
+
+The instance also posts the notification `@"BuildAPILogEntryReceived"` when a log entry has been received. The log entry is passed as the notification’s object, which is a dictionary with the keys *message* and *code*. The former is the raw log entry data, which will be in the form:
+
+```
+"232390b030728cee 2017-05-19T17:28:19.095Z development server.log Connected by WiFi on SSID \"darkmatter\" with IP address 192.168.0.2"
+```
+
+The *code* key is only present in the case of an error; the value of *message* will then be an error message. Errors are relayed via the notification `@"BuildAPILogStreamClosed"`.
+
+### - (void)stopLogging:(NSString &#42;)deviceID ###
+
+Removes the specified device (by its ID) from the list of devices for which streamed log entries are being received. The instance posts the notification `@"BuildAPIDeviceRemovedFromStream"` when the device has been removed from the stream. The notification's object is a dictionary containing the key *device* &mdash; its value is the removed device’s ID.
+
+Relays the notification `@"BuildAPILogStreamClosed"` to the host app if logging is terminated because of a connection error.
+
+### - (BOOL)isDeviceLogging:(NSString &#42;)deviceID ###
+
+Returns `YES` if the supplied device ID is that of a device which is currently live-streaming log data, otherwise `NO`.
+
+### - (void)killAllConnections ###
+
+Immediately halt all in-flight connections to the impCentral API, including log streams.
+
+## Class Methods: Pagination ##
+
+### - (void)setPageSize:(NSInteger)size ###
+
+Set the maximum number of data items which will be returned by the impCentral API when the instance calls an endpoint that returns data sets. The value of *size* should be between 1 and 100, inclusive.
+
+### - (BOOL)isFirstPage:(NSDictionary &#42;)links ###
+
+Used by the instance to determine whether a page of data is the first of many. This may also be the last page if the number of returned items is less than the page maximum.
+
+*links* is an NSDictionary derived from the JSON data returned by the API.
+
+### - (NSString *)nextPageLink:(NSDictionary &#42;)links ###
+
+Used by the instance to get the URL (as a string) of the next page of data in the sequence.
+
+*links* is an NSDictionary derived from the JSON data returned by the API.
+
+### - (NSString *)getNextURL:(NSString &#42;)url ###
+
+Used by the instance to obtain the query string from the URL pointing to the next page of data in the sequence.

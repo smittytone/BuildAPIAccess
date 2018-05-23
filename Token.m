@@ -1,6 +1,6 @@
 
 //  BuildAPIAccess
-//  Copyright (c) 2015-18 Tony Smith. All rights reserved.
+//  Copyright (c) 2017-18 Tony Smith. All rights reserved.
 //  Issued under the MIT licence:
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -24,28 +24,28 @@
 //  BuildAPIAccess 3.0.0
 
 
-#import <Foundation/Foundation.h>
+#import "Token.h"
+
+@implementation Token
 
 
-@interface Connexion : NSObject
+@synthesize accessToken, refreshToken, expiryDate, lifetime, loginKey, account;
 
 
-// Required by BuildAPI access class
-// Connexion is simply a packaging object for NSURLSessionTasks
-// and associated data
+- (instancetype)init
+{
+    if (self = [super init])
+    {
+        accessToken = @"";
+        refreshToken = @"";
+        expiryDate = @"";
+        lifetime = 0;
+        loginKey = @"";
+        account = @"";
+    }
 
-// Methods
-
-- (instancetype)init;
-
-// Properties
-
-@property (nonatomic, strong) id                  representedObject;
-@property (nonatomic, strong) NSURLSessionTask    *task;
-@property (nonatomic, strong) NSMutableData       *data;
-@property (nonatomic, strong) NSMutableURLRequest *originalRequest;
-@property (nonatomic, assign) NSInteger           actionCode;
-@property (nonatomic, assign) NSInteger           errorCode;
+    return self;
+}
 
 
 @end
