@@ -528,13 +528,20 @@
 
 - (void)getMyAccount
 {
+    [self getMyAccount:nil];
+}
+
+
+
+- (void)getMyAccount:(id)someObject
+{
     // Set up a GET request to /accounts/me
 
     NSMutableURLRequest *request = [self makeGETrequest:@"accounts/me" :NO];
 
     if (request)
     {
-        [self launchConnection:request :kConnectTypeGetMyAccount :nil];
+        [self launchConnection:request :kConnectTypeGetMyAccount :someObject];
     }
     else
     {
@@ -4319,19 +4326,21 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
             // The server returns the user's own account information
 
             data = [data objectForKey:@"data"];
+            NSString *aid = [data objectForKey:@"id"];
 
             me = @{ @"type" : @"account",
-                    @"id" : [data objectForKey:@"id"] };
+                    @"id" : aid };
             
-            token.account = [data objectForKey:@"id"];
-            currentAccount = [data objectForKey:@"id"];
+            token.account = aid;
+            currentAccount = aid;
 
 #ifdef DEBUG
     NSLog(@"My Account ID: %@", [me objectForKey:@"id"]);
 #endif
 
-            NSDictionary *dict = @{ @"type" : @"account",
-                                   @"id" : [data objectForKey:@"id"] };
+            NSDictionary *dict = connexion.representedObject != nil
+            ? @{ @"account" : aid, @"object" : connexion.representedObject }
+            : @{ @"account" : aid };
 
             [nc postNotificationName:@"BuildAPIGotAccountID" object:dict];
 

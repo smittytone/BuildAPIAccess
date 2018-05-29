@@ -87,6 +87,7 @@
 
 // Data Request Methods
 - (void)getMyAccount;
+- (void)getMyAccount:(id)someObject;
 - (void)getProducts;
 - (void)getProducts:(id)someObject;
 - (void)getProductsWithFilter:(NSString *)filter :(NSString *)uuid;
