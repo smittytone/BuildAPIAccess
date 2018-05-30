@@ -4316,7 +4316,7 @@ didCompleteWithError:(NSError *)error
 
             // Get user's account information before we do anything else
 
-            [self getMyAccount];
+            // [self getMyAccount];
 
             // Do we have any pending connections we need to process?
             // NOTE 'launchPendingConnections' returns immediately if there are no pending connections
