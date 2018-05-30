@@ -80,6 +80,7 @@
 #define kConnectTypeStreamActive                84
 #define kConnectTypeAddLogStream                85
 #define kConnectTypeEndLogStream                86
+#define kConnectTypeGetAnAccount                87
 
 #define kConnectTypeGetLoginToken               90
 

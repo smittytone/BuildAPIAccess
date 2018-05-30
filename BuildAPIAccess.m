@@ -552,6 +552,40 @@
 
 
 
+- (void)getAccount:(NSString *)accountID
+{
+    [self getAccount:accountID :nil];
+}
+
+
+
+- (void)getAccount:(NSString *)accountID :(id)someObject
+{
+    // Set up a GET request to /accounts/{id}
+
+    if (accountID == nil || accountID.length == 0)
+    {
+        // If no account ID is passed, just get the user's own accoint
+
+        [self getMyAccount:someObject];
+        return;
+    }
+    
+    NSMutableURLRequest *request = [self makeGETrequest:[NSString stringWithFormat:@"accounts/%@", accountID] :NO];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeGetAnAccount :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to list your account information.";
+        [self reportError];
+    }
+}
+
+
+
 #pragma mark Products
 
 
@@ -4339,10 +4373,10 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
 #endif
 
             NSDictionary *dict = connexion.representedObject != nil
-            ? @{ @"account" : aid, @"object" : connexion.representedObject }
-            : @{ @"account" : aid };
+            ? @{ @"account" : data, @"object" : connexion.representedObject }
+            : @{ @"account" : data };
 
-            [nc postNotificationName:@"BuildAPIGotAccountID" object:dict];
+            [nc postNotificationName:@"BuildAPIGotMyAccount" object:dict];
 
             break;
         }
@@ -4424,6 +4458,22 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
             break;
         }
             
+        case kConnectTypeGetAnAccount:
+        {
+            // The server returns the requested account information -
+            // just send the account data back to the calling app
+
+            data = [data objectForKey:@"data"];
+
+            NSDictionary *dict = connexion.representedObject != nil
+            ? @{ @"account" : data, @"object" : connexion.representedObject }
+            : @{ @"account" : data };
+
+            [nc postNotificationName:@"BuildAPIGotAnAccount" object:dict];
+
+            break;
+        }
+        
         case kConnectTypeGetLoginToken:
         {
             // The server returns the requested access token directly
