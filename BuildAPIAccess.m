@@ -2450,9 +2450,14 @@
 
     // Use NSURLSession for the connection. Compatible with iOS, tvOS and Mac OS X
 
-    if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
+    if (apiSession == nil)
+    {
+        NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
+        configuration.URLCache = [[NSURLCache alloc] initWithMemoryCapacity:0 diskCapacity:0 diskPath:nil];
+        apiSession = [NSURLSession sessionWithConfiguration:configuration
                                                           delegate:self
                                                      delegateQueue:[NSOperationQueue mainQueue]];
+    }
 
     // Do we have a valid access token - or are we getting/refreshing the access token?
 
@@ -2536,9 +2541,14 @@
         {
             [self setRequestAuthorization:conn.originalRequest];
 
-            if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
+            if (apiSession == nil)
+            {
+                NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
+                configuration.URLCache = [[NSURLCache alloc] initWithMemoryCapacity:0 diskCapacity:0 diskPath:nil];
+                apiSession = [NSURLSession sessionWithConfiguration:configuration
                                                                   delegate:self
                                                              delegateQueue:[NSOperationQueue mainQueue]];
+            }
 
             conn.task = [apiSession dataTaskWithRequest:conn.originalRequest];
 
@@ -2821,9 +2831,14 @@
 
     logIsClosed = NO;
 
-    if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
-                                                                      delegate:self
-                                                                 delegateQueue:[NSOperationQueue mainQueue]];
+    if (apiSession == nil)
+    {
+        NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
+        configuration.URLCache = [[NSURLCache alloc] initWithMemoryCapacity:0 diskCapacity:0 diskPath:nil];
+        apiSession = [NSURLSession sessionWithConfiguration:configuration
+                                                   delegate:self
+                                              delegateQueue:[NSOperationQueue mainQueue]];
+    }
 
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:logStreamURL
                                                            cachePolicy:NSURLRequestReloadIgnoringCacheData
