@@ -1582,9 +1582,9 @@
         if (relationships.count > 0)
         {
             data = @{ @"id" : devicegroupID,
-                        @"type" : devicegroupType,
-                        @"attributes" : [NSDictionary dictionaryWithDictionary:attributes],
-                        @"relationships" : [NSDictionary dictionaryWithDictionary:relationships] };
+                      @"type" : devicegroupType,
+                      @"attributes" : [NSDictionary dictionaryWithDictionary:attributes],
+                      @"relationships" : [NSDictionary dictionaryWithDictionary:relationships] };
         }
         else
         {
