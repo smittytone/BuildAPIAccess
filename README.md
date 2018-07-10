@@ -1,6 +1,6 @@
-# BuildAPIAccess 3.0.1 #
+# BuildAPIAccess 3.0.2 #
 
-*BuildAPIAccess* is an Objective-C (macOS, iOS and tvOS) wrapper for [Electric Imp’s impCentral™ API](https://developer.electricimp.com/tools/impcentralapi). It is called BuildAPIAccess for historical reasons: it was written to the support Electric Imp’s Build API, the predecessor to the impCentral API. **BuildAPIAccess 3.0.0 does not support the Build API**, which has been deprecated and will shortly be removed from service.
+*BuildAPIAccess* is an Objective-C (macOS, iOS and tvOS) wrapper for [Electric Imp’s impCentral™ API](https://developer.electricimp.com/tools/impcentralapi). It is called BuildAPIAccess for historical reasons: it was written to the support Electric Imp’s Build API, the predecessor to the impCentral API. **BuildAPIAccess 3.0.2 does not support the Build API**, which has been deprecated and will shortly be removed from service.
 
 *BuildAPIAccess* requires the (included) classes *Connexion*, *LogStreamEvent* and *Toke*n. All three are convenience classes for combining properties.
 
@@ -28,6 +28,8 @@ BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 
 ## Release Notes ##
 
+- 3.0.2
+    - *In development*
 - 3.0.1
     - *Released July 10, 2018*
     - Add *getAccount()* and *gotMyAccount()* methods
@@ -51,7 +53,7 @@ Log in using the supplied credentials. The method uses the credentials to retrie
 
 ### - (void)twoFactorLogin:(NSString &#42;)loginToken :(NSString &#42;)otp ###
 
-Placeholder for support of two-factor authentication.
+If OTP is enabled for the target account, BuildAPIAccess will return the notification `@"BuildAPINeedOTP"` and return the server-supplied login token within the notification object via the key *token*. The host app should respond to this by requesting access using this method. Pass in the login token and the six-digit OTP code, typically retrieved from a phone app.
 
 ### - (void)logout ###
 
