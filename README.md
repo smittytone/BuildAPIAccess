@@ -30,6 +30,7 @@ BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 
 - 3.0.1
     - *In Development*
+    - Add *getAccount()* and *gotMyAccount()* methods
 - 3.0.0
     - Major revision to support the impCentral API
     - End support for the (deprecated) Build API
@@ -59,6 +60,16 @@ Delete the instance's impCentral API authorization tokens and close any current 
 ### - (void)setEndpoint:(NSString &#42;)pathWithVersion ###
 
 Changes the URL to which BuildAPIAccess accesses the impCentral API. Use this if you are accessing the API within a Private Cloud. If this is not called, all API accesses are made to `https://api.electricimp.com/v5`.
+
+### - (void)getMyAccount ###
+
+Get information on the logged in account. The instance posts the notification `@"BuildAPIGotMyAccount"` when the account data has been received.
+
+### - (void)getAccount:(NSString *)accountID ###
+
+Get information about the account with the specified ID. The instance posts the notification `@"BuildAPIGotAnAccount"` when the account data has been received.
+
+This call will trigger an API error if you do not have permission to access the account because you are not a collaborator.
 
 ## Class Methods: Getting Data ##
 
