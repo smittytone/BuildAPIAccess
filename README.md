@@ -65,7 +65,7 @@ Changes the URL to which BuildAPIAccess accesses the impCentral API. Use this if
 
 Get information on the logged in account. The instance posts the notification `@"BuildAPIGotMyAccount"` when the account data has been received.
 
-### - (void)getAccount:(NSString *)accountID ###
+### - (void)getAccount:(NSString &#42;)accountID ###
 
 Get information about the account with the specified ID. The instance posts the notification `@"BuildAPIGotAnAccount"` when the account data has been received.
 
