@@ -29,7 +29,7 @@ BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 ## Release Notes ##
 
 - 3.0.1
-    - *In Development*
+    - *Released July 10, 2018*
     - Add *getAccount()* and *gotMyAccount()* methods
 - 3.0.0
     - Major revision to support the impCentral API
