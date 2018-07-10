@@ -21,7 +21,7 @@
 //  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //  SOFTWARE.
 //
-//  BuildAPIAccess 3.0.0
+//  BuildAPIAccess 3.0.1
 
 
 #ifndef BuildAPIContants_h
@@ -29,7 +29,7 @@
 
 // Build API Access Version
 
-#define kBuildAPIAccessVersion                  @"3.0.0"
+#define kBuildAPIAccessVersion                  @"3.0.1"
 
 // Connection Types / Actions
 
@@ -80,6 +80,7 @@
 #define kConnectTypeStreamActive                84
 #define kConnectTypeAddLogStream                85
 #define kConnectTypeEndLogStream                86
+#define kConnectTypeGetAnAccount                87
 
 #define kConnectTypeGetLoginToken               90
 

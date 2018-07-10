@@ -21,7 +21,7 @@
 //  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //  SOFTWARE.
 //
-//  BuildAPIAccess 3.0.0
+//  BuildAPIAccess 3.0.1
 
 
 #import <Foundation/Foundation.h>
@@ -87,6 +87,9 @@
 
 // Data Request Methods
 - (void)getMyAccount;
+- (void)getMyAccount:(id)someObject;
+- (void)getAccount:(NSString *)accountID;
+- (void)getAccount:(NSString *)accountID :(id)someObject;
 - (void)getProducts;
 - (void)getProducts:(id)someObject;
 - (void)getProductsWithFilter:(NSString *)filter :(NSString *)uuid;

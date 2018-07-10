@@ -1,4 +1,4 @@
-# BuildAPIAccess 3.0.0 #
+# BuildAPIAccess 3.0.1 #
 
 *BuildAPIAccess* is an Objective-C (macOS, iOS and tvOS) wrapper for [Electric Imp’s impCentral™ API](https://developer.electricimp.com/tools/impcentralapi). It is called BuildAPIAccess for historical reasons: it was written to the support Electric Imp’s Build API, the predecessor to the impCentral API. **BuildAPIAccess 3.0.0 does not support the Build API**, which has been deprecated and will shortly be removed from service.
 
@@ -26,6 +26,15 @@ From version 2.0.1, BuildAPIAccess issues HTTPS requests with a custom user agen
 BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 ```
 
+## Release Notes ##
+
+- 3.0.1
+    - *Released July 10, 2018*
+    - Add *getAccount()* and *gotMyAccount()* methods
+- 3.0.0
+    - Major revision to support the impCentral API
+    - End support for the (deprecated) Build API
+
 ## Class Usage ##
 
 Initialize a *BuildAPIAccess* instance using *init:*
@@ -51,6 +60,16 @@ Delete the instance's impCentral API authorization tokens and close any current 
 ### - (void)setEndpoint:(NSString &#42;)pathWithVersion ###
 
 Changes the URL to which BuildAPIAccess accesses the impCentral API. Use this if you are accessing the API within a Private Cloud. If this is not called, all API accesses are made to `https://api.electricimp.com/v5`.
+
+### - (void)getMyAccount ###
+
+Get information on the logged in account. The instance posts the notification `@"BuildAPIGotMyAccount"` when the account data has been received.
+
+### - (void)getAccount:(NSString &#42;)accountID ###
+
+Get information about the account with the specified ID. The instance posts the notification `@"BuildAPIGotAnAccount"` when the account data has been received.
+
+This call will trigger an API error if you do not have permission to access the account because you are not a collaborator.
 
 ## Class Methods: Getting Data ##
 

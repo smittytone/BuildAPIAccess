@@ -21,7 +21,7 @@
 //  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //  SOFTWARE.
 //
-//  BuildAPIAccess 3.0.0
+//  BuildAPIAccess 3.0.1
 
 
 #import "BuildAPIAccess.h"
@@ -350,6 +350,7 @@
 
     token = nil;
     isLoggedIn = NO;
+    impCloudCode = -1;
 }
 
 
@@ -527,13 +528,54 @@
 
 - (void)getMyAccount
 {
+    [self getMyAccount:nil];
+}
+
+
+
+- (void)getMyAccount:(id)someObject
+{
     // Set up a GET request to /accounts/me
 
     NSMutableURLRequest *request = [self makeGETrequest:@"accounts/me" :NO];
 
     if (request)
     {
-        [self launchConnection:request :kConnectTypeGetMyAccount :nil];
+        [self launchConnection:request :kConnectTypeGetMyAccount :someObject];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to list your account information.";
+        [self reportError];
+    }
+}
+
+
+
+- (void)getAccount:(NSString *)accountID
+{
+    [self getAccount:accountID :nil];
+}
+
+
+
+- (void)getAccount:(NSString *)accountID :(id)someObject
+{
+    // Set up a GET request to /accounts/{id}
+
+    if (accountID == nil || accountID.length == 0)
+    {
+        // If no account ID is passed, just get the user's own accoint
+
+        [self getMyAccount:someObject];
+        return;
+    }
+    
+    NSMutableURLRequest *request = [self makeGETrequest:[NSString stringWithFormat:@"accounts/%@", accountID] :NO];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeGetAnAccount :someObject];
     }
     else
     {
@@ -1540,9 +1582,9 @@
         if (relationships.count > 0)
         {
             data = @{ @"id" : devicegroupID,
-                        @"type" : devicegroupType,
-                        @"attributes" : [NSDictionary dictionaryWithDictionary:attributes],
-                        @"relationships" : [NSDictionary dictionaryWithDictionary:relationships] };
+                      @"type" : devicegroupType,
+                      @"attributes" : [NSDictionary dictionaryWithDictionary:attributes],
+                      @"relationships" : [NSDictionary dictionaryWithDictionary:relationships] };
         }
         else
         {
@@ -2408,9 +2450,14 @@
 
     // Use NSURLSession for the connection. Compatible with iOS, tvOS and Mac OS X
 
-    if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
+    if (apiSession == nil)
+    {
+        NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
+        configuration.URLCache = [[NSURLCache alloc] initWithMemoryCapacity:0 diskCapacity:0 diskPath:nil];
+        apiSession = [NSURLSession sessionWithConfiguration:configuration
                                                           delegate:self
                                                      delegateQueue:[NSOperationQueue mainQueue]];
+    }
 
     // Do we have a valid access token - or are we getting/refreshing the access token?
 
@@ -2494,9 +2541,14 @@
         {
             [self setRequestAuthorization:conn.originalRequest];
 
-            if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
+            if (apiSession == nil)
+            {
+                NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
+                configuration.URLCache = [[NSURLCache alloc] initWithMemoryCapacity:0 diskCapacity:0 diskPath:nil];
+                apiSession = [NSURLSession sessionWithConfiguration:configuration
                                                                   delegate:self
                                                              delegateQueue:[NSOperationQueue mainQueue]];
+            }
 
             conn.task = [apiSession dataTaskWithRequest:conn.originalRequest];
 
@@ -2779,9 +2831,14 @@
 
     logIsClosed = NO;
 
-    if (apiSession == nil) apiSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
-                                                                      delegate:self
-                                                                 delegateQueue:[NSOperationQueue mainQueue]];
+    if (apiSession == nil)
+    {
+        NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
+        configuration.URLCache = [[NSURLCache alloc] initWithMemoryCapacity:0 diskCapacity:0 diskPath:nil];
+        apiSession = [NSURLSession sessionWithConfiguration:configuration
+                                                   delegate:self
+                                              delegateQueue:[NSOperationQueue mainQueue]];
+    }
 
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:logStreamURL
                                                            cachePolicy:NSURLRequestReloadIgnoringCacheData
@@ -4274,7 +4331,7 @@ didCompleteWithError:(NSError *)error
 
             // Get user's account information before we do anything else
 
-            [self getMyAccount];
+            // [self getMyAccount];
 
             // Do we have any pending connections we need to process?
             // NOTE 'launchPendingConnections' returns immediately if there are no pending connections
@@ -4318,21 +4375,23 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
             // The server returns the user's own account information
 
             data = [data objectForKey:@"data"];
+            NSString *aid = [data objectForKey:@"id"];
 
             me = @{ @"type" : @"account",
-                    @"id" : [data objectForKey:@"id"] };
+                    @"id" : aid };
             
-            token.account = [data objectForKey:@"id"];
-            currentAccount = [data objectForKey:@"id"];
+            token.account = aid;
+            currentAccount = aid;
 
 #ifdef DEBUG
     NSLog(@"My Account ID: %@", [me objectForKey:@"id"]);
 #endif
 
-            NSDictionary *dict = @{ @"type" : @"account",
-                                   @"id" : [data objectForKey:@"id"] };
+            NSDictionary *dict = connexion.representedObject != nil
+            ? @{ @"account" : data, @"object" : connexion.representedObject }
+            : @{ @"account" : data };
 
-            [nc postNotificationName:@"BuildAPIGotAccountID" object:dict];
+            [nc postNotificationName:@"BuildAPIGotMyAccount" object:dict];
 
             break;
         }
@@ -4414,6 +4473,22 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
             break;
         }
             
+        case kConnectTypeGetAnAccount:
+        {
+            // The server returns the requested account information -
+            // just send the account data back to the calling app
+
+            data = [data objectForKey:@"data"];
+
+            NSDictionary *dict = connexion.representedObject != nil
+            ? @{ @"account" : data, @"object" : connexion.representedObject }
+            : @{ @"account" : data };
+
+            [nc postNotificationName:@"BuildAPIGotAnAccount" object:dict];
+
+            break;
+        }
+        
         case kConnectTypeGetLoginToken:
         {
             // The server returns the requested access token directly
