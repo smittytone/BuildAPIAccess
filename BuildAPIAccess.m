@@ -200,6 +200,9 @@
                             @"password" : password };
 
     [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
+
+    // Clear the credentials as we no longer need them (can read them from the keychain if we do)
+    
     [self clearCredentials];
 
     if (request && !error)
@@ -359,8 +362,7 @@
 {
     // This is essentially a placeholder for whe 2FA is introduced for impCentral API logins
 
-    NSDictionary *dict = @{ @"otp" : otp,
-                            @"login_token" : loginToken };
+    NSDictionary *dict = @{ @"login_token" : loginToken };
 
     NSError *error = nil;
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"auth"]]];
@@ -371,6 +373,7 @@
     [request setHTTPMethod:@"POST"];
     [request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
     [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    [request setValue:otp forHTTPHeaderField:@"X-Electricimp-OTP-Token"];
     [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
 
     if (request && !error)
@@ -4294,7 +4297,7 @@ didCompleteWithError:(NSError *)error
         {
             // The server returns the requested access token directly
 
-            if ((connexion.errorCode == 403) && useTwoFactor)
+            if (connexion.errorCode == 403)
             {
                 // We are using 2FA and the initial contact has resulted in a login token which we need to
                 // hand back now to the host app
