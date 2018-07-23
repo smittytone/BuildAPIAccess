@@ -66,9 +66,12 @@
 
         username = nil;
         password = nil;
+        tokenConnexion = nil;
 
         // Logging
 
+        logConnexions = nil;
+        logConnexion = nil;
         logStreamID = nil;
         logStreamURL = nil;
         logTimeout = kLogTimeout;
@@ -2409,8 +2412,10 @@
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
 
     [self setRequestAuthorization:request];
-    [request setHTTPMethod:verb];
     [request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
+
+    request.timeoutInterval = kConnectTimeoutInterval;
+    request.HTTPMethod = verb;
 
     if (addContentType) [request setValue:@"application/vnd.api+json" forHTTPHeaderField:@"Content-Type"];
 
@@ -2652,7 +2657,7 @@
             ? @{ @"device" : deviceID, @"object" : someObject }
             : @{ @"device" : deviceID };
 
-            [self launchConnection:request :kConnectTypeGetLogStreamID :dict];
+            [self launchConnection:request :kConnectTypeLogGetStreamID :dict];
         }
         else
         {
@@ -2690,6 +2695,16 @@
         {
             if ([devid compare:deviceID] == NSOrderedSame) return;
         }
+
+        // Check that maximum number of devices hasn't been reached.
+
+
+        if (loggingDevices.count == kLogMaxDevicesPerLog)
+        {
+            errorMessage = @"Maximum number of logging devices already reached";
+            [self reportError];
+            return;
+        }
     }
 
     NSDictionary *dict = @{ @"id" : deviceID,
@@ -2703,7 +2718,7 @@
         ? @{ @"device" : deviceID, @"object" : someObject }
         : @{ @"device" : deviceID };
 
-        [self launchConnection:request :kConnectTypeAddLogStream :dict];
+        [self launchConnection:request :kConnectTypeLogStreamAdd :dict];
     }
     else
     {
@@ -2739,7 +2754,7 @@
     NSMutableURLRequest *request = [self makeRequest:@"DELETE" :[NSString stringWithFormat:@"%@/%@", logStreamURL, deviceID] :NO :NO];
     NSError *error;
 
-    [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
+    request.HTTPBody = [NSJSONSerialization dataWithJSONObject:dict options:0 error:&error];
 
     if (error)
     {
@@ -2754,7 +2769,7 @@
         ? @{ @"device" : deviceID, @"object" : someObject }
         : @{ @"device" : deviceID };
 
-        [self launchConnection:request :kConnectTypeEndLogStream :dict];
+        [self launchConnection:request :kConnectTypeLogStreamEnd :dict];
     }
     else
     {
@@ -2777,7 +2792,7 @@
         // Pass in the first device's ID so we have it to use after the stream has been established
 
         restartingLog = YES;
-        [self launchConnection:request :kConnectTypeGetLogStreamID :nil];
+        [self launchConnection:request :kConnectTypeLogGetStreamID :nil];
     }
     else
     {
@@ -2788,12 +2803,11 @@
 
 
 
-- (void)startStream:(NSURL *)url
+- (void)startStream
 {
     // This method sets up the log stream which will receive and handle server-sent events (SSE) from the API
     // At this point we have no connection to pipe the SSEs, just the URL for the stream (sent by the server)
 
-    logStreamURL = url;
     logIsClosed = YES;
 
     if (eventQueue == nil)
@@ -2831,6 +2845,7 @@
 - (void)openStream
 {
     // Here we actually open the connection through which events from the server will pass
+    // NOTE We have not added any devices to the stream yet - we have to do this part first
 
     logIsClosed = NO;
 
@@ -2846,8 +2861,7 @@
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:logStreamURL
                                                            cachePolicy:NSURLRequestReloadIgnoringCacheData
                                                        timeoutInterval:logTimeout];
-
-    [request setHTTPMethod:@"GET"];
+    request.HTTPMethod = @"GET";
 
     if (logLastEventID) [request setValue:logLastEventID forHTTPHeaderField:@"Last-Event-ID"];
 
@@ -2999,8 +3013,15 @@
 {
     // Called on the main thread when the log stream has been successfully opened
 
-    if (deviceToStream != nil) [self addDeviceToLogStream:deviceToStream :nil];
-    deviceToStream = nil;
+    // If we have been passed an object, we should unpack it
+
+    if (savedObject != nil)
+    {
+        NSMutableDictionary *dict = (NSMutableDictionary *)savedObject;
+        NSString *deviceID = [dict objectForKey:@"device"];
+        [self addDeviceToLogStream:deviceID :[dict objectForKey:@"object"]];
+        savedObject = nil;
+    }
 
     if (restartingLog)
     {
@@ -3107,6 +3128,10 @@ didReceiveResponse:(NSURLResponse *)response
     NSHTTPURLResponse *resp = (NSHTTPURLResponse *)response;
     NSInteger statusCode = resp.statusCode;
 
+#ifdef DEBUG
+    NSLog(@"Status: %li (%@)", (long)statusCode, dataTask.originalRequest.URL.absoluteString);
+#endif
+
     if (statusCode > 399 || statusCode == 302)
     {
         // The API has responded with a status code that indicates an error.
@@ -3116,14 +3141,14 @@ didReceiveResponse:(NSURLResponse *)response
         {
             // TODO Is this ever called now?
 
-            if (connexion.actionCode == kConnectTypeGetLogStreamID)
+            if (connexion.actionCode == kConnectTypeLogGetStreamID)
             {
                 // We have asked for a log stream ID; this is returned as a 302, which we trap here
 
-                logStreamID = [resp.allHeaderFields objectForKey:@"location"];
+                //logStreamID = [resp.allHeaderFields objectForKey:@"location"];
 
 #ifdef DEBUG
-    NSLog(@"Log Stream ID received: %@", logStreamID);
+    NSLog(@"Log Stream ID received: %@ (302)", [resp.allHeaderFields objectForKey:@"location"]);
 #endif
             }
         }
@@ -3300,6 +3325,7 @@ didCompleteWithError:(NSError *)error
 
                 logIsClosed = YES;
                 logStreamURL = nil;
+                logStreamID = nil;
 
                 // Create an error event
 
@@ -3406,7 +3432,7 @@ didCompleteWithError:(NSError *)error
 
     NSString *eventString;
 
-    if (connexion.data != nil)
+    if (connexion.data != nil && connexion.data.length > 0)
     {
         // Add in existing data from the last streamed chunk, if there is any
 
@@ -3439,11 +3465,15 @@ didCompleteWithError:(NSError *)error
         {
             NSString *event = [events objectAtIndex:i];
 
+            // Empty event? Continue to the next in the series
+
             if (event.length == 0) continue;
+
+            // Check if the last event on the list has been terminated correctly
 
             if (i == events.count - 1 && lastMessageTruncated)
             {
-                // This is the detected event and it MIGHT be truncated, so just hold it for the next pass
+                // This is the last detected event and it MIGHT be truncated, so just hold it for the next pass
 
                 connexion.data = [NSMutableData dataWithData:[event dataUsingEncoding:NSUTF8StringEncoding]];
 
@@ -3463,6 +3493,7 @@ didCompleteWithError:(NSError *)error
                 // Separate the key-value pairs (separated by newlines)
 
                 NSArray *lines = [event componentsSeparatedByString:kLogStreamEventKeyValuePairSeparator];
+
 #ifdef DEBUG
     NSLog(@"Lines -> %lu", (long)lines.count);
 #endif
@@ -3472,6 +3503,7 @@ didCompleteWithError:(NSError *)error
 
                 for (NSString *line in lines)
                 {
+
 #ifdef DEBUG
     NSLog(@"Line  -> %@ (%li)", line, (long)line.length);
 #endif
@@ -3516,6 +3548,7 @@ didCompleteWithError:(NSError *)error
                     }
                     else
                     {
+
 #ifdef DEBUG
     // No field separator????
                         NSLog(@"Incoming event malformed - no field separator (: )");
@@ -3551,6 +3584,8 @@ didCompleteWithError:(NSError *)error
         // Partial event (no \n\n in received data) so preserve it in the connexion
         // so it's ready to be added to the next chunk of data received from the server
 
+        if (connexion.data == nil) connexion.data = [[NSMutableData alloc] init];
+
         [connexion.data appendData:data];
     }
 }
@@ -3577,10 +3612,10 @@ didCompleteWithError:(NSError *)error
 
     if (dataDecodeError != nil)
     {
-        // If the incoming data could not be decoded to JSON for some reason,
-        // most likely a malformed request which returns a block of HTML
+        // If the incoming data could not be decoded to JSON for some reason.
+        // NOTE Most likely this is caused by a malformed request which returns a block of HTML
 
-        errorMessage = [NSString stringWithFormat:@"[SERVER ERROR] Received data could not be decoded: %@", (NSString *)connexion.data];
+        errorMessage = [NSString stringWithFormat:@"[SERVER ERROR] Received data could not be decoded: %@", [[NSString alloc] initWithData:connexion.data encoding:NSUTF8StringEncoding]];
         [self reportError];
 
         connexion.errorCode = -1;
@@ -4292,7 +4327,6 @@ didCompleteWithError:(NSError *)error
             break;
         }
 
-
         case kConnectTypeGetAccessToken:
         {
             // The server returns the requested access token directly
@@ -4399,38 +4433,51 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
             break;
         }
 
-        case kConnectTypeGetLogStreamID:
+        case kConnectTypeGetAnAccount:
         {
-            // We've got the stream ID so we are ready to activate the log stream
+            // The server returns the requested account information -
+            // just send the account data back to the calling app
+
+            data = [data objectForKey:@"data"];
+
+            NSDictionary *dict = connexion.representedObject != nil
+            ? @{ @"account" : data, @"object" : connexion.representedObject }
+            : @{ @"account" : data };
+
+            [nc postNotificationName:@"BuildAPIGotAnAccount" object:dict];
+
+            break;
+        }
+
+        case kConnectTypeLogGetStreamID:
+        {
+            // We've got the stream ID and URL so we are ready to activate the log stream
             // NOTE no devices have yet been subscribed - this happens after connection
 
             data = [data objectForKey:@"data"];
             logStreamID = [data objectForKey:@"id"];
-            
-#ifdef DEBUG
-            NSLog(@"Log Stream ID received: %@", logStreamID);
-#endif
 
             NSDictionary *attributes = [data objectForKey:@"attributes"];
             logStreamURL = [NSURL URLWithString:[attributes objectForKey:@"url"]];
 
-            // Preserve the first device's ID for use later
+#ifdef DEBUG
+            NSLog(@"Log Stream URL received: %@", logStreamURL);
+#endif
 
-            deviceToStream = [connexion.representedObject objectForKey:@"device"];
+            // Now set up the log stream, ie. open it (have to do this before adding devices
 
-            // Set up the log stream
-
-            [self startStream:logStreamURL];
+            savedObject = connexion.representedObject;
+            [self startStream];
 
             break;
         }
 
-        case kConnectTypeStreamActive:
+        case kConnectTypeLogStreamActive:
         {
             break;
         }
 
-        case kConnectTypeAddLogStream:
+        case kConnectTypeLogStreamAdd:
         {
             // We have added a device to the log stream
 
@@ -4453,7 +4500,7 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
             break;
         }
 
-        case kConnectTypeEndLogStream:
+        case kConnectTypeLogStreamEnd:
         {
             if (connexion.representedObject != nil)
             {
@@ -4476,22 +4523,6 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
             break;
         }
             
-        case kConnectTypeGetAnAccount:
-        {
-            // The server returns the requested account information -
-            // just send the account data back to the calling app
-
-            data = [data objectForKey:@"data"];
-
-            NSDictionary *dict = connexion.representedObject != nil
-            ? @{ @"account" : data, @"object" : connexion.representedObject }
-            : @{ @"account" : data };
-
-            [nc postNotificationName:@"BuildAPIGotAnAccount" object:dict];
-
-            break;
-        }
-        
         case kConnectTypeGetLoginToken:
         {
             // The server returns the requested access token directly
