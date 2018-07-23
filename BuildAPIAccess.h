@@ -37,13 +37,13 @@
     NSURLSession *apiSession;
 
     NSMutableArray *connexions, *pendingConnections, *loggingDevices, *products, *devices;
-    NSMutableArray *devicegroups, *deployments, *history, *logs;
+    NSMutableArray *devicegroups, *deployments, *history, *logs, *logConnexions;
 
     NSDictionary *me;
 
     NSOperationQueue *eventQueue;
 
-    NSString *baseURL, *userAgent, *username, *password, *logStreamID, *deviceToStream;
+    NSString *baseURL, *userAgent, *username, *password, *logStreamID;
 
     NSDateFormatter *dateFormatter;
 
@@ -55,7 +55,7 @@
 
     BOOL pageSizeChangeFlag, logIsClosed, restartingLog, useTwoFactor;
 
-    id logLastEventID;
+    id logLastEventID, savedObject;
 
     Connexion *logConnexion, *tokenConnexion;
 
@@ -181,7 +181,7 @@
 - (void)stopLogging:(NSString *)deviceID;
 - (void)stopLogging:(NSString *)deviceID :(id)someObject;
 - (void)restartLogging;
-- (void)startStream:(NSURL *)url;
+- (void)startStream;
 - (void)openStream;
 - (void)closeStream;
 - (void)dispatchEvent:(LogStreamEvent *)event;
