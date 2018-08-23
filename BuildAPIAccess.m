@@ -3164,8 +3164,10 @@ didReceiveResponse:(NSURLResponse *)response
 
                 isLoggedIn = NO;
 
-                errorMessage = @"Your impCloud access credentials have been rejected.";
-                [self reportError:kErrorLoginRejectCredentials];
+                //errorMessage = @"Your impCloud access credentials have been rejected.";
+                //[self reportError:kErrorLoginRejectCredentials];
+
+                [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPILoginRejected" object:nil];
 
                 [connexions removeObject:connexion];
                 numberOfConnections = connexions.count;
@@ -4557,13 +4559,9 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
 {
     // Signal the host app that we have an error message for it to display (in the property 'errorMessage')
 
-    NSDictionary *error;
     NSString *message = errorMessage;
-
-    error = errCode == -1
-    ? @{ @"message" : message }
-    : @{ @"message" : message,
-         @"code" : [NSNumber numberWithInteger:errCode] };
+    NSDictionary *error = @{ @"message" : message,
+                             @"code" : [NSNumber numberWithInteger:errCode] };
 
     [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIError" object:error];
 }
