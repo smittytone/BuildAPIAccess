@@ -166,7 +166,7 @@
             baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
     }
 
-    // This is not currently used but will be in future
+    // This is not currently used but may be in future
 
     useTwoFactor = is2FA;
 
@@ -365,9 +365,8 @@
 {
     // This is essentially a placeholder for whe 2FA is introduced for impCentral API logins
 
-    NSDictionary *dict = @{ @"login_token" : loginToken };
-
     NSError *error = nil;
+    NSDictionary *dict = @{ @"login_token" : loginToken };
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"auth"]]];
 
     // Set up a POST request to the auth URL to get an access token
@@ -2469,7 +2468,9 @@
 
     // Do we have a valid access token - or are we getting/refreshing the access token?
 
-    if (aConnexion.actionCode == kConnectTypeGetAccessToken || aConnexion.actionCode == kConnectTypeRefreshAccessToken || [self isAccessTokenValid])
+    if (aConnexion.actionCode == kConnectTypeGetAccessToken ||
+        aConnexion.actionCode == kConnectTypeRefreshAccessToken || 
+        [self isAccessTokenValid])
     {
         // Create and begin the task
 
@@ -3178,10 +3179,9 @@ didReceiveResponse:(NSURLResponse *)response
                 return;
             }
 
-            if (connexion.actionCode == kConnectTypeRefreshAccessToken)
-            {
-                NSLog(@"401 encountered refreshing access token");
-            }
+            // Debug message
+
+            if (connexion.actionCode == kConnectTypeRefreshAccessToken) NSLog(@"401 encountered refreshing access token");
         }
 
         if (statusCode == 429)
@@ -3622,9 +3622,10 @@ didCompleteWithError:(NSError *)error
         connexion.actionCode = kConnectTypeNone;
     }
 
-    if (connexion.errorCode > 399)
+    if (connexion.errorCode > 399 && !(connexion.errorCode == 403 && connexion.actionCode == kConnectTypeGetAccessToken))
     {
-        // Trap and handle impCentral API errors here
+        // Trap and handle impCentral API errors here, but not 403s relating to a 'get access token' as this
+        // will be error data we want to parse later for the login token used to send an OTP
         // NOTE The value of 'errorCode' is the returned HTTP status code
 
         errorMessage = @"";
@@ -3665,21 +3666,21 @@ didCompleteWithError:(NSError *)error
                     else
                     {
                         // Process other API errors
-                        
+
                         NSDictionary *errorPlus;
                         NSMutableDictionary *ed = [NSMutableDictionary dictionaryWithDictionary:error];
                         NSString *action = @"N/A";
-                        
+
                         if (connexion.representedObject != nil)
                         {
                             NSString *act = [connexion.representedObject objectForKey:@"action"];
-                            
+
                             if (act != nil) action = act;
                         }
-                        
+
                         [ed setObject:action forKey:@"action"];
                         errorPlus = [NSDictionary dictionaryWithObjects:[ed allValues] forKeys:[ed allKeys]];
-                        
+
                         errorMessage = errors.count > 1
                         ? [errorMessage stringByAppendingFormat:@"%li. %@\n", (count + 1), [self processAPIError:errorPlus]]
                         : [self processAPIError:errorPlus];
@@ -3692,17 +3693,9 @@ didCompleteWithError:(NSError *)error
 
                 if (codeErrors.count > 0)
                 {
-                    NSDictionary *returnData;
-
-                    if (connexion.representedObject != nil)
-                    {
-                        returnData = @{ @"data" : codeErrors,
-                                        @"object" : connexion.representedObject };
-                    }
-                    else
-                    {
-                        returnData = @{ @"data" : codeErrors };
-                    }
+                    NSDictionary *returnData = (connexion.representedObject != nil)
+                    ? @{ @"data" : codeErrors, @"object" : connexion.representedObject }
+                    : @{ @"data" : codeErrors };
 
                     [nc postNotificationName:@"BuildAPICodeErrors" object:returnData];
 
@@ -4336,11 +4329,15 @@ didCompleteWithError:(NSError *)error
                 // We are using 2FA and the initial contact has resulted in a login token which we need to
                 // hand back now to the host app
 
-                NSString *lt = [data objectForKey:@"login_token"];
+                // NOTE The login token arrives within an API 'errors' structure, so we need to extract
+                //      the data from the array and THEN extract the value by key and path
+                NSArray *errorsArray = [data valueForKeyPath:@"errors"];
+                NSDictionary *keyData = [errorsArray firstObject];
+                NSString *loginToken = [keyData valueForKeyPath:@"meta.login_token"];
 
                 NSDictionary *dict = connexion.representedObject != nil
-                ? @{ @"action" : @"needotp", @"token" : lt, @"object" : connexion.representedObject }
-                : @{ @"action" : @"needotp", @"token" : lt };
+                ? @{ @"action" : @"needotp", @"token" : loginToken, @"object" : connexion.representedObject }
+                : @{ @"action" : @"needotp", @"token" : loginToken };
 
                 [nc postNotificationName:@"BuildAPINeedOTP" object:dict];
                 break;
@@ -4364,6 +4361,7 @@ didCompleteWithError:(NSError *)error
 #endif
 
             // Record the cloud type
+
             impCloudCode = tempImpCloudCode;
 
             // Get user's account information before we do anything else
@@ -4522,7 +4520,7 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
 
             break;
         }
-            
+
         case kConnectTypeGetLoginToken:
         {
             // The server returns the requested access token directly
