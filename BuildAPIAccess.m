@@ -22,7 +22,7 @@
 //  SOFTWARE.
 //
 
-//  BuildAPIAccess 3.1.0
+//  BuildAPIAccess 3.1.1
 
 
 #import "BuildAPIAccess.h"
@@ -355,6 +355,8 @@
     token = nil;
     isLoggedIn = NO;
     impCloudCode = -1;
+
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPILoggedOut" object:nil];
 }
 
 
@@ -3356,7 +3358,12 @@ didCompleteWithError:(NSError *)error
 
             // Make sure we're not logged in if we haven't been able to get an access token
 
-            if (connexion.actionCode == kConnectTypeGetAccessToken || connexion.actionCode == kConnectTypeRefreshAccessToken) isLoggedIn = NO;
+            if (connexion.actionCode == kConnectTypeGetAccessToken || connexion.actionCode == kConnectTypeRefreshAccessToken)
+            {
+                isLoggedIn = NO;
+
+                [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPILoggedOut" object:nil];
+            }
 
             errorMessage = @"Unable to connect to the Electric Imp impCloud. Please check your network connection.";
 
