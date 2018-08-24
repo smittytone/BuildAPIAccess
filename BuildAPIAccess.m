@@ -21,7 +21,7 @@
 //  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //  SOFTWARE.
 //
-//  BuildAPIAccess 3.0.2
+//  BuildAPIAccess 3.1.0
 
 
 #import "BuildAPIAccess.h"
@@ -112,19 +112,18 @@
 #pragma mark - Login Methods
 
 
-- (void)login:(NSString *)userName :(NSString *)passWord :(NSUInteger)cloudCode :(BOOL)is2FA
+- (void)login:(NSString *)userName :(NSString *)passWord :(NSUInteger)cloudCode
 {
     // Login is the process of sending the user's username/email address and password to the API
     // in return for a new access token. We retain the credentials in case the token expires during
     // the host application's runtime, but we don't save them - this is the job of the host application.
-    // PARAMETERS:
+    // PARAMETERS
     //   'userName' is the login user name
     //   'passWord' is the login password
     //   'cloudCode' indicates which impCloud we're logging in to:
     //               0 - AWS
     //               1 - Azure
-    //   'is2FA' is a flag set to make use of two-factor authentication (CURRENTLY UNSUPPORTED)
-    // RETURNS:
+    // RETURNS
     //   Nothing
 
     if ((userName == nil || userName.length == 0) && (passWord == nil || passWord.length == 0))
@@ -148,6 +147,8 @@
         return;
     }
 
+    // Remember the credentials for later use (they will be cleared once done with)
+
     username = userName;
     password = passWord;
 
@@ -166,11 +167,7 @@
             baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
     }
 
-    // This is not currently used but may be in future
-
-    useTwoFactor = is2FA;
-
-    // Get a new token using the credentials provided
+    // Attempt to get a new access token using the credentials provided
 
     [self getNewAccessToken];
 }
@@ -4342,6 +4339,9 @@ didCompleteWithError:(NSError *)error
                 : @{ @"action" : @"needotp", @"token" : loginToken };
 
                 [nc postNotificationName:@"BuildAPINeedOTP" object:dict];
+
+                useTwoFactor = YES;
+                
                 break;
             }
 

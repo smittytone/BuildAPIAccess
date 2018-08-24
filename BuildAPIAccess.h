@@ -21,7 +21,7 @@
 //  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //  SOFTWARE.
 //
-//  BuildAPIAccess 3.0.2
+//  BuildAPIAccess 3.1.0
 
 
 #import <Foundation/Foundation.h>
@@ -68,7 +68,7 @@
 - (instancetype)init NS_DESIGNATED_INITIALIZER;
 
 // Login Methods
-- (void)login:(NSString *)userName :(NSString *)passWord :(NSUInteger)cloudCode :(BOOL)is2FA;
+- (void)login:(NSString *)userName :(NSString *)passWord :(NSUInteger)cloudCode;
 - (void)getNewAccessToken;
 - (void)refreshAccessToken:(NSString *)loginKey;
 - (BOOL)isAccessTokenValid;
