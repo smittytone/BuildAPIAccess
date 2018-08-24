@@ -1,4 +1,4 @@
-# BuildAPIAccess 3.0.2 #
+# BuildAPIAccess 3.1.0 #
 
 *BuildAPIAccess* is an Objective-C (macOS, iOS and tvOS) wrapper for [Electric Imp’s impCentral™ API](https://developer.electricimp.com/tools/impcentralapi). It is called BuildAPIAccess for historical reasons: it was written to the support Electric Imp’s Build API, the predecessor to the impCentral API. **BuildAPIAccess 3.0.2 does not support the Build API**, which has been deprecated and will shortly be removed from service.
 
@@ -28,9 +28,9 @@ BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 
 ## Release Notes ##
 
-- 3.0.2
-    - *In development*
+- 3.1.0
     - Finalize multi-password authentication (MPA) support
+        - Remove *is2FA* parameter from *login:::* (it's redundant)
     - Issue notification on login rejection rather than post an error
     - Unify all non-code error notifications (`@"BuildAPIError"`) to return `{ "message": <error_message>, "code": <error_code> }`
 - 3.0.1
@@ -50,9 +50,9 @@ BuildAPIAccess *api = [[BuildAPIAccess alloc] init];
 
 ## Class Methods: Login and Authentication ##
 
-### - (void)login:(NSString &#42;)userName :(NSString &#42;)passWord :(BOOL)is2FA ###
+### - (void)login:(NSString &#42;)userName :(NSString &#42;)passWord ###
 
-Log in using the supplied credentials. The method uses the credentials to retrieve a new API access token, which is used to authorize all further API accesses during the lifetime of the token. Values passed into *is2FA* are currently ignored; this parameter is for future use.
+Log in using the supplied credentials. The method uses the credentials to retrieve a new API access token, which is used to authorize all further API accesses during the lifetime of the token.
 
 ### - (void)twoFactorLogin:(NSString &#42;)loginToken :(NSString &#42;)otp ###
 
