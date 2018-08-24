@@ -21,7 +21,8 @@
 //  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //  SOFTWARE.
 //
-//  BuildAPIAccess 3.0.1
+
+//  BuildAPIAccess 3.1.0
 
 
 #import <Foundation/Foundation.h>
@@ -37,13 +38,13 @@
     NSURLSession *apiSession;
 
     NSMutableArray *connexions, *pendingConnections, *loggingDevices, *products, *devices;
-    NSMutableArray *devicegroups, *deployments, *history, *logs;
+    NSMutableArray *devicegroups, *deployments, *history, *logs, *logConnexions;
 
     NSDictionary *me;
 
     NSOperationQueue *eventQueue;
 
-    NSString *baseURL, *userAgent, *username, *password, *logStreamID, *deviceToStream;
+    NSString *baseURL, *userAgent, *username, *password, *logStreamID;
 
     NSDateFormatter *dateFormatter;
 
@@ -55,7 +56,7 @@
 
     BOOL pageSizeChangeFlag, logIsClosed, restartingLog, useTwoFactor;
 
-    id logLastEventID;
+    id logLastEventID, savedObject;
 
     Connexion *logConnexion, *tokenConnexion;
 
@@ -68,7 +69,7 @@
 - (instancetype)init NS_DESIGNATED_INITIALIZER;
 
 // Login Methods
-- (void)login:(NSString *)userName :(NSString *)passWord :(NSUInteger)cloudCode :(BOOL)is2FA;
+- (void)login:(NSString *)userName :(NSString *)passWord :(NSUInteger)cloudCode;
 - (void)getNewAccessToken;
 - (void)refreshAccessToken:(NSString *)loginKey;
 - (BOOL)isAccessTokenValid;
@@ -181,7 +182,7 @@
 - (void)stopLogging:(NSString *)deviceID;
 - (void)stopLogging:(NSString *)deviceID :(id)someObject;
 - (void)restartLogging;
-- (void)startStream:(NSURL *)url;
+- (void)startStream;
 - (void)openStream;
 - (void)closeStream;
 - (void)dispatchEvent:(LogStreamEvent *)event;

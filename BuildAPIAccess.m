@@ -21,7 +21,8 @@
 //  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //  SOFTWARE.
 //
-//  BuildAPIAccess 3.0.1
+
+//  BuildAPIAccess 3.1.0
 
 
 #import "BuildAPIAccess.h"
@@ -66,9 +67,12 @@
 
         username = nil;
         password = nil;
+        tokenConnexion = nil;
 
         // Logging
 
+        logConnexions = nil;
+        logConnexion = nil;
         logStreamID = nil;
         logStreamURL = nil;
         logTimeout = kLogTimeout;
@@ -109,19 +113,18 @@
 #pragma mark - Login Methods
 
 
-- (void)login:(NSString *)userName :(NSString *)passWord :(NSUInteger)cloudCode :(BOOL)is2FA
+- (void)login:(NSString *)userName :(NSString *)passWord :(NSUInteger)cloudCode
 {
     // Login is the process of sending the user's username/email address and password to the API
     // in return for a new access token. We retain the credentials in case the token expires during
     // the host application's runtime, but we don't save them - this is the job of the host application.
-    // PARAMETERS:
+    // PARAMETERS
     //   'userName' is the login user name
     //   'passWord' is the login password
     //   'cloudCode' indicates which impCloud we're logging in to:
     //               0 - AWS
     //               1 - Azure
-    //   'is2FA' is a flag set to make use of two-factor authentication (CURRENTLY UNSUPPORTED)
-    // RETURNS:
+    // RETURNS
     //   Nothing
 
     if ((userName == nil || userName.length == 0) && (passWord == nil || passWord.length == 0))
@@ -145,6 +148,8 @@
         return;
     }
 
+    // Remember the credentials for later use (they will be cleared once done with)
+
     username = userName;
     password = passWord;
 
@@ -163,11 +168,7 @@
             baseURL = [kBaseAPIURL stringByAppendingString:kAPIVersion];
     }
 
-    // This is not currently used but will be in future
-
-    useTwoFactor = is2FA;
-
-    // Get a new token using the credentials provided
+    // Attempt to get a new access token using the credentials provided
 
     [self getNewAccessToken];
 }
@@ -200,6 +201,9 @@
                             @"password" : password };
 
     [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
+
+    // Clear the credentials as we no longer need them (can read them from the keychain if we do)
+    
     [self clearCredentials];
 
     if (request && !error)
@@ -359,10 +363,8 @@
 {
     // This is essentially a placeholder for whe 2FA is introduced for impCentral API logins
 
-    NSDictionary *dict = @{ @"otp" : otp,
-                            @"login_token" : loginToken };
-
     NSError *error = nil;
+    NSDictionary *dict = @{ @"login_token" : loginToken };
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[baseURL stringByAppendingString:@"auth"]]];
 
     // Set up a POST request to the auth URL to get an access token
@@ -371,6 +373,7 @@
     [request setHTTPMethod:@"POST"];
     [request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
     [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    [request setValue:otp forHTTPHeaderField:@"X-Electricimp-OTP-Token"];
     [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
 
     if (request && !error)
@@ -2406,8 +2409,10 @@
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:path]];
 
     [self setRequestAuthorization:request];
-    [request setHTTPMethod:verb];
     [request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
+
+    request.timeoutInterval = kConnectTimeoutInterval;
+    request.HTTPMethod = verb;
 
     if (addContentType) [request setValue:@"application/vnd.api+json" forHTTPHeaderField:@"Content-Type"];
 
@@ -2461,7 +2466,9 @@
 
     // Do we have a valid access token - or are we getting/refreshing the access token?
 
-    if (aConnexion.actionCode == kConnectTypeGetAccessToken || aConnexion.actionCode == kConnectTypeRefreshAccessToken || [self isAccessTokenValid])
+    if (aConnexion.actionCode == kConnectTypeGetAccessToken ||
+        aConnexion.actionCode == kConnectTypeRefreshAccessToken || 
+        [self isAccessTokenValid])
     {
         // Create and begin the task
 
@@ -2649,7 +2656,7 @@
             ? @{ @"device" : deviceID, @"object" : someObject }
             : @{ @"device" : deviceID };
 
-            [self launchConnection:request :kConnectTypeGetLogStreamID :dict];
+            [self launchConnection:request :kConnectTypeLogGetStreamID :dict];
         }
         else
         {
@@ -2687,6 +2694,16 @@
         {
             if ([devid compare:deviceID] == NSOrderedSame) return;
         }
+
+        // Check that maximum number of devices hasn't been reached.
+
+
+        if (loggingDevices.count == kLogMaxDevicesPerLog)
+        {
+            errorMessage = @"Maximum number of logging devices already reached";
+            [self reportError];
+            return;
+        }
     }
 
     NSDictionary *dict = @{ @"id" : deviceID,
@@ -2700,7 +2717,7 @@
         ? @{ @"device" : deviceID, @"object" : someObject }
         : @{ @"device" : deviceID };
 
-        [self launchConnection:request :kConnectTypeAddLogStream :dict];
+        [self launchConnection:request :kConnectTypeLogStreamAdd :dict];
     }
     else
     {
@@ -2736,7 +2753,7 @@
     NSMutableURLRequest *request = [self makeRequest:@"DELETE" :[NSString stringWithFormat:@"%@/%@", logStreamURL, deviceID] :NO :NO];
     NSError *error;
 
-    [request setHTTPBody:[NSJSONSerialization dataWithJSONObject:dict options:0 error:&error]];
+    request.HTTPBody = [NSJSONSerialization dataWithJSONObject:dict options:0 error:&error];
 
     if (error)
     {
@@ -2751,7 +2768,7 @@
         ? @{ @"device" : deviceID, @"object" : someObject }
         : @{ @"device" : deviceID };
 
-        [self launchConnection:request :kConnectTypeEndLogStream :dict];
+        [self launchConnection:request :kConnectTypeLogStreamEnd :dict];
     }
     else
     {
@@ -2774,7 +2791,7 @@
         // Pass in the first device's ID so we have it to use after the stream has been established
 
         restartingLog = YES;
-        [self launchConnection:request :kConnectTypeGetLogStreamID :nil];
+        [self launchConnection:request :kConnectTypeLogGetStreamID :nil];
     }
     else
     {
@@ -2785,12 +2802,11 @@
 
 
 
-- (void)startStream:(NSURL *)url
+- (void)startStream
 {
     // This method sets up the log stream which will receive and handle server-sent events (SSE) from the API
     // At this point we have no connection to pipe the SSEs, just the URL for the stream (sent by the server)
 
-    logStreamURL = url;
     logIsClosed = YES;
 
     if (eventQueue == nil)
@@ -2828,6 +2844,7 @@
 - (void)openStream
 {
     // Here we actually open the connection through which events from the server will pass
+    // NOTE We have not added any devices to the stream yet - we have to do this part first
 
     logIsClosed = NO;
 
@@ -2843,8 +2860,7 @@
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:logStreamURL
                                                            cachePolicy:NSURLRequestReloadIgnoringCacheData
                                                        timeoutInterval:logTimeout];
-
-    [request setHTTPMethod:@"GET"];
+    request.HTTPMethod = @"GET";
 
     if (logLastEventID) [request setValue:logLastEventID forHTTPHeaderField:@"Last-Event-ID"];
 
@@ -2996,8 +3012,15 @@
 {
     // Called on the main thread when the log stream has been successfully opened
 
-    if (deviceToStream != nil) [self addDeviceToLogStream:deviceToStream :nil];
-    deviceToStream = nil;
+    // If we have been passed an object, we should unpack it
+
+    if (savedObject != nil)
+    {
+        NSMutableDictionary *dict = (NSMutableDictionary *)savedObject;
+        NSString *deviceID = [dict objectForKey:@"device"];
+        [self addDeviceToLogStream:deviceID :[dict objectForKey:@"object"]];
+        savedObject = nil;
+    }
 
     if (restartingLog)
     {
@@ -3104,6 +3127,10 @@ didReceiveResponse:(NSURLResponse *)response
     NSHTTPURLResponse *resp = (NSHTTPURLResponse *)response;
     NSInteger statusCode = resp.statusCode;
 
+#ifdef DEBUG
+    NSLog(@"Status: %li (%@)", (long)statusCode, dataTask.originalRequest.URL.absoluteString);
+#endif
+
     if (statusCode > 399 || statusCode == 302)
     {
         // The API has responded with a status code that indicates an error.
@@ -3113,14 +3140,14 @@ didReceiveResponse:(NSURLResponse *)response
         {
             // TODO Is this ever called now?
 
-            if (connexion.actionCode == kConnectTypeGetLogStreamID)
+            if (connexion.actionCode == kConnectTypeLogGetStreamID)
             {
                 // We have asked for a log stream ID; this is returned as a 302, which we trap here
 
-                logStreamID = [resp.allHeaderFields objectForKey:@"location"];
+                //logStreamID = [resp.allHeaderFields objectForKey:@"location"];
 
 #ifdef DEBUG
-    NSLog(@"Log Stream ID received: %@", logStreamID);
+    NSLog(@"Log Stream ID received: %@ (302)", [resp.allHeaderFields objectForKey:@"location"]);
 #endif
             }
         }
@@ -3135,8 +3162,10 @@ didReceiveResponse:(NSURLResponse *)response
 
                 isLoggedIn = NO;
 
-                errorMessage = @"Your impCloud access credentials have been rejected.";
-                [self reportError:kErrorLoginRejectCredentials];
+                //errorMessage = @"Your impCloud access credentials have been rejected.";
+                //[self reportError:kErrorLoginRejectCredentials];
+
+                [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPILoginRejected" object:nil];
 
                 [connexions removeObject:connexion];
                 numberOfConnections = connexions.count;
@@ -3150,10 +3179,9 @@ didReceiveResponse:(NSURLResponse *)response
                 return;
             }
 
-            if (connexion.actionCode == kConnectTypeRefreshAccessToken)
-            {
-                NSLog(@"401 encountered refreshing access token");
-            }
+            // Debug message
+
+            if (connexion.actionCode == kConnectTypeRefreshAccessToken) NSLog(@"401 encountered refreshing access token");
         }
 
         if (statusCode == 429)
@@ -3297,6 +3325,7 @@ didCompleteWithError:(NSError *)error
 
                 logIsClosed = YES;
                 logStreamURL = nil;
+                logStreamID = nil;
 
                 // Create an error event
 
@@ -3403,7 +3432,7 @@ didCompleteWithError:(NSError *)error
 
     NSString *eventString;
 
-    if (connexion.data != nil)
+    if (connexion.data != nil && connexion.data.length > 0)
     {
         // Add in existing data from the last streamed chunk, if there is any
 
@@ -3436,11 +3465,15 @@ didCompleteWithError:(NSError *)error
         {
             NSString *event = [events objectAtIndex:i];
 
+            // Empty event? Continue to the next in the series
+
             if (event.length == 0) continue;
+
+            // Check if the last event on the list has been terminated correctly
 
             if (i == events.count - 1 && lastMessageTruncated)
             {
-                // This is the detected event and it MIGHT be truncated, so just hold it for the next pass
+                // This is the last detected event and it MIGHT be truncated, so just hold it for the next pass
 
                 connexion.data = [NSMutableData dataWithData:[event dataUsingEncoding:NSUTF8StringEncoding]];
 
@@ -3460,6 +3493,7 @@ didCompleteWithError:(NSError *)error
                 // Separate the key-value pairs (separated by newlines)
 
                 NSArray *lines = [event componentsSeparatedByString:kLogStreamEventKeyValuePairSeparator];
+
 #ifdef DEBUG
     NSLog(@"Lines -> %lu", (long)lines.count);
 #endif
@@ -3469,6 +3503,7 @@ didCompleteWithError:(NSError *)error
 
                 for (NSString *line in lines)
                 {
+
 #ifdef DEBUG
     NSLog(@"Line  -> %@ (%li)", line, (long)line.length);
 #endif
@@ -3513,6 +3548,7 @@ didCompleteWithError:(NSError *)error
                     }
                     else
                     {
+
 #ifdef DEBUG
     // No field separator????
                         NSLog(@"Incoming event malformed - no field separator (: )");
@@ -3548,6 +3584,8 @@ didCompleteWithError:(NSError *)error
         // Partial event (no \n\n in received data) so preserve it in the connexion
         // so it's ready to be added to the next chunk of data received from the server
 
+        if (connexion.data == nil) connexion.data = [[NSMutableData alloc] init];
+
         [connexion.data appendData:data];
     }
 }
@@ -3574,19 +3612,20 @@ didCompleteWithError:(NSError *)error
 
     if (dataDecodeError != nil)
     {
-        // If the incoming data could not be decoded to JSON for some reason,
-        // most likely a malformed request which returns a block of HTML
+        // If the incoming data could not be decoded to JSON for some reason.
+        // NOTE Most likely this is caused by a malformed request which returns a block of HTML
 
-        errorMessage = [NSString stringWithFormat:@"[SERVER ERROR] Received data could not be decoded: %@", (NSString *)connexion.data];
+        errorMessage = [NSString stringWithFormat:@"[SERVER ERROR] Received data could not be decoded: %@", [[NSString alloc] initWithData:connexion.data encoding:NSUTF8StringEncoding]];
         [self reportError];
 
         connexion.errorCode = -1;
         connexion.actionCode = kConnectTypeNone;
     }
 
-    if (connexion.errorCode > 399)
+    if (connexion.errorCode > 399 && !(connexion.errorCode == 403 && connexion.actionCode == kConnectTypeGetAccessToken))
     {
-        // Trap and handle impCentral API errors here
+        // Trap and handle impCentral API errors here, but not 403s relating to a 'get access token' as this
+        // will be error data we want to parse later for the login token used to send an OTP
         // NOTE The value of 'errorCode' is the returned HTTP status code
 
         errorMessage = @"";
@@ -3627,21 +3666,21 @@ didCompleteWithError:(NSError *)error
                     else
                     {
                         // Process other API errors
-                        
+
                         NSDictionary *errorPlus;
                         NSMutableDictionary *ed = [NSMutableDictionary dictionaryWithDictionary:error];
                         NSString *action = @"N/A";
-                        
+
                         if (connexion.representedObject != nil)
                         {
                             NSString *act = [connexion.representedObject objectForKey:@"action"];
-                            
+
                             if (act != nil) action = act;
                         }
-                        
+
                         [ed setObject:action forKey:@"action"];
                         errorPlus = [NSDictionary dictionaryWithObjects:[ed allValues] forKeys:[ed allKeys]];
-                        
+
                         errorMessage = errors.count > 1
                         ? [errorMessage stringByAppendingFormat:@"%li. %@\n", (count + 1), [self processAPIError:errorPlus]]
                         : [self processAPIError:errorPlus];
@@ -3654,17 +3693,9 @@ didCompleteWithError:(NSError *)error
 
                 if (codeErrors.count > 0)
                 {
-                    NSDictionary *returnData;
-
-                    if (connexion.representedObject != nil)
-                    {
-                        returnData = @{ @"data" : codeErrors,
-                                        @"object" : connexion.representedObject };
-                    }
-                    else
-                    {
-                        returnData = @{ @"data" : codeErrors };
-                    }
+                    NSDictionary *returnData = (connexion.representedObject != nil)
+                    ? @{ @"data" : codeErrors, @"object" : connexion.representedObject }
+                    : @{ @"data" : codeErrors };
 
                     [nc postNotificationName:@"BuildAPICodeErrors" object:returnData];
 
@@ -4289,23 +4320,29 @@ didCompleteWithError:(NSError *)error
             break;
         }
 
-
         case kConnectTypeGetAccessToken:
         {
             // The server returns the requested access token directly
 
-            if ((connexion.errorCode == 403) && useTwoFactor)
+            if (connexion.errorCode == 403)
             {
                 // We are using 2FA and the initial contact has resulted in a login token which we need to
                 // hand back now to the host app
 
-                NSString *lt = [data objectForKey:@"login_token"];
+                // NOTE The login token arrives within an API 'errors' structure, so we need to extract
+                //      the data from the array and THEN extract the value by key and path
+                NSArray *errorsArray = [data valueForKeyPath:@"errors"];
+                NSDictionary *keyData = [errorsArray firstObject];
+                NSString *loginToken = [keyData valueForKeyPath:@"meta.login_token"];
 
                 NSDictionary *dict = connexion.representedObject != nil
-                ? @{ @"action" : @"needotp", @"token" : lt, @"object" : connexion.representedObject }
-                : @{ @"action" : @"needotp", @"token" : lt };
+                ? @{ @"action" : @"needotp", @"token" : loginToken, @"object" : connexion.representedObject }
+                : @{ @"action" : @"needotp", @"token" : loginToken };
 
                 [nc postNotificationName:@"BuildAPINeedOTP" object:dict];
+
+                useTwoFactor = YES;
+                
                 break;
             }
 
@@ -4327,6 +4364,7 @@ didCompleteWithError:(NSError *)error
 #endif
 
             // Record the cloud type
+
             impCloudCode = tempImpCloudCode;
 
             // Get user's account information before we do anything else
@@ -4396,38 +4434,51 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
             break;
         }
 
-        case kConnectTypeGetLogStreamID:
+        case kConnectTypeGetAnAccount:
         {
-            // We've got the stream ID so we are ready to activate the log stream
+            // The server returns the requested account information -
+            // just send the account data back to the calling app
+
+            data = [data objectForKey:@"data"];
+
+            NSDictionary *dict = connexion.representedObject != nil
+            ? @{ @"account" : data, @"object" : connexion.representedObject }
+            : @{ @"account" : data };
+
+            [nc postNotificationName:@"BuildAPIGotAnAccount" object:dict];
+
+            break;
+        }
+
+        case kConnectTypeLogGetStreamID:
+        {
+            // We've got the stream ID and URL so we are ready to activate the log stream
             // NOTE no devices have yet been subscribed - this happens after connection
 
             data = [data objectForKey:@"data"];
             logStreamID = [data objectForKey:@"id"];
-            
-#ifdef DEBUG
-            NSLog(@"Log Stream ID received: %@", logStreamID);
-#endif
 
             NSDictionary *attributes = [data objectForKey:@"attributes"];
             logStreamURL = [NSURL URLWithString:[attributes objectForKey:@"url"]];
 
-            // Preserve the first device's ID for use later
+#ifdef DEBUG
+            NSLog(@"Log Stream URL received: %@", logStreamURL);
+#endif
 
-            deviceToStream = [connexion.representedObject objectForKey:@"device"];
+            // Now set up the log stream, ie. open it (have to do this before adding devices
 
-            // Set up the log stream
-
-            [self startStream:logStreamURL];
+            savedObject = connexion.representedObject;
+            [self startStream];
 
             break;
         }
 
-        case kConnectTypeStreamActive:
+        case kConnectTypeLogStreamActive:
         {
             break;
         }
 
-        case kConnectTypeAddLogStream:
+        case kConnectTypeLogStreamAdd:
         {
             // We have added a device to the log stream
 
@@ -4450,7 +4501,7 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
             break;
         }
 
-        case kConnectTypeEndLogStream:
+        case kConnectTypeLogStreamEnd:
         {
             if (connexion.representedObject != nil)
             {
@@ -4472,23 +4523,7 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
 
             break;
         }
-            
-        case kConnectTypeGetAnAccount:
-        {
-            // The server returns the requested account information -
-            // just send the account data back to the calling app
 
-            data = [data objectForKey:@"data"];
-
-            NSDictionary *dict = connexion.representedObject != nil
-            ? @{ @"account" : data, @"object" : connexion.representedObject }
-            : @{ @"account" : data };
-
-            [nc postNotificationName:@"BuildAPIGotAnAccount" object:dict];
-
-            break;
-        }
-        
         case kConnectTypeGetLoginToken:
         {
             // The server returns the requested access token directly
@@ -4525,13 +4560,9 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
 {
     // Signal the host app that we have an error message for it to display (in the property 'errorMessage')
 
-    NSDictionary *error;
     NSString *message = errorMessage;
-
-    error = errCode == -1
-    ? @{ @"message" : message }
-    : @{ @"message" : message,
-         @"code" : [NSNumber numberWithInteger:errCode] };
+    NSDictionary *error = @{ @"message" : message,
+                             @"code" : [NSNumber numberWithInteger:errCode] };
 
     [[NSNotificationCenter defaultCenter] postNotificationName:@"BuildAPIError" object:error];
 }

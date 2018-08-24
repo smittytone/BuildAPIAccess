@@ -1,6 +1,7 @@
-# BuildAPIAccess 3.0.1 #
 
-*BuildAPIAccess* is an Objective-C (macOS, iOS and tvOS) wrapper for [Electric Imp’s impCentral™ API](https://developer.electricimp.com/tools/impcentralapi). It is called BuildAPIAccess for historical reasons: it was written to the support Electric Imp’s Build API, the predecessor to the impCentral API. **BuildAPIAccess 3.0.0 does not support the Build API**, which has been deprecated and will shortly be removed from service.
+# BuildAPIAccess 3.1.0 #
+
+*BuildAPIAccess* is an Objective-C (macOS, iOS and tvOS) wrapper for [Electric Imp’s impCentral™ API](https://developer.electricimp.com/tools/impcentralapi). It is called BuildAPIAccess for historical reasons: it was written to the support Electric Imp’s Build API, the predecessor to the impCentral API. **BuildAPIAccess 3.0.2 does not support the Build API**, which has been deprecated and will shortly be removed from service.
 
 *BuildAPIAccess* requires the (included) classes *Connexion*, *LogStreamEvent* and *Toke*n. All three are convenience classes for combining properties.
 
@@ -28,8 +29,12 @@ BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 
 ## Release Notes ##
 
-- 3.0.1
-    - *Released July 10, 2018*
+- 3.1.0 *Released August 24, 2018*
+    - Finalize multi-password authentication (MPA) support
+        - Remove *is2FA* parameter from *login:::* (it's redundant)
+    - Issue notification on login rejection rather than post an error
+    - Unify all non-code error notifications (`@"BuildAPIError"`) to return `{ "message": <error_message>, "code": <error_code> }`
+- 3.0.1 *Released July 10, 2018*
     - Add *getAccount()* and *gotMyAccount()* methods
 - 3.0.0
     - Major revision to support the impCentral API
@@ -45,13 +50,13 @@ BuildAPIAccess *api = [[BuildAPIAccess alloc] init];
 
 ## Class Methods: Login and Authentication ##
 
-### - (void)login:(NSString &#42;)userName :(NSString &#42;)passWord :(BOOL)is2FA ###
+### - (void)login:(NSString &#42;)userName :(NSString &#42;)passWord ###
 
-Log in using the supplied credentials. The method uses the credentials to retrieve a new API access token, which is used to authorize all further API accesses during the lifetime of the token. Values passed into *is2FA* are currently ignored; this parameter is for future use.
+Log in using the supplied credentials. The method uses the credentials to retrieve a new API access token, which is used to authorize all further API accesses during the lifetime of the token.
 
 ### - (void)twoFactorLogin:(NSString &#42;)loginToken :(NSString &#42;)otp ###
 
-Placeholder for support of two-factor authentication.
+If OTP is enabled for the target account, BuildAPIAccess will return the notification `@"BuildAPINeedOTP"` and return the server-supplied login token within the notification object via the key *token*. The host app should respond to this by requesting access using this method. Pass in the login token and the six-digit OTP code, typically retrieved from a phone app.
 
 ### - (void)logout ###
 
@@ -322,3 +327,54 @@ Used by the instance to get the URL (as a string) of the next page of data in th
 ### - (NSString *)getNextURL:(NSString &#42;)url ###
 
 Used by the instance to obtain the query string from the URL pointing to the next page of data in the sequence.
+
+## Notifications ##
+
+BuildAPIAccess can issue any of the following notifications to its host app.
+
+| Notification Name | Meaning | Notes |
+| --- | --- | --- |
+| `@"BuildAPINeedOTP"` | impCentral requires a OTP to continue login | The host can can use this to ask the user for an OTP |
+| `@"BuildAPILoginKey"` | A Login Token has been received | *object* is an NSDictionary: the data from the server |
+| `@"BuildAPILoggedIn"` | The user is logged in | The host can can use this to notify the user. *object* is an NSDictionary: its *data* key value is `@"loggedin"` |
+| `@"BuildAPILoginRejected"` | impCentral rejected the most recent login attempt | The host can can use this to warn the user |
+| `@"BuildAPIGotMyAccount"` | The user’s account information has been received | *object* is an NSDictionary: its *data* key contains the account info |
+| `@"BuildAPIGotAnAccount"` | A user’s account information has been received | *object* is an NSDictionary: its *data* key contains the account info |
+| `@"BuildAPIError"` | A non-code error has occured | *object* is an NSDictionary: its *message* key contains a human-readable error string; its *code* key contains an error code |
+| `@"BuildAPICodeErrors"` | There are syntax errors in uploaded code | *object* is an NSDictionary: its *data* key contains the returned error info |
+| `@"BuildAPIProgressStart"` | A request has been sent to impCentral | The host app can use this to start a progress indicator |
+| `@"BuildAPIProgressStop"` | A request sent to impCentral has completed | The host app can use this to start a progress indicator |
+| `@"BuildAPIDeviceAssigned"` | Device successfully assigned to a Device Group | |
+| `@"BuildAPIDeviceUnassigned"` | Device successfully unassigned from a Device Group | |
+| `@"BuildAPIGotProductsList"` | List of Products received | *object* is an NSDictionary: its *data* key contains the returned Product list |
+| `@"BuildAPIGotProduct"` | Product info received | *object* is an NSDictionary: its *data* key contains the requested Product's info |
+| `@"BuildAPIGotProductCreated"` | A Product has been created | *object* is an NSDictionary: its *data* key contains the new Product’s info |
+| `@"BuildAPIProductUpdated"` | A Product has been updated | *object* is an NSDictionary: its *data* key contains the updated Product’s info |
+| `@"BuildAPIProductDeleted"` | A Product has been deleted | *object* is an NSDictionary: its *data* key value is `@"deleted"` |
+| `@"BuildAPIGotDeviceGroupsList"` | List of Device Groups received | *object* is an NSDictionary: its *data* key contains the returned Device Group list |
+| `@"BuildAPIGotDeviceGroup"` | Device Group info received | *object* is an NSDictionary: its *data* key contains the requested Device Group's info |
+| `@"BuildAPIDeviceGroupCreated"` | A Device Group has been created | *object* is an NSDictionary: its *data* key contains the new Device Group’s info |
+| `@"BuildAPIDeviceGroupUpdated"` | A Device Group has been updated | *object* is an NSDictionary: its *data* key contains the updated Device Group’s info |
+| `@"BuildAPIDeviceGroupDeleted"` | A Device Group has been deleted | *object* is an NSDictionary: its *data* key value is `@"deleted"` |
+| `@"BuildAPIDeviceGroupRestarted"` | A Device Group’s devices have been restarted | *object* is an NSDictionary: its *data* key value is `@"restarted"` |
+| `@"BuildAPIGotDeploymentsList"` | List of Deployments received | *object* is an NSDictionary: its *data* key contains the returned Deployment list |
+| `@"BuildAPIGotDeviceGroup"` | Deployment info received | *object* is an NSDictionary: its *data* key contains the requested Deployment's info |
+| `@"BuildAPIDeploymentCreated"` | A Deploymentp has been created | *object* is an NSDictionary: its *data* key contains the new Deployment’s info |
+| `@"BuildAPIDeploymentUpdated"` | A Deployment has been updated | *object* is an NSDictionary: its *data* key contains the updated Deployment’s info |
+| `@"BuildAPIDeploymentDeleted"` | A Deployment has been deleted | *object* is an NSDictionary: its *data* key value is `@"deleted"` |
+| `@"BuildAPISetMinDeployment"` | A Device Group’s Minimum Deployment has been set | *object* is an NSDictionary: its *data* key contains the Deployment’s info |
+| `@"BuildAPIGotDevicesList"` | List of Devices received | *object* is an NSDictionary: its *data* key contains the returned Device list |
+| `@"BuildAPIGotDevice"` | Device info received | *object* is an NSDictionary: its *data* key contains the requested Device Group's info |
+| `@"BuildAPIDeviceUpdated"` | A Device has been updated | *object* is an NSDictionary: its *data* key contains the updated Device’s info |
+| `@"BuildAPIDeviceDeleted"` | A Device has been deleted | *object* is an NSDictionary: its *data* key value is `@"deleted"` |
+| `@"BuildAPIDeviceRestarted"` | A Device has been restarted | *object* is an NSDictionary: its *data* key value is `@"restarted"` |
+| `@"BuildAPIDeviceAssigned"` | A Device has been assigned to a Device Group | *object* is an NSDictionary: its *data* key value is `@"assigned"` |
+| `@"BuildAPIDevicesAssigned"` | Some Devices have been assigned to a Device Group | *object* is an NSDictionary: its *data* key value is `@"assigned"` |
+| `@"BuildAPIDeviceUnassigned"` | A Device has been removed from a Device Group | *object* is an NSDictionary: its *data* key value is `@"unassigned"` |
+| `@"BuildAPIDevicesUnassigned"` | Some Devices have been removed from a Device Group | *object* is an NSDictionary: its *data* key value is `@"unassigned"` |
+| `@"BuildAPIGotLogs"` | A Device’s historical logs have been received | *object* is an NSDictionary: its *data* key contains the returned log entries |
+| `@"BuildAPIGotHistory"` | A Device’s enrollment history has been received | *object* is an NSDictionary: its *data* key contains the returned history entries |
+| `@"BuildAPIDeviceAddedToStream"` | A Device has been added to a log stream | *object* is an NSDictionary: its *device* key value is the Device’s ID |
+| `@"BuildAPIDeviceRemovedFromStream"` | A Device has been removed from a log stream | *object* is an NSDictionary: its *device* key value is the Device’s ID |
+| `@"BuildAPILogEntryReceived"` | A log item has been received | *object* points to the entry |
+| `@"BuildAPILogStreamEnd"` | Log stream closed unexpectedly | |

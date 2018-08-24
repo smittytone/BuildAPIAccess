@@ -21,7 +21,8 @@
 //  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //  SOFTWARE.
 //
-//  BuildAPIAccess 3.0.1
+
+//  BuildAPIAccess 3.1.0
 
 
 #ifndef BuildAPIContants_h
@@ -29,7 +30,8 @@
 
 // Build API Access Version
 
-#define kBuildAPIAccessVersion                  @"3.0.1"
+
+#define kBuildAPIAccessVersion                  @"3.1.0"
 
 // Connection Types / Actions
 
@@ -76,11 +78,11 @@
 #define kConnectTypeGetAccessToken              80
 #define kConnectTypeRefreshAccessToken          81
 #define kConnectTypeGetMyAccount                82
-#define kConnectTypeGetLogStreamID              83
-#define kConnectTypeStreamActive                84
-#define kConnectTypeAddLogStream                85
-#define kConnectTypeEndLogStream                86
-#define kConnectTypeGetAnAccount                87
+#define kConnectTypeGetAnAccount                83
+#define kConnectTypeLogGetStreamID              84
+#define kConnectTypeLogStreamActive             85
+#define kConnectTypeLogStreamAdd                86
+#define kConnectTypeLogStreamEnd                87
 
 #define kConnectTypeGetLoginToken               90
 
@@ -99,6 +101,7 @@
 #define kMaxHistoricalLogs                      1000
 #define kLogTimeout                             300.0
 #define klogRetryInterval                       10.0
+#define kLogMaxDevicesPerLog                    8
 
 // Pagination
 
@@ -114,6 +117,8 @@
 #define kErrorLoginNoPassword                   12
 #define kErrorLoginNoCredentials                13
 #define kErrorLoginRejectCredentials            14
+
+#define kConnectTimeoutInterval                 120
 
 
 #endif
