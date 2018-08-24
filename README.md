@@ -28,13 +28,12 @@ BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 
 ## Release Notes ##
 
-- 3.1.0
+- 3.1.0 *Released August 24, 2018*
     - Finalize multi-password authentication (MPA) support
         - Remove *is2FA* parameter from *login:::* (it's redundant)
     - Issue notification on login rejection rather than post an error
     - Unify all non-code error notifications (`@"BuildAPIError"`) to return `{ "message": <error_message>, "code": <error_code> }`
-- 3.0.1
-    - *Released July 10, 2018*
+- 3.0.1 *Released July 10, 2018*
     - Add *getAccount()* and *gotMyAccount()* methods
 - 3.0.0
     - Major revision to support the impCentral API
