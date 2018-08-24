@@ -21,7 +21,7 @@
 //  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //  SOFTWARE.
 //
-//  BuildAPIAccess 3.0.2
+//  BuildAPIAccess 3.1.0
 
 
 #ifndef BuildAPIContants_h
@@ -29,7 +29,7 @@
 
 // Build API Access Version
 
-#define kBuildAPIAccessVersion                  @"3.0.2"
+#define kBuildAPIAccessVersion                  @"3.1.0"
 
 // Connection Types / Actions
 
