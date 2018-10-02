@@ -1117,6 +1117,25 @@
 
 
 
+#pragma mark Deployments
+
+- (void)getLibraries
+{
+    NSMutableURLRequest *request = [self makeGETrequest:@"libraries" :NO];
+
+    if (request)
+    {
+        [self launchConnection:request :kConnectTypeGetLibraries :nil];
+    }
+    else
+    {
+        errorMessage = @"Could not create a request to get Electric Imp libraries.";
+        [self reportError];
+    }
+}
+
+
+
 #pragma mark - Action Methods
 
 #pragma mark Products
@@ -4546,6 +4565,46 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
             
             [nc postNotificationName:@"BuildAPILoginKey" object:data];
             
+            break;
+        }
+
+        case kConnectTypeGetLibraries:
+        {
+            // The server returns an array of one or more libraries, which we add to an
+            // emptied master array. The list is returned one page at a time, so we need
+            // to check for the supplied URL of the next page in sequence
+
+            NSDictionary *links = [data objectForKey:@"links"];
+            NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
+            BOOL isFirstPage = [self isFirstPage:links];
+
+            if (isFirstPage) [eiLibs removeAllObjects];
+
+            NSArray *libList = [data objectForKey:@"data"];
+
+            if (eiLibs == nil) eiLibs = [[NSMutableArray alloc] init];
+
+            for (NSDictionary *lib in libList) [eiLibs addObject:lib];
+
+            if (nextURL.length != 0)
+            {
+                NSMutableURLRequest *request = [self makeGETrequest:nextURL :YES];
+
+                if (request)
+                {
+                    [self launchConnection:request :kConnectTypeGetLibraries :nil];
+                    break;
+                }
+                else
+                {
+                    errorMessage = @"Could not create a request to list all of the Electric Imp libraries — the list may be incomplete.";
+                    [self reportError];
+                }
+            }
+
+            returnData = @{ @"data" : eiLibs };
+
+            [nc postNotificationName:@"BuildAPIGotLibrariesList" object:returnData];
             break;
         }
     }

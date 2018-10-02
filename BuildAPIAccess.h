@@ -38,7 +38,7 @@
     NSURLSession *apiSession;
 
     NSMutableArray *connexions, *pendingConnections, *loggingDevices, *products, *devices;
-    NSMutableArray *devicegroups, *deployments, *history, *logs, *logConnexions;
+    NSMutableArray *devicegroups, *deployments, *history, *logs, *logConnexions, *eiLibs;
 
     NSDictionary *me;
 
@@ -119,6 +119,7 @@
 - (void)getDeploymentsWithFilter:(NSString *)filter :(NSString *)uuid :(id)someObject;
 - (void)getDeployment:(NSString *)deploymentID;
 - (void)getDeployment:(NSString *)deploymentID :(id)someObject;
+- (void)getLibraries;
 
 // Action Methods
 - (void)createProduct:(NSString *)name :(NSString *)description;

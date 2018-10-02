@@ -85,6 +85,7 @@
 #define kConnectTypeLogStreamEnd                87
 
 #define kConnectTypeGetLoginToken               90
+#define kConnectTypeGetLibraries                91
 
 // impCentral URL, version
 
