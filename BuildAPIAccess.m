@@ -3798,6 +3798,10 @@ didCompleteWithError:(NSError *)error
             // emptied master array. The list is returned one page at a time, so we need
             // to check for the supplied URL of the next page in sequence
 
+            if (products == nil) products = [[NSMutableArray alloc] init];
+            NSString *nextURL = [self addDataToList:products :data];
+            
+            /*
             NSDictionary *links = [data objectForKey:@"links"];
             NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
             BOOL isFirstPage = [self isFirstPage:links];
@@ -3810,10 +3814,9 @@ didCompleteWithError:(NSError *)error
 
             NSArray *productList = [data objectForKey:@"data"];
 
-            if (products == nil) products = [[NSMutableArray alloc] init];
-
             for (NSMutableDictionary *product in productList) [products addObject:product];
-
+             */
+            
             // Are there more pages yet to be received?
 
             if (nextURL.length != 0)
@@ -3905,7 +3908,11 @@ didCompleteWithError:(NSError *)error
             // The server returns an array of one or more device groups, which we add to an
             // emptied master array. The list is returned one page at a time, so we need
             // to check for the supplied URL of the next page in sequence
-
+            
+            if (devicegroups == nil) devicegroups = [[NSMutableArray alloc] init];
+            NSString *nextURL = [self addDataToList:devicegroups :data];
+            
+            /*
             NSDictionary *links = [data objectForKey:@"links"];
             NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
             BOOL isFirstPage = [self isFirstPage:links];
@@ -3914,10 +3921,9 @@ didCompleteWithError:(NSError *)error
 
             NSArray *devicegroupList = [data objectForKey:@"data"];
 
-            if (devicegroups == nil) devicegroups = [[NSMutableArray alloc] init];
-
             for (NSDictionary *devicegroup in devicegroupList) [devicegroups addObject:devicegroup];
-
+             */
+            
             if (nextURL.length != 0)
             {
                 NSMutableURLRequest *request = [self makeGETrequest:nextURL :YES];
@@ -4013,7 +4019,11 @@ didCompleteWithError:(NSError *)error
             // The server returns an array of one or more deployments, which we add to an
             // emptied master array. The list is returned one page at a time, so we need
             // to check for the supplied URL of the next page in sequence
-
+            
+            if (deployments == nil) deployments = [[NSMutableArray alloc] init];
+            NSString *nextURL = [self addDataToList:deployments :data];
+            
+            /*
             NSDictionary *links = [data objectForKey:@"links"];
             NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
             BOOL isFirstPage = [self isFirstPage:links];
@@ -4025,7 +4035,8 @@ didCompleteWithError:(NSError *)error
             if (deployments == nil) deployments = [[NSMutableArray alloc] init];
 
             for (NSMutableDictionary *deployment in deploymentList) [deployments addObject:deployment];
-
+             */
+            
             if (nextURL.length != 0 && deployments.count < maxListCount)
             {
                 NSMutableURLRequest *request = [self makeGETrequest:nextURL :YES];
@@ -4124,7 +4135,11 @@ didCompleteWithError:(NSError *)error
             // emptied master array. The list is returned one page at a time, so we need
             // to check for the supplied URL of the next page in sequence
 
-            NSDictionary *links = [data objectForKey:@"links"];
+            if (devices == nil) devices = [[NSMutableArray alloc] init];
+            NSString *nextURL = [self addDataToList:devices :data];
+            
+            /*
+             NSDictionary *links = [data objectForKey:@"links"];
             NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
             BOOL isFirstPage = [self isFirstPage:links];
 
@@ -4135,7 +4150,8 @@ didCompleteWithError:(NSError *)error
             if (devices == nil) devices = [[NSMutableArray alloc] init];
 
             for (NSDictionary *device in deviceList) [devices addObject:device];
-
+             */
+            
             if (nextURL.length != 0)
             {
                 NSMutableURLRequest *request = [self makeGETrequest:nextURL :YES];
@@ -4266,7 +4282,11 @@ didCompleteWithError:(NSError *)error
             // emptied master array. The list is returned one page at a time, so we need
             // to check for the supplied URL of the next page in sequence
 
-            NSDictionary *links = [data objectForKey:@"links"];
+            if (logs == nil) logs = [[NSMutableArray alloc] init];
+            NSString *nextURL = [self addDataToList:logs :data];
+            
+            /*
+             NSDictionary *links = [data objectForKey:@"links"];
             NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
             BOOL isFirstPage = [self isFirstPage:links];
 
@@ -4277,7 +4297,8 @@ didCompleteWithError:(NSError *)error
             NSArray *batch = [data objectForKey:@"data"];
 
             for (NSDictionary *entry in batch) [logs addObject:entry];
-
+             */
+            
             if (nextURL.length != 0 && logs.count < maxListCount)
             {
                 NSMutableURLRequest *request = [self makeGETrequest:nextURL :YES];
@@ -4308,7 +4329,11 @@ didCompleteWithError:(NSError *)error
             // emptied master array. The list is returned one page at a time, so we need
             // to check for the supplied URL of the next page in sequence
 
-            NSDictionary *links = [data objectForKey:@"links"];
+            if (history == nil) history = [[NSMutableArray alloc] init];
+            NSString *nextURL = [self addDataToList:history :data];
+            
+            /*
+             NSDictionary *links = [data objectForKey:@"links"];
             NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
             BOOL isFirstPage = [self isFirstPage:links];
 
@@ -4319,7 +4344,8 @@ didCompleteWithError:(NSError *)error
             NSArray *batch = [data objectForKey:@"data"];
 
             for (NSDictionary *entry in batch) [history addObject:entry];
-
+             */
+            
             if (nextURL.length != 0 && history.count < maxListCount)
             {
                 // There is at least one more page of data, so go and get it
@@ -4573,21 +4599,14 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
             // The server returns an array of one or more libraries, which we add to an
             // emptied master array. The list is returned one page at a time, so we need
             // to check for the supplied URL of the next page in sequence
-
-            NSDictionary *links = [data objectForKey:@"links"];
-            NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
-            BOOL isFirstPage = [self isFirstPage:links];
-
-            if (isFirstPage) [eiLibs removeAllObjects];
-
-            NSArray *libList = [data objectForKey:@"data"];
-
+            
             if (eiLibs == nil) eiLibs = [[NSMutableArray alloc] init];
-
-            for (NSDictionary *lib in libList) [eiLibs addObject:lib];
-
+            NSString *nextURL = [self addDataToList:eiLibs :data];
+            
             if (nextURL.length != 0)
             {
+                // Get the next page of libraries
+                
                 NSMutableURLRequest *request = [self makeGETrequest:nextURL :YES];
 
                 if (request)
@@ -4613,6 +4632,33 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
 
 
 #pragma mark - Utility Methods
+
+
+- (NSString *)addDataToList:(NSMutableArray *)array :(NSDictionary *)data
+{
+    // Adds the incoming data to the target array, and returns the next page URL
+    // This method is sed internally, os it makes no sense to call this directly
+    // 'array' should be defined before this method is called (it is not returned)
+    
+    // Get the URL of the next page from the passed data's 'links' section
+    
+    NSDictionary *links = [data objectForKey:@"links"];
+    NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
+    
+    // Only clear the target array if this is the first page
+    
+    BOOL isFirstPage = [self isFirstPage:links];
+    if (isFirstPage && array.count > 0) [array removeAllObjects];
+    
+    // Add the received page of records to the target array
+    
+    NSArray *libList = [data objectForKey:@"data"];
+    
+    for (NSDictionary *lib in libList) [array addObject:lib];
+    
+    return nextURL;
+}
+
 
 
 - (void)reportError

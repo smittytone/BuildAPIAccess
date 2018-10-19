@@ -200,6 +200,7 @@
 - (void)processResult:(Connexion *)connexion :(NSDictionary *)data;
 
 // Utility Methods
+- (NSString *)addDataToList:(NSMutableArray *)array :(NSDictionary *)data;
 - (void)reportError;
 - (void)reportError:(NSInteger)errCode;
 - (NSString *)processAPIError:(NSDictionary *)error;
