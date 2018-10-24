@@ -31,6 +31,8 @@ BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 
 - 3.1.1 *In Development*
     - Add `@"BuildAPIError"` notification
+    - Code refactoring
+    - Add support for Electric Imp's alpha library endpoint
 - 3.1.0 *Released August 24, 2018*
     - Finalize multi-password authentication (MPA) support
         - Remove *is2FA* parameter from *login:::* (it's redundant)
