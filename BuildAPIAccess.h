@@ -22,7 +22,6 @@
 //  SOFTWARE.
 //
 
-//  BuildAPIAccess 3.1.0
 
 
 #import <Foundation/Foundation.h>
@@ -38,7 +37,7 @@
     NSURLSession *apiSession;
 
     NSMutableArray *connexions, *pendingConnections, *loggingDevices, *products, *devices;
-    NSMutableArray *devicegroups, *deployments, *history, *logs, *logConnexions;
+    NSMutableArray *devicegroups, *deployments, *history, *logs, *logConnexions, *eiLibs;
 
     NSDictionary *me;
 
