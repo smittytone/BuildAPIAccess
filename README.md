@@ -29,16 +29,15 @@ BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 
 ## Release Notes ##
 
-- 3.1.1 *In Development*
-    - Add `@"BuildAPIError"` notification
-    - Code refactoring
+- 3.1.1 *29 November 2018*
     - Add support for Electric Imp's alpha library endpoint
-- 3.1.0 *Released August 24, 2018*
+    - Code refactoring
+- 3.1.0 *24 August 24 2018*
     - Finalize multi-password authentication (MPA) support
         - Remove *is2FA* parameter from *login:::* (it's redundant)
     - Issue notification on login rejection rather than post an error
     - Unify all non-code error notifications (`@"BuildAPIError"`) to return `{ "message": <error_message>, "code": <error_code> }`
-- 3.0.1 *Released July 10, 2018*
+- 3.0.1 *10 July 2018*
     - Add *getAccount()* and *gotMyAccount()* methods
 - 3.0.0
     - Major revision to support the impCentral API
@@ -344,7 +343,7 @@ BuildAPIAccess can issue any of the following notifications to its host app.
 | `@"BuildAPILoginRejected"` | impCentral rejected the most recent login attempt | The host can can use this to warn the user |
 | `@"BuildAPIGotMyAccount"` | The user’s account information has been received | *object* is an NSDictionary: its *data* key contains the account info |
 | `@"BuildAPIGotAnAccount"` | A user’s account information has been received | *object* is an NSDictionary: its *data* key contains the account info |
-| `@"BuildAPIError"` | A non-code error has occured | *object* is an NSDictionary: its *message* key contains a human-readable error string; its *code* key contains an error code |
+| `@"BuildAPIError"` | A non-code error has occurred | *object* is an NSDictionary: its *message* key contains a human-readable error string; its *code* key contains an error code |
 | `@"BuildAPICodeErrors"` | There are syntax errors in uploaded code | *object* is an NSDictionary: its *data* key contains the returned error info |
 | `@"BuildAPIProgressStart"` | A request has been sent to impCentral | The host app can use this to start a progress indicator |
 | `@"BuildAPIProgressStop"` | A request sent to impCentral has completed | The host app can use this to start a progress indicator |
@@ -363,7 +362,7 @@ BuildAPIAccess can issue any of the following notifications to its host app.
 | `@"BuildAPIDeviceGroupRestarted"` | A Device Group’s devices have been restarted | *object* is an NSDictionary: its *data* key value is `@"restarted"` |
 | `@"BuildAPIGotDeploymentsList"` | List of Deployments received | *object* is an NSDictionary: its *data* key contains the returned Deployment list |
 | `@"BuildAPIGotDeviceGroup"` | Deployment info received | *object* is an NSDictionary: its *data* key contains the requested Deployment's info |
-| `@"BuildAPIDeploymentCreated"` | A Deploymentp has been created | *object* is an NSDictionary: its *data* key contains the new Deployment’s info |
+| `@"BuildAPIDeploymentCreated"` | A Deployment has been created | *object* is an NSDictionary: its *data* key contains the new Deployment’s info |
 | `@"BuildAPIDeploymentUpdated"` | A Deployment has been updated | *object* is an NSDictionary: its *data* key contains the updated Deployment’s info |
 | `@"BuildAPIDeploymentDeleted"` | A Deployment has been deleted | *object* is an NSDictionary: its *data* key value is `@"deleted"` |
 | `@"BuildAPISetMinDeployment"` | A Device Group’s Minimum Deployment has been set | *object* is an NSDictionary: its *data* key contains the Deployment’s info |
