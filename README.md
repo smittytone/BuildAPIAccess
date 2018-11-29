@@ -32,7 +32,7 @@ BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 - 3.1.1 *29 November 2018*
     - Add support for Electric Imp's alpha library endpoint
     - Code refactoring
-- 3.1.0 *24 August 24 2018*
+- 3.1.0 *24 August 2018*
     - Finalize multi-password authentication (MPA) support
         - Remove *is2FA* parameter from *login:::* (it's redundant)
     - Issue notification on login rejection rather than post an error
