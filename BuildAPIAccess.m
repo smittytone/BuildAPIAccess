@@ -1,5 +1,5 @@
 
-//  BuildAPIAccess 3.1.1
+//  BuildAPIAccess 3.1.2
 //  Copyright (c) 2015-18 Tony Smith. All rights reserved.
 //  Issued under the MIT licence:
 //
@@ -1377,14 +1377,18 @@
 
     NSArray *allowedTypes = @[ @"pre_production_devicegroup",
                                @"pre_factoryfixture_devicegroup",
+                               @"pre_dut_devicegroup",
                                @"development_devicegroup",
                                @"production_devicegroup",
                                @"factoryfixture_devicegroup",
+                               @"dut_devicegroup",
                                @"development",
                                @"production",
                                @"factoryfixture",
+                               @"dut",
                                @"pre_factoryfixture",
-                               @"pre_production" ];
+                               @"pre_production",
+                               @"pre_dut"];
 
     for (NSUInteger i = 0 ; i < allowedTypes.count ; ++i)
     {
@@ -1558,14 +1562,18 @@
             BOOL flag = NO;
             NSArray *allowedTypes = @[ @"pre_production_devicegroup",
                                        @"pre_factoryfixture_devicegroup",
+                                       @"pre_dut_devicegroup",
                                        @"development_devicegroup",
                                        @"production_devicegroup",
                                        @"factoryfixture_devicegroup",
+                                       @"dut_devicegroup",
                                        @"development",
                                        @"production",
                                        @"factoryfixture",
+                                       @"dut",
                                        @"pre_factoryfixture",
-                                       @"pre_production" ];
+                                       @"pre_production",
+                                       @"pre_dut"];
 
             for (NSUInteger i = 0 ; i < allowedTypes.count ; ++i)
             {
