@@ -1,5 +1,5 @@
 
-# BuildAPIAccess 3.1.1 #
+# BuildAPIAccess 3.1.2 #
 
 *BuildAPIAccess* is an Objective-C (macOS, iOS and tvOS) wrapper for [Electric Imp’s impCentral™ API](https://developer.electricimp.com/tools/impcentralapi). It is called BuildAPIAccess for historical reasons: it was written to the support Electric Imp’s Build API, the predecessor to the impCentral API. **BuildAPIAccess 3.0.2 does not support the Build API**, which has been deprecated and will shortly be removed from service.
 
@@ -29,9 +29,10 @@ BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 
 ## Release Notes ##
 
+- 3.1.2 *Unreleased*
+    - Add support for DUT devicegroups
 - 3.1.1 *29 November 2018*
-    - Add support for Electric Imp's alpha library endpoint
-    - Code refactoring
+    - Add support for Electric Imp's alpha library checking endpoint
 - 3.1.0 *24 August 2018*
     - Finalize multi-password authentication (MPA) support
         - Remove *is2FA* parameter from *login:::* (it's redundant)
@@ -40,8 +41,24 @@ BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 - 3.0.1 *10 July 2018*
     - Add *getAccount()* and *gotMyAccount()* methods
 - 3.0.0
-    - Major revision to support the impCentral API
-    - End support for the (deprecated) Build API
+    - Major revision to support Electric Imp’s impCentral API
+    - End support for the Build API, now deprecated by Electric Imp
+- 2.0.1
+    - Add methods: *clearAPIKey:*, *setAPIKey:*
+    - Add *numberOfConnections* property
+    - Add custom User-Agent string to all HTTP requests
+    - Add BuildAPIAccess version constant
+    - Bug fixes
+- 2.0.0
+    - Major code revision and extended API support
+- 1.1.3
+    - Bug fixes
+- 1.1.2
+    - Bug fixes
+- 1.1.1
+    - Connexion object fixes
+- 1.1.0
+    - Initial public release
 
 ## Class Usage ##
 
