@@ -1552,6 +1552,13 @@
             if (pt != nil) [relationships setValue:pt forKey:@"production_target"];
             continue;
         }
+        
+        if ([key compare:@"dut_target"] == NSOrderedSame)
+        {
+            NSDictionary *pt = [values objectAtIndex:i];
+            if (pt != nil) [relationships setValue:pt forKey:@"dut_target"];
+            continue;
+        }
 
         if ([key compare:@"type"] == NSOrderedSame)
         {
