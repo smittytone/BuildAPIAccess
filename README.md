@@ -15,9 +15,9 @@ Making use of the impCentral API requires an Electric Imp account. You will need
 
 ## Licence and Copyright ##
 
-BuildAPIAccess is &copy; Tony Smith, 2015-18 and is offered under the terms of the MIT licence.
+BuildAPIAccess is &copy; Tony Smith, 2015-19 and is offered under the terms of the MIT licence.
 
-The impCentral API is &copy; Electric Imp, 2017-18.
+The impCentral API is &copy; Electric Imp, 2017-19.
 
 ## HTTP User Agent ##
 
@@ -30,7 +30,7 @@ BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 ## Release Notes ##
 
 - 3.1.2 *Unreleased*
-    - Add support for DUT devicegroups
+    - Add support for DUT device groups
 - 3.1.1 *29 November 2018*
     - Add support for Electric Imp's alpha library checking endpoint
 - 3.1.0 *24 August 2018*

@@ -1,6 +1,6 @@
 
 //  BuildAPIAccess 3.1.2
-//  Copyright (c) 2015-18 Tony Smith. All rights reserved.
+//  Copyright (c) 2015-19 Tony Smith. All rights reserved.
 //  Issued under the MIT licence:
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
