@@ -1,5 +1,5 @@
 
-//  BuildAPIAccess 3.1.2
+//  BuildAPIAccess 3.2.0
 //  Copyright (c) 2015-19 Tony Smith. All rights reserved.
 //  Issued under the MIT licence:
 //
@@ -1409,35 +1409,39 @@
         return;
     }
 
-    // (Pre) Factory Fixture Device Groups must have a target - check that we have it
+    // FROM 3.2.0
+    // (Pre) Factory Fixture Device Groups must have two targets - check that we have then both
 
-    NSDictionary *target = nil;
-    NSString *targetID = [details valueForKey:@"targetid"];
-
-    if ([type compare:@"factoryfixture_devicegroup"] == NSOrderedSame)
+    NSDictionary *prodTarget = nil;
+    NSString *prodTargetID = [details valueForKey:@"targetid"];
+    NSDictionary *dutTarget = nil;
+    NSString *dutTargetID = [details valueForKey:@"dutid"];
+    BOOL isFixtureGroup = NO;
+    BOOL isTest = [type hasPrefix:@"pre_"];
+    
+    if ([type containsString:@"fixture"])
     {
-        if (targetID == nil || targetID.length == 0)
+        if (prodTargetID == nil || prodTargetID.length == 0)
         {
-            errorMessage = @"Could not create a request to create the new device group: invalid production target device group.";
+            errorMessage = [NSString stringWithFormat:@"Could not create a request to create the new device group: invalid %@ production target device group.", (isTest ? @"test" : @"")];
             [self reportError];
             return;
         }
-
-        target = @{ @"type" : @"production_devicegroup",
-                    @"id" : targetID };
-    }
-
-    if ([type compare:@"pre_factoryfixture_devicegroup"] == NSOrderedSame)
-    {
-        if (targetID == nil || targetID.length == 0)
+        
+        if (dutTargetID == nil || dutTargetID.length == 0)
         {
-            errorMessage = @"Could not create a request to create the new device group: invalid test production target device group.";
+            errorMessage = [NSString stringWithFormat:@"Could not create a request to create the new device group: invalid %@ DUT target device group.", (isTest ? @"test" : @"")];
             [self reportError];
             return;
         }
-
-        target = @{ @"type" : @"pre_production_devicegroup",
-                    @"id" : targetID };
+        
+        prodTarget = @{ @"type" : (isTest ? @"pre_production_devicegroup" : @"production_devicegroup"),
+                        @"id" : prodTargetID };
+        
+         dutTarget = @{ @"type" : (isTest ? @"pre_dut_devicegroup" : @"dut_devicegroup"),
+                        @"id" : dutTargetID };
+        
+        isFixtureGroup = YES;
     }
 
     NSDictionary *attributes = @{ @"name" : name,
@@ -1446,8 +1450,8 @@
     NSDictionary *product = @{ @"type" : @"product",
                                @"id" : productID };
 
-    NSDictionary *relationships = target != nil
-    ? @{ @"product" : product, @"production_target" : target }
+    NSDictionary *relationships = isFixtureGroup
+    ? @{ @"product" : product, @"production_target" : prodTarget, @"dut_target" : dutTarget }   // NOTE key string "dut_target" TBC
     : @{ @"product" : product };
 
     NSDictionary *data = @{ @"type" : type,
