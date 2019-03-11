@@ -1,5 +1,5 @@
 
-# BuildAPIAccess 3.1.2 #
+# BuildAPIAccess 3.2.0 #
 
 *BuildAPIAccess* is an Objective-C (macOS, iOS and tvOS) wrapper for [Electric Imp’s impCentral™ API](https://developer.electricimp.com/tools/impcentralapi). It is called BuildAPIAccess for historical reasons: it was written to the support Electric Imp’s Build API, the predecessor to the impCentral API. **BuildAPIAccess 3.0.2 does not support the Build API**, which has been deprecated and will shortly be removed from service.
 
@@ -29,8 +29,8 @@ BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 
 ## Release Notes ##
 
-- 3.1.2 *Unreleased*
-    - Add support for DUT device groups
+- 3.2.0 *Unreleased*
+    - Add support for (Test) DUT device groups
 - 3.1.1 *29 November 2018*
     - Add support for Electric Imp's alpha library checking endpoint
 - 3.1.0 *24 August 2018*
