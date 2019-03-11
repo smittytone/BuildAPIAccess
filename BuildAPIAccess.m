@@ -1550,17 +1550,10 @@
             continue;
         }
 
-        if ([key compare:@"production_target"] == NSOrderedSame)
+        if ([key compare:@"dut_target"] == NSOrderedSame || [key compare:@"production_target"] == NSOrderedSame)
         {
             NSDictionary *pt = [values objectAtIndex:i];
-            if (pt != nil) [relationships setValue:pt forKey:@"production_target"];
-            continue;
-        }
-        
-        if ([key compare:@"dut_target"] == NSOrderedSame)
-        {
-            NSDictionary *pt = [values objectAtIndex:i];
-            if (pt != nil) [relationships setValue:pt forKey:@"dut_target"];
+            if (pt != nil) [relationships setValue:pt forKey:key];
             continue;
         }
 
