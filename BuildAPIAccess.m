@@ -1369,45 +1369,20 @@
     if (description == nil) description = @"";
     if (description.length > 255) description = [description substringToIndex:255];
 
-    BOOL flag = NO;
-
     // Check a legal type of device group has been specified
 
-    if (type == nil || type.length == 0) type = @"development_devicegroup";
+    type = [self checkDevicegroupType:type];
 
-    NSArray *allowedTypes = @[ @"pre_production_devicegroup",
-                               @"pre_factoryfixture_devicegroup",
-                               @"pre_dut_devicegroup",
-                               @"development_devicegroup",
-                               @"production_devicegroup",
-                               @"factoryfixture_devicegroup",
-                               @"dut_devicegroup",
-                               @"development",
-                               @"production",
-                               @"factoryfixture",
-                               @"dut",
-                               @"pre_factoryfixture",
-                               @"pre_production",
-                               @"pre_dut"];
-
-    for (NSUInteger i = 0 ; i < allowedTypes.count ; ++i)
-    {
-        NSString *pType = [allowedTypes objectAtIndex:i];
-
-        if ([type compare:pType] == NSOrderedSame)
-        {
-            flag = YES;
-
-            if (i > 4) type = [type stringByAppendingString:@"_devicegroup"];
-        }
-    }
-
-    if (!flag)
+    if ([type compare:@"FALSE"] == NSOrderedSame)
     {
         errorMessage = @"Could not create a request to create the new device group: invalid device group type.";
         [self reportError];
         return;
     }
+
+    // Write the updated type back
+
+    [details setValue:type forKey:@"type"];
 
     // FROM 3.2.0
     // (Pre) Factory Fixture Device Groups must have two targets - check that we have then both
@@ -1561,42 +1536,16 @@
         {
             devicegroupType = [values objectAtIndex:i];
 
-            if (devicegroupType.length == 0) devicegroupType = @"development_devicegroup";
+            NSString *type = [self checkDevicegroupType:devicegroupType];
 
-            BOOL flag = NO;
-            NSArray *allowedTypes = @[ @"pre_production_devicegroup",
-                                       @"pre_factoryfixture_devicegroup",
-                                       @"pre_dut_devicegroup",
-                                       @"development_devicegroup",
-                                       @"production_devicegroup",
-                                       @"factoryfixture_devicegroup",
-                                       @"dut_devicegroup",
-                                       @"development",
-                                       @"production",
-                                       @"factoryfixture",
-                                       @"dut",
-                                       @"pre_factoryfixture",
-                                       @"pre_production",
-                                       @"pre_dut"];
-
-            for (NSUInteger i = 0 ; i < allowedTypes.count ; ++i)
-            {
-                NSString *pType = [allowedTypes objectAtIndex:i];
-
-                if ([devicegroupType compare:pType] == NSOrderedSame)
-                {
-                    flag = YES;
-
-                    if (i > 4) devicegroupType = [devicegroupType stringByAppendingString:@"_devicegroup"];
-                }
-            }
-
-            if (!flag)
+            if ([type compare:@"FALSE"] == NSOrderedSame)
             {
                 errorMessage = @"Could not create a request to update the device group: invalid device group type supplied.";
                 [self reportError];
                 return;
             }
+
+            devicegroupType = type;
 
             continue;
         }
@@ -4741,6 +4690,47 @@ NSLog(@"   Expires in: %li", (long)token.lifetime);
     }
 
     return filterIsOK;
+}
+
+
+
+- (NSString *)checkDevicegroupType:(NSString *)type
+{
+    // FROM 3.2.0
+    // Extract device group check code and refactor it as a separate function
+
+    if (type == nil || type.length == 0) return @"development_devicegroup";
+
+    NSArray *allowedTypes = @[ @"development_devicegroup",
+                               @"pre_production_devicegroup",
+                               @"pre_dut_devicegroup",
+                               @"pre_factoryfixture_devicegroup",
+                               @"production_devicegroup",
+                               @"dut_devicegroup",
+                               @"factoryfixture_devicegroup",
+                               @"development",
+                               @"pre_production",
+                               @"pre_dut",
+                               @"pre_factoryfixture",
+                               @"production",
+                               @"dut",
+                               @"factoryfixture" ];
+
+    bool set = NO;
+
+    for (NSUInteger i = 0 ; i < allowedTypes.count ; ++i)
+    {
+        NSString *pType = [allowedTypes objectAtIndex:i];
+
+        if ([type compare:pType] == NSOrderedSame)
+        {
+            if (i > 6) type = [type stringByAppendingString:@"_devicegroup"];
+            set = YES;
+        }
+    }
+
+    if (set) return type;
+    return @"FALSE";
 }
 
 
