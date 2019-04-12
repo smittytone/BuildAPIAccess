@@ -292,9 +292,9 @@
     NSDate *now = [NSDate date];
 
 #ifdef DEBUG
-    NSLog(@"      Expiry: %@", [dateFormatter stringFromDate:expiry]);
-    NSLog(@"Expiry Delta: %@", [dateFormatter stringFromDate:deltaExpiry]);
-    NSLog(@"         Now: %@", [dateFormatter stringFromDate:now]);
+    //NSLog(@"      Expiry: %@", [dateFormatter stringFromDate:expiry]);
+    //NSLog(@"Expiry Delta: %@", [dateFormatter stringFromDate:deltaExpiry]);
+    //NSLog(@"         Now: %@", [dateFormatter stringFromDate:now]);
 #endif
 
     NSDate *latest = [now laterDate:expiry];
@@ -302,7 +302,7 @@
     if (now == latest)
     {
 #ifdef DEBUG
-    NSLog(@"              EXPIRED");
+    //NSLog(@"              EXPIRED");
 #endif
 
         // Return BAD TOKEN
@@ -315,7 +315,7 @@
     if (now == latest)
     {
 #ifdef DEBUG
-    NSLog(@"              ABOUT TO EXPIRE");
+    //NSLog(@"              ABOUT TO EXPIRE");
 #endif
 
         // Return BAD TOKEN
@@ -324,7 +324,7 @@
     }
 
 #ifdef DEBUG
-    NSLog(@"              NOT EXPIRED");
+    //NSLog(@"              NOT EXPIRED");
 #endif
 
     // Return GOOD TOKEN
@@ -2427,6 +2427,13 @@
     // RETURNS:
     //   A BuildAPIAccess Connexion instance
 
+#ifdef DEBUG
+    NSLog(@"URL: %@", request.URL);
+    NSLog(@"VRB: %@", request.HTTPMethod);
+    NSLog(@"HED: %@", request.allHTTPHeaderFields);
+    NSLog(@"BDY: %@", [[NSString alloc] initWithData:request.HTTPBody encoding:NSUTF8StringEncoding]);
+#endif
+    
     Connexion *aConnexion = [[Connexion alloc] init];
     aConnexion.actionCode = actionCode;
     aConnexion.originalRequest = request;
@@ -3872,18 +3879,6 @@ didCompleteWithError:(NSError *)error
             if (devicegroups == nil) devicegroups = [[NSMutableArray alloc] init];
             NSString *nextURL = [self addDataToList:devicegroups :data];
             
-            /*
-            NSDictionary *links = [data objectForKey:@"links"];
-            NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
-            BOOL isFirstPage = [self isFirstPage:links];
-
-            if (isFirstPage) [devicegroups removeAllObjects];
-
-            NSArray *devicegroupList = [data objectForKey:@"data"];
-
-            for (NSDictionary *devicegroup in devicegroupList) [devicegroups addObject:devicegroup];
-             */
-            
             if (nextURL.length != 0)
             {
                 NSMutableURLRequest *request = [self makeGETrequest:nextURL :YES];
@@ -3982,20 +3977,6 @@ didCompleteWithError:(NSError *)error
             
             if (deployments == nil) deployments = [[NSMutableArray alloc] init];
             NSString *nextURL = [self addDataToList:deployments :data];
-            
-            /*
-            NSDictionary *links = [data objectForKey:@"links"];
-            NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
-            BOOL isFirstPage = [self isFirstPage:links];
-
-            if (isFirstPage) [deployments removeAllObjects];
-
-            NSArray *deploymentList = [data objectForKey:@"data"];
-
-            if (deployments == nil) deployments = [[NSMutableArray alloc] init];
-
-            for (NSMutableDictionary *deployment in deploymentList) [deployments addObject:deployment];
-             */
             
             if (nextURL.length != 0 && deployments.count < maxListCount)
             {
@@ -4097,20 +4078,6 @@ didCompleteWithError:(NSError *)error
 
             if (devices == nil) devices = [[NSMutableArray alloc] init];
             NSString *nextURL = [self addDataToList:devices :data];
-            
-            /*
-             NSDictionary *links = [data objectForKey:@"links"];
-            NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
-            BOOL isFirstPage = [self isFirstPage:links];
-
-            if (isFirstPage) [devices removeAllObjects];
-
-            NSArray *deviceList = [data objectForKey:@"data"];
-
-            if (devices == nil) devices = [[NSMutableArray alloc] init];
-
-            for (NSDictionary *device in deviceList) [devices addObject:device];
-             */
             
             if (nextURL.length != 0)
             {
@@ -4245,20 +4212,6 @@ didCompleteWithError:(NSError *)error
             if (logs == nil) logs = [[NSMutableArray alloc] init];
             NSString *nextURL = [self addDataToList:logs :data];
             
-            /*
-             NSDictionary *links = [data objectForKey:@"links"];
-            NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
-            BOOL isFirstPage = [self isFirstPage:links];
-
-            if (logs == nil) logs = [[NSMutableArray alloc] init];
-
-            if (isFirstPage && logs.count > 0) [logs removeAllObjects];
-
-            NSArray *batch = [data objectForKey:@"data"];
-
-            for (NSDictionary *entry in batch) [logs addObject:entry];
-             */
-            
             if (nextURL.length != 0 && logs.count < maxListCount)
             {
                 NSMutableURLRequest *request = [self makeGETrequest:nextURL :YES];
@@ -4291,20 +4244,6 @@ didCompleteWithError:(NSError *)error
 
             if (history == nil) history = [[NSMutableArray alloc] init];
             NSString *nextURL = [self addDataToList:history :data];
-            
-            /*
-             NSDictionary *links = [data objectForKey:@"links"];
-            NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
-            BOOL isFirstPage = [self isFirstPage:links];
-
-            if (history == nil) history = [[NSMutableArray alloc] init];
-
-            if (isFirstPage && history.count > 0) [history removeAllObjects];
-
-            NSArray *batch = [data objectForKey:@"data"];
-
-            for (NSDictionary *entry in batch) [history addObject:entry];
-             */
             
             if (nextURL.length != 0 && history.count < maxListCount)
             {
