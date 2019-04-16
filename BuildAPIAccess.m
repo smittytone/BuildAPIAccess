@@ -1382,7 +1382,7 @@
 
     // Write the updated type back
 
-    [details setValue:type forKey:@"type"];
+    // [details setValue:type forKey:@"type"];
 
     // FROM 3.2.0
     // (Pre) Factory Fixture Device Groups must have two targets - check that we have then both
