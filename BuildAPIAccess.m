@@ -4049,7 +4049,7 @@ didCompleteWithError:(NSError *)error
             NSDictionary *dp = [data objectForKey:@"data"];
 
             returnData = connexion.representedObject != nil
-            ?  @{ @"data" : dp, @"object" : connexion.representedObject }
+            ? @{ @"data" : dp, @"object" : connexion.representedObject }
             : @{ @"data" : dp };
 
             [nc postNotificationName:@"BuildAPIGotDeployment" object:returnData];
@@ -4063,7 +4063,7 @@ didCompleteWithError:(NSError *)error
             NSDictionary *dp = [data objectForKey:@"data"];
 
             returnData = connexion.representedObject != nil
-            ?  @{ @"data" : dp, @"object" : connexion.representedObject }
+            ? @{ @"data" : dp, @"object" : connexion.representedObject }
             : @{ @"data" : dp };
 
             [nc postNotificationName:@"BuildAPISetMinDeployment" object:returnData];
