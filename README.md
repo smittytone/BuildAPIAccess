@@ -29,11 +29,11 @@ BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 
 ## Release Notes ##
 
-- 3.2.0 *1 May 2019*
+- 3.2.0 &mdash; *1 May 2019*
     - Add support for (Test) DUT device groups
-- 3.1.1 *29 November 2018*
+- 3.1.1 &mdash; *29 November 2018*
     - Add support for Electric Imp's alpha library checking endpoint
-- 3.1.0 *24 August 2018*
+- 3.1.0 &mdash; *24 August 2018*
     - Finalize multi-password authentication (MPA) support
         - Remove *is2FA* parameter from *login:::* (it's redundant)
     - Issue notification on login rejection rather than post an error
