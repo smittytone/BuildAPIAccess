@@ -3768,24 +3768,6 @@ didCompleteWithError:(NSError *)error
             if (products == nil) products = [[NSMutableArray alloc] init];
             NSString *nextURL = [self addDataToList:products :data];
             
-            /*
-            NSDictionary *links = [data objectForKey:@"links"];
-            NSString *nextURL = [self getNextURL:[self nextPageLink:links]];
-            BOOL isFirstPage = [self isFirstPage:links];
-
-            // Only clear the products list if this is the first page
-
-            if (isFirstPage) [products removeAllObjects];
-
-            // Add the received page of product records to the array
-
-            NSArray *productList = [data objectForKey:@"data"];
-
-            for (NSMutableDictionary *product in productList) [products addObject:product];
-             */
-            
-            // Are there more pages yet to be received?
-
             if (nextURL.length != 0)
             {
                 // We found a 'next' field in the 'links' list. This will get us the next page of data
