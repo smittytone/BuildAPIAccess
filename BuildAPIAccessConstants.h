@@ -30,7 +30,7 @@
 // Build API Access Version
 
 
-#define kBuildAPIAccessVersion                  @"3.1.2"
+#define kBuildAPIAccessVersion                  @"3.2.0"
 
 // Connection Types / Actions
 
