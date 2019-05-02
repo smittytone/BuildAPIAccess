@@ -1,9 +1,9 @@
 
 # BuildAPIAccess 3.2.0 #
 
-*BuildAPIAccess* is an Objective-C (macOS, iOS and tvOS) wrapper for [Electric Imp’s impCentral™ API](https://developer.electricimp.com/tools/impcentralapi). It is called BuildAPIAccess for historical reasons: it was written to the support Electric Imp’s Build API, the predecessor to the impCentral API. **BuildAPIAccess 3.0.2 does not support the Build API**, which has been deprecated and will shortly be removed from service.
+*BuildAPIAccess* is an Objective-C (macOS, iOS and tvOS) wrapper for [Electric Imp’s impCentral™ API](https://developer.electricimp.com/tools/impcentralapi). It is called BuildAPIAccess for historical reasons: it was written to the support Electric Imp’s Build API, the predecessor to the impCentral API.
 
-*BuildAPIAccess* requires the (included) classes *Connexion*, *LogStreamEvent* and *Toke*n. All three are convenience classes for combining properties.
+*BuildAPIAccess* requires the (included) classes *Connexion*, *Token* and *LogStreamEvent*. All three are convenience classes for combining properties.
 
 - *Connexion* combines an [NSURLSession](https://developer.apple.com/library/prerelease/mac/documentation/Foundation/Reference/NSURLSession_class/index.html) instance and associated impCentral API connection data.
 - *Token* is used to store impCentral API authorization data.
@@ -64,7 +64,7 @@ BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 
 Initialize a *BuildAPIAccess* instance using *init:*
 
-```
+```obj-c
 BuildAPIAccess *api = [[BuildAPIAccess alloc] init];
 ```
 
