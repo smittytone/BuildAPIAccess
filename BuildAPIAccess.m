@@ -1486,7 +1486,8 @@
 
     // Check the keys for validity - only a device group's attributes.name, attributes.description,
     // attributes.load_code_after_blessing, and relationships.production_target can be changed
-
+    // FROM 3.3.0 - attributes.env_var added
+    
     NSMutableDictionary *attributes = [[NSMutableDictionary alloc] init];
     NSMutableDictionary *relationships = [[NSMutableDictionary alloc] init];
 
@@ -1554,6 +1555,12 @@
         {
             NSNumber *val = [values objectAtIndex:i];
             if (val != nil) [attributes setValue:val forKey:@"load_code_after_blessing"];
+        }
+        
+        if ([key compare:@"env_var"] == NSOrderedSame)
+        {
+            NSString *jsonString = [values objectAtIndex:i];
+            if (jsonString != nil) [attributes setValue:jsonString forKey:@"env_var"];
         }
     }
 
