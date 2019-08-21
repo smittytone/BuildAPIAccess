@@ -1547,7 +1547,6 @@
             }
 
             devicegroupType = type;
-
             continue;
         }
 
@@ -1555,12 +1554,14 @@
         {
             NSNumber *val = [values objectAtIndex:i];
             if (val != nil) [attributes setValue:val forKey:@"load_code_after_blessing"];
+            continue;
         }
         
-        if ([key compare:@"env_var"] == NSOrderedSame)
+        if ([key compare:@"env_vars"] == NSOrderedSame)
         {
-            NSString *jsonString = [values objectAtIndex:i];
-            if (jsonString != nil) [attributes setValue:jsonString forKey:@"env_var"];
+            NSDictionary *envVars = [values objectAtIndex:i];
+            if (envVars != nil) [attributes setValue:envVars forKey:@"env_vars"];
+            continue;
         }
     }
 
@@ -3666,9 +3667,12 @@ didCompleteWithError:(NSError *)error
                     else
                     {
                         // Process other API errors
+                        
+                        // TODO Fix this next section: it depends up 'action' being a key in 'connexion.representedObject'
+                        //      It should NOT assume this as it's Squinter specific
 
                         NSDictionary *errorPlus;
-                        NSMutableDictionary *ed = [NSMutableDictionary dictionaryWithDictionary:error];
+                        NSMutableDictionary *errorDict = [NSMutableDictionary dictionaryWithDictionary:error];
                         NSString *action = @"N/A";
 
                         if (connexion.representedObject != nil)
@@ -3678,8 +3682,8 @@ didCompleteWithError:(NSError *)error
                             if (act != nil) action = act;
                         }
 
-                        [ed setObject:action forKey:@"action"];
-                        errorPlus = [NSDictionary dictionaryWithObjects:[ed allValues] forKeys:[ed allKeys]];
+                        [errorDict setObject:action forKey:@"action"];
+                        errorPlus = [NSDictionary dictionaryWithObjects:[errorDict allValues] forKeys:[errorDict allKeys]];
 
                         errorMessage = errors.count > 1
                         ? [errorMessage stringByAppendingFormat:@"%li. %@\n", (count + 1), [self processAPIError:errorPlus]]
