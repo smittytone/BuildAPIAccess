@@ -1,5 +1,5 @@
 
-//  BuildAPIAccess 3.2.0
+//  BuildAPIAccess 3.3.0
 //  Copyright (c) 2015-19 Tony Smith. All rights reserved.
 //  Issued under the MIT licence:
 //
@@ -30,7 +30,7 @@
 // Build API Access Version
 
 
-#define kBuildAPIAccessVersion                  @"3.2.0"
+#define kBuildAPIAccessVersion                  @"3.3.0"
 
 // Connection Types / Actions
 
