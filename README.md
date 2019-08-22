@@ -1,5 +1,5 @@
 
-# BuildAPIAccess 3.2.0 #
+# BuildAPIAccess 3.3.0 #
 
 *BuildAPIAccess* is an Objective-C (macOS, iOS and tvOS) wrapper for [Electric Imp’s impCentral™ API](https://developer.electricimp.com/tools/impcentralapi). It is called BuildAPIAccess for historical reasons: it was written to the support Electric Imp’s Build API, the predecessor to the impCentral API.
 
@@ -29,36 +29,34 @@ BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 
 ## Release Notes ##
 
+- 3.3.0 &mdash; *In Development*
+    - Add support for impCental user-defined environment variables: you can now pass the key *env_vars* into the method [*updateDeviceGroup:::*](#--voidupdatedevicegroupnsstring-devicegroupid-nsstring-keys-nsstring-values)’s *values* array.
 - 3.2.0 &mdash; *1 May 2019*
-    - Add support for (Test) DUT device groups
+    - Add support for impCental (Test) DUT device groups.
 - 3.1.1 &mdash; *29 November 2018*
-    - Add support for Electric Imp's alpha library checking endpoint
+    - Add support for Electric Imp's alpha library checking endpoint.
 - 3.1.0 &mdash; *24 August 2018*
-    - Finalize multi-password authentication (MPA) support
-        - Remove *is2FA* parameter from *login:::* (it's redundant)
-    - Issue notification on login rejection rather than post an error
+    - Finalize multi-password authentication (MPA) support.
+        - Remove *is2FA* parameter from [*login:::*](#--voidloginnsstring-username-nsstring-password) (it’s redundant).
+    - Issue notification on login rejection rather than post an error.
     - Unify all non-code error notifications (`@"BuildAPIError"`) to return `{ "message": <error_message>, "code": <error_code> }`
 - 3.0.1 *10 July 2018*
-    - Add *getAccount()* and *gotMyAccount()* methods
+    - Add *getAccount()* and *gotMyAccount()* methods.
 - 3.0.0
-    - Major revision to support Electric Imp’s impCentral API
-    - End support for the Build API, now deprecated by Electric Imp
+    - Major revision to support Electric Imp’s impCentral API.
+    - End support for the Build API, now deprecated by Electric Imp.
 - 2.0.1
-    - Add methods: *clearAPIKey:*, *setAPIKey:*
-    - Add *numberOfConnections* property
-    - Add custom User-Agent string to all HTTP requests
-    - Add BuildAPIAccess version constant
-    - Bug fixes
+    - Add methods: *clearAPIKey:*, *setAPIKey:*.
+    - Add *numberOfConnections* property.
+    - Add custom User-Agent string to all HTTP requests.
+    - Add BuildAPIAccess version constant.
+    - Bug fixes.
 - 2.0.0
-    - Major code revision and extended API support
-- 1.1.3
-    - Bug fixes
-- 1.1.2
-    - Bug fixes
-- 1.1.1
-    - Connexion object fixes
+    - Major code revision and extended API support.
+- 1.1.1&mdash;1.1.3
+    - Bug fixes.
 - 1.1.0
-    - Initial public release
+    - Initial public release.
 
 ## Class Usage ##
 
@@ -218,7 +216,7 @@ The instance posts the notification `@"BuildAPIDeviceGroupCreated"` when the dev
 
 ### - (void)updateDevicegroup:(NSString &#42;)devicegroupID :(NSString &#42;)keys :(NSString &#42;)values ###
 
-Updates the specified device group using the supplied keys and their associated values. The order of items in the keys and values arrays should match; no check is made to ensure that this is the case. The method checks that the two arrays are of equal length, however. The only supported keys are *name*, *description*, *type*, *production_target* and *load_code_after_blessing*. The first three of these reference strings; *production_target* references a dictionary with the keys *id* (the ID of the target production device group) and *type* (the string `@"production_devicegroup"`); and *load_code_after_blessing* references an NSNumber created from a boolean value.
+Updates the specified device group using the supplied keys and their associated values. The order of items in the keys and values arrays should match; no check is made to ensure that this is the case. The method checks that the two arrays are of equal length, however. The only supported keys are *name*, *description*, *type*, *production_target*, *load_code_after_blessing* and *env_vars^. The first three of these reference strings; *production_target* references a dictionary with the keys *id* (the ID of the target production device group) and *type* (the string `@"production_devicegroup"`); *env_vars* references a dictionary with the user-defined keys and values; and *load_code_after_blessing* references an NSNumber created from a boolean value.
 
 The instance posts the notification `@"BuildAPIDeviceGroupUpdated"` when the device group has been updated. The notification includes an NSDictionary: its *data* key points to a record of the updated device group as an NSDictionary.
 
