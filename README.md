@@ -29,7 +29,7 @@ BuildAPIAccess/<VERSION> <HOST_APP_NAME>/<VERSION> (macOS <VERSION>)
 
 ## Release Notes ##
 
-- 3.3.0 &mdash; *In Development*
+- 3.3.0 &mdash; *6 September 2019*
     - Add support for impCental user-defined environment variables: you can now pass the key *env_vars* into the method [*updateDeviceGroup:::*](#--voidupdatedevicegroupnsstring-devicegroupid-nsstring-keys-nsstring-values)’s *values* array.
 - 3.2.0 &mdash; *1 May 2019*
     - Add support for impCental (Test) DUT device groups.
