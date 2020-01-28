@@ -3175,9 +3175,9 @@ didReceiveResponse:(NSURLResponse *)response
                 return;
             }
 
-            // Debug message
-
+#ifdef DEBUG
             if (connexion.actionCode == kConnectTypeRefreshAccessToken) NSLog(@"401 encountered refreshing access token");
+#endif
         }
 
         if (statusCode == 429)
@@ -3551,7 +3551,6 @@ didCompleteWithError:(NSError *)error
                     {
 
 #ifdef DEBUG
-    // No field separator????
                         NSLog(@"Incoming event malformed - no field separator (: )");
 #endif
                     }
